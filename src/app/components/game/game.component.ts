@@ -37,7 +37,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
-  private boundPopStateHandler: (e: PopStateEvent) => void;
   @Output() exitGame = new EventEmitter<void>();
 
   constructor(
@@ -46,34 +45,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private audioService: AudioService,
     private fullscreenService: FullscreenService
-  ) {
-    // Bind the handler in constructor so we can properly remove it later
-    this.boundPopStateHandler = this.handlePopState.bind(this);
-  }
-
-  private handlePopState(e: PopStateEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    // Stay on current page, don't allow browser navigation
-    history.pushState(null, '', window.location.pathname);
-  }
+  ) {}
 
   ngOnInit() {
     this.generateNewQuestion();
-    this.preventZoom();
     this.fullscreenService.enableFullscreen();
-
-    // Prevent default browser navigation
-    window.onpopstate = (e) => {
-      e.preventDefault();
-      this.goToMainMenu();
-      return false;
-    };
-
-    // Prevent the page from being added to browser history
-    if (window.history && window.history.replaceState) {
-      window.history.replaceState({}, '', window.location.href);
-    }
   }
 
   ngAfterViewInit() {
@@ -114,15 +90,23 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   checkAnswer(selectedAnswer: number) {
-    if (this.currentQuestion?.answer === selectedAnswer) {
-      console.log('Correct!');
-      this.wrongAnswer = null;
-      this.removeClosestZombie();
-      this.generateNewQuestion();
-    } else {
-      console.log('Wrong answer!');
-      this.wrongAnswer = selectedAnswer;
+    if (this.currentQuestion) {
+      if (selectedAnswer === this.currentQuestion.answer) {
+        this.handleCorrectAnswer();
+      } else {
+        this.wrongAnswer = selectedAnswer;
+        setTimeout(() => {
+          this.wrongAnswer = null;
+        }, 1000);
+      }
     }
+  }
+
+  private handleCorrectAnswer() {
+    console.log('Correct!');
+    this.wrongAnswer = null;
+    this.removeClosestZombie();
+    this.generateNewQuestion();
   }
 
   private removeClosestZombie() {
@@ -235,24 +219,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       canvas.remove();
       console.log('Removed lemonade projectile');
     }, 500);
-  }
-
-  private preventZoom() {
-    document.addEventListener(
-      'touchmove',
-      (e) => {
-        e.preventDefault();
-      },
-      { passive: false }
-    );
-
-    document.addEventListener(
-      'touchstart',
-      (e) => {
-        e.preventDefault();
-      },
-      { passive: false }
-    );
   }
 
   private startZombieSpawning() {
@@ -431,27 +397,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   restartGame() {
-    // Reset game state
     this.isGameOver = false;
-
-    // Clear all zombies
     this.zombies = [];
-    const gameArea = this.gameAreaRef.nativeElement;
-    const zombieElements = gameArea.querySelectorAll('.zombie');
-    zombieElements.forEach((zombie: Element) => zombie.remove());
-
-    // Reset zombie ID counter
     this.nextZombieId = 0;
-
-    // Clear all intervals
-    this.moveIntervals.forEach((interval) => clearInterval(interval));
-    this.moveIntervals.clear();
-
-    // Start spawning zombies again
-    this.startZombieSpawning();
-
-    // Generate new question
     this.generateNewQuestion();
+    this.startZombieSpawning();
   }
 
   goToMainMenu() {
@@ -463,9 +413,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Remove popstate listener properly
-    window.removeEventListener('popstate', this.boundPopStateHandler);
-
     // Existing cleanup code...
     this.audioService.cleanup();
     if (this.zombieSpawnInterval) {

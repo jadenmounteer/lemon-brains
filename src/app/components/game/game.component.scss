@@ -8,8 +8,6 @@
   min-height: 100vh;
   min-height: -webkit-fill-available;
   overflow: hidden;
-  -webkit-overflow-scrolling: none;
-  touch-action: none;
   z-index: 9999;
   background-color: white;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
@@ -29,6 +27,7 @@
 
   @media (max-width: 768px) {
     flex-direction: column;
+    padding: 0;
   }
 }
 
@@ -43,6 +42,7 @@
   background-color: #f0f0f0;
   border-right: 2px solid #ccc;
   overflow: hidden;
+  position: relative;
 
   @media (max-width: 768px) {
     border-right: none;
@@ -64,6 +64,7 @@
   @media (max-width: 768px) {
     height: 30vh;
     padding: 10px;
+    justify-content: flex-start;
   }
 }
 
@@ -211,6 +212,8 @@
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: "Creepster", cursive;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 
   @media (max-width: 768px) {
     padding: 12px 24px;
@@ -245,7 +248,6 @@
   align-items: center;
   gap: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 
   &:hover {
@@ -257,15 +259,19 @@
   }
 
   @media (max-width: 768px) {
-    padding: 12px 24px;
-    font-size: 18px;
-    top: env(safe-area-inset-top, 20px);
-    left: env(safe-area-inset-left, 20px);
+    top: 10px;
+    left: 10px;
+    padding: 8px 16px;
+    font-size: 16px;
   }
 
   .menu-icon {
     font-size: 24px;
     line-height: 1;
+
+    @media (max-width: 768px) {
+      font-size: 20px;
+    }
   }
 }
 
@@ -300,15 +306,23 @@
   width: 48px;
   height: 48px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  -webkit-tap-highlight-color: transparent;
 
   &:hover {
     background-color: #45a049;
-    transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   }
 
   &:active {
     transform: scale(0.95);
+  }
+
+  @media (max-width: 768px) {
+    top: 10px;
+    right: 10px;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    font-size: 20px;
   }
 
   .music-icon {
@@ -334,5 +348,19 @@
   }
   100% {
     transform: scale(1);
+  }
+}
+
+/* Update all interactive elements to have proper touch behavior */
+.menu-button,
+.music-button,
+.option-button,
+.restart-button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  @media (max-width: 768px) {
+    min-height: 44px; /* Minimum touch target size for iOS */
+    min-width: 44px;
   }
 }
