@@ -38,6 +38,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               <input
                 type="radio"
                 [(ngModel)]="settings.curriculum"
+                name="curriculum"
                 value="math"
                 (change)="updateSettings()"
               />
@@ -52,6 +53,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               <input
                 type="radio"
                 [(ngModel)]="settings.curriculum"
+                name="curriculum"
                 value="portuguese"
                 (change)="updateSettings()"
               />
@@ -207,6 +209,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               <input
                 type="radio"
                 [(ngModel)]="settings.gameDifficulty"
+                name="difficulty"
                 value="easy"
                 (change)="updateSettings()"
               />
@@ -222,6 +225,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               <input
                 type="radio"
                 [(ngModel)]="settings.gameDifficulty"
+                name="difficulty"
                 value="normal"
                 (change)="updateSettings()"
               />
@@ -234,6 +238,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               <input
                 type="radio"
                 [(ngModel)]="settings.gameDifficulty"
+                name="difficulty"
                 value="hard"
                 (change)="updateSettings()"
               />
