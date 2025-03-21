@@ -159,12 +159,12 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         : this.portugueseService.generateQuestion();
   }
 
-  checkAnswer(selectedAnswer: number) {
+  checkAnswer(selectedAnswer: number | string) {
     if (this.currentQuestion) {
       if (selectedAnswer === this.currentQuestion.answer) {
         this.handleCorrectAnswer();
       } else {
-        this.wrongAnswer = selectedAnswer;
+        this.wrongAnswer = selectedAnswer as number;
         // Play zombie sound and spawn a new zombie
         this.audioService.playZombieSound();
         this.spawnZombie();
