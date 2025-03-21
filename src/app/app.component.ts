@@ -1,21 +1,29 @@
-import { Component, OnInit } from '@angular/core';
+import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet } from '@angular/router';
+import { MainMenuComponent } from './components/main-menu/main-menu.component';
 import { GameComponent } from './components/game/game.component';
-import { FullscreenService } from './services/fullscreen.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, GameComponent],
-  template: `<router-outlet></router-outlet>`,
-  styleUrls: ['./app.component.scss'],
+  imports: [CommonModule, MainMenuComponent, GameComponent],
+  template: `
+    <app-main-menu
+      *ngIf="!isGameView"
+      (startGame)="startGame()"
+    ></app-main-menu>
+    <app-game *ngIf="isGameView" (exitGame)="exitGame()"></app-game>
+  `,
+  styles: [],
 })
-export class AppComponent implements OnInit {
-  constructor(private fullscreenService: FullscreenService) {}
+export class AppComponent {
+  isGameView = false;
 
-  ngOnInit() {
-    // Enable full-screen mode on app start
-    this.fullscreenService.enableFullscreen();
+  startGame() {
+    this.isGameView = true;
+  }
+
+  exitGame() {
+    this.isGameView = false;
   }
 }

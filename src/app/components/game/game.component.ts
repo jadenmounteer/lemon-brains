@@ -5,6 +5,8 @@ import {
   ViewChild,
   AfterViewInit,
   OnDestroy,
+  EventEmitter,
+  Output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -36,6 +38,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
   private boundPopStateHandler: (e: PopStateEvent) => void;
+  @Output() exitGame = new EventEmitter<void>();
 
   constructor(
     private mathService: MathService,
@@ -455,8 +458,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up game state
     this.ngOnDestroy();
 
-    // Use window.location.replace to avoid adding to browser history
-    window.location.replace('/');
+    // Emit exit event
+    this.exitGame.emit();
   }
 
   ngOnDestroy() {

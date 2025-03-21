@@ -1,15 +1,16 @@
 import {
   Component,
-  OnInit,
-  ElementRef,
+  EventEmitter,
+  Output,
   ViewChild,
+  ElementRef,
   AfterViewInit,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { SpriteAnimationService } from '../../services/sprite-animation.service';
+import { AudioService } from '../../services/audio.service';
 import { SettingsService, GameSettings } from '../../services/settings.service';
+import { SpriteAnimationService } from '../../services/sprite-animation.service';
 
 @Component({
   selector: 'app-main-menu',
@@ -119,7 +120,7 @@ import { SettingsService, GameSettings } from '../../services/settings.service';
         </button>
         <button
           class="start-button"
-          (click)="startGame()"
+          (click)="onStartGameClick()"
           [disabled]="!isValidSettings()"
         >
           Start Game
@@ -127,22 +128,22 @@ import { SettingsService, GameSettings } from '../../services/settings.service';
       </div>
     </div>
   `,
-  styleUrls: ['./main-menu.component.scss'],
+  styleUrl: './main-menu.component.scss',
 })
-export class MainMenuComponent implements OnInit, AfterViewInit {
+export class MainMenuComponent implements AfterViewInit {
+  @Output() startGame = new EventEmitter<void>();
   @ViewChild('lemonadeContainer') lemonadeContainer!: ElementRef;
   settings: GameSettings;
   showSettings = false;
+  isMusicPlaying = false;
 
   constructor(
-    private router: Router,
-    private spriteAnimationService: SpriteAnimationService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private audioService: AudioService,
+    private spriteAnimationService: SpriteAnimationService
   ) {
     this.settings = this.settingsService.getCurrentSettings();
   }
-
-  ngOnInit() {}
 
   ngAfterViewInit() {
     this.initLemonadeAnimation();
@@ -164,6 +165,12 @@ export class MainMenuComponent implements OnInit, AfterViewInit {
     this.lemonadeContainer.nativeElement.appendChild(canvas);
   }
 
+  onStartGameClick() {
+    if (this.isValidSettings()) {
+      this.startGame.emit();
+    }
+  }
+
   toggleSettings() {
     this.showSettings = !this.showSettings;
   }
@@ -173,13 +180,10 @@ export class MainMenuComponent implements OnInit, AfterViewInit {
   }
 
   isValidSettings(): boolean {
-    // Ensure at least one question type is selected
     return Object.values(this.settings.questionTypes).some((value) => value);
   }
 
-  startGame() {
-    if (this.isValidSettings()) {
-      this.router.navigate(['/game']);
-    }
+  toggleMusic() {
+    this.isMusicPlaying = this.audioService.toggle();
   }
 }
