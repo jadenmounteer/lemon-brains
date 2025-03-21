@@ -245,15 +245,22 @@
   align-items: center;
   gap: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 
   &:hover {
     background-color: #45a049;
-    transform: scale(1.05);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
   }
 
   &:active {
     transform: scale(0.95);
+  }
+
+  @media (max-width: 768px) {
+    padding: 12px 24px;
+    font-size: 18px;
+    top: env(safe-area-inset-top, 20px);
+    left: env(safe-area-inset-left, 20px);
   }
 
   .menu-icon {
