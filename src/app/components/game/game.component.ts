@@ -7,6 +7,7 @@ import {
   OnDestroy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { Router } from '@angular/router';
 import { MathService } from '../../services/math.service';
 import { MathQuestion } from '../../models/math-question.interface';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
@@ -34,7 +35,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private mathService: MathService,
-    private spriteAnimationService: SpriteAnimationService
+    private spriteAnimationService: SpriteAnimationService,
+    private router: Router
   ) {}
 
   ngOnInit() {
@@ -409,6 +411,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Generate new question
     this.generateNewQuestion();
+  }
+
+  goToMainMenu() {
+    // Clean up game state
+    this.ngOnDestroy();
+    // Navigate to main menu
+    this.router.navigate(['/']);
   }
 
   ngOnDestroy() {

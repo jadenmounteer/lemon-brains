@@ -3,31 +3,32 @@
 .game-container {
   display: flex;
   width: 100%;
-  height: 100vh; // Full viewport height
-  flex-direction: row; // Default for desktop
-  overflow: hidden; // Prevent scrolling
+  height: 100vh;
+  flex-direction: row;
+  overflow: hidden;
+  background-color: #f0f0f0;
 
   @media (max-width: 768px) {
-    flex-direction: column; // Stack vertically on mobile
+    flex-direction: column;
   }
 }
 
 .game-half {
   flex: 1;
-  height: 100%; // Change from 100vh to 100%
+  height: 100%;
   position: relative;
-  padding: 0; // Remove padding that might affect positioning
+  padding: 0;
 }
 
 .game-area {
   background-color: #f0f0f0;
   border-right: 2px solid #ccc;
-  position: relative; // Change from absolute to relative
-  overflow: hidden; // Hide zombies until they enter the game area
+  overflow: hidden;
 
   @media (max-width: 768px) {
     border-right: none;
     border-bottom: 2px solid #ccc;
+    height: 70vh;
   }
 }
 
@@ -37,6 +38,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  padding: 20px;
+
+  @media (max-width: 768px) {
+    height: 30vh;
+  }
 }
 
 .placeholder-text {
@@ -50,14 +56,16 @@
   width: 100%;
   max-width: 500px;
   margin: 0 auto;
-  padding: 0 15px;
+  padding: 20px;
 
   h2 {
     font-size: 24px;
     margin-bottom: 20px;
+    color: #333;
 
     @media (max-width: 768px) {
       font-size: 20px;
+      margin-bottom: 15px;
     }
   }
 }
@@ -65,11 +73,11 @@
 .options {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 15px;
   width: 100%;
 
   @media (max-width: 480px) {
-    grid-template-columns: 1fr; // Stack buttons vertically on very small screens
+    grid-template-columns: 1fr;
   }
 }
 
@@ -77,20 +85,17 @@
   padding: 15px 20px;
   font-size: 18px;
   cursor: pointer;
-  border: 2px solid #ccc;
-  border-radius: 5px;
+  border: 2px solid #4caf50;
+  border-radius: 8px;
   background: white;
+  color: #4caf50;
   transition: all 0.3s ease;
-
-  @media (max-width: 768px) {
-    padding: 12px 16px;
-    font-size: 16px;
-    min-height: 44px; // Minimum touch target size
-    touch-action: manipulation; // Optimize for touch
-  }
+  min-height: 44px;
+  touch-action: manipulation;
 
   &:hover {
-    background: #f0f0f0;
+    background: #4caf50;
+    color: white;
   }
 
   &.wrong {
@@ -106,7 +111,7 @@
   bottom: 15%;
   transform: translate(-50%, 0);
   image-rendering: pixelated;
-  z-index: 2; // Make sure stand appears above zombies
+  z-index: 2;
   width: 64px;
   height: 64px;
 }
@@ -152,7 +157,7 @@
   background-color: #4caf50;
   color: white;
   border: none;
-  border-radius: 5px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: "Creepster", cursive;
@@ -165,6 +170,53 @@
   &:active {
     transform: scale(0.95);
   }
+}
+
+.menu-button {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  padding: 10px 20px;
+  font-family: "Creepster", cursive;
+  font-size: 20px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    background-color: #45a049;
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  .menu-icon {
+    font-size: 24px;
+    line-height: 1;
+  }
+}
+
+.lemonade-projectile {
+  position: absolute;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 3;
+  width: 96px;
+  height: 96px;
+  transform-origin: center;
+  transition: all 0.5s ease-out;
+  overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -186,16 +238,4 @@
   100% {
     transform: scale(1);
   }
-}
-
-.lemonade-projectile {
-  position: absolute;
-  image-rendering: pixelated;
-  pointer-events: none;
-  z-index: 3;
-  width: 96px;
-  height: 96px;
-  transform-origin: center;
-  transition: all 0.5s ease-out;
-  overflow: hidden;
 }

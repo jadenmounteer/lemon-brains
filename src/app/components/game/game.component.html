@@ -1,16 +1,17 @@
 <div class="game-container">
   <div class="game-half game-area" #gameArea>
-    <!-- Game over overlay -->
-    <div class="game-over-overlay" *ngIf="isGameOver">
-      <h1 class="game-over-text">Game Over</h1>
-      <button class="restart-button" (click)="restartGame()">
-        Restart Game
-      </button>
+    <button class="menu-button" (click)="goToMainMenu()">
+      <span class="menu-icon">←</span> Menu
+    </button>
+
+    <div *ngIf="isGameOver" class="game-over-overlay">
+      <h1 class="game-over-text">Game Over!</h1>
+      <button class="restart-button" (click)="restartGame()">Try Again</button>
     </div>
   </div>
 
   <div class="game-half question-area">
-    <div class="question-container" *ngIf="currentQuestion">
+    <div class="question-container" *ngIf="!isGameOver && currentQuestion">
       <h2>{{ currentQuestion.question }}</h2>
       <div class="options">
         <button
@@ -18,7 +19,6 @@
           (click)="checkAnswer(option)"
           class="option-button"
           [class.wrong]="wrongAnswer === option"
-          [disabled]="isGameOver"
         >
           {{ option }}
         </button>
