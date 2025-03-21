@@ -1,16 +1,23 @@
 <div class="game-container">
-  <div class="game-interface-container"></div>
+  <div class="game-half game-area">
+    <div class="placeholder-text">
+      Game Area - Zombies and Lemonade Stand will go here
+    </div>
+  </div>
 
-  <div class="question-container" *ngIf="currentQuestion">
-    <h2>{{ currentQuestion.question }}</h2>
-    <div class="options">
-      <button
-        *ngFor="let option of currentQuestion.options"
-        (click)="checkAnswer(option)"
-        class="option-button"
-      >
-        {{ option }}
-      </button>
+  <div class="game-half question-area">
+    <div class="question-container" *ngIf="currentQuestion">
+      <h2>{{ currentQuestion.question }}</h2>
+      <div class="options">
+        <button
+          *ngFor="let option of currentQuestion.options"
+          (click)="checkAnswer(option)"
+          class="option-button"
+          [class.wrong]="wrongAnswer === option"
+        >
+          {{ option }}
+        </button>
+      </div>
     </div>
   </div>
 </div>

@@ -12,6 +12,7 @@ import { MathQuestion } from '../../models/math-question.interface';
 })
 export class GameComponent implements OnInit {
   currentQuestion?: MathQuestion;
+  wrongAnswer: number | null = null;
 
   constructor(private mathService: MathService) {}
 
@@ -26,9 +27,11 @@ export class GameComponent implements OnInit {
   checkAnswer(selectedAnswer: number) {
     if (this.currentQuestion?.correctAnswer === selectedAnswer) {
       console.log('Correct!');
+      this.wrongAnswer = null;
       this.generateNewQuestion();
     } else {
       console.log('Wrong answer!');
+      this.wrongAnswer = selectedAnswer;
     }
   }
 }

@@ -1,8 +1,30 @@
 .game-container {
   display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.game-half {
+  flex: 1;
+  padding: 20px;
+  display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px;
+}
+
+.game-area {
+  background-color: #f0f0f0;
+  border-right: 2px solid #ccc;
+}
+
+.question-area {
+  background-color: white;
+}
+
+.placeholder-text {
+  color: #666;
+  font-size: 18px;
+  text-align: center;
 }
 
 .question-container {
@@ -21,14 +43,21 @@
 }
 
 .option-button {
-  padding: 10px 20px;
+  padding: 15px 30px;
   font-size: 18px;
   cursor: pointer;
   border: 2px solid #ccc;
   border-radius: 5px;
   background: white;
+  transition: all 0.3s ease;
 
   &:hover {
     background: #f0f0f0;
+  }
+
+  &.wrong {
+    background-color: #ffebee;
+    border-color: #ef5350;
+    color: #c62828;
   }
 }
