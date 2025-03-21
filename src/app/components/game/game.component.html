@@ -1,1 +1,14 @@
-<p>game works!</p>
+<div class="game-container">
+  <div class="question-container" *ngIf="currentQuestion">
+    <h2>{{ currentQuestion.question }}</h2>
+    <div class="options">
+      <button
+        *ngFor="let option of currentQuestion.options"
+        (click)="checkAnswer(option)"
+        class="option-button"
+      >
+        {{ option }}
+      </button>
+    </div>
+  </div>
+</div>
