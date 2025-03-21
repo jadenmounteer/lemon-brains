@@ -34,6 +34,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
+  private kingSpawnTimeout?: ReturnType<typeof setTimeout>;
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
@@ -250,6 +251,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       this.spawnZombie();
     }, this.spawnTimeoutMs);
 
+    // Schedule first king spawn after 5 minutes
+    this.scheduleNextKing();
+
     // Increase difficulty every 10 seconds
     this.spawnRateDecreaseInterval = setInterval(() => {
       if (this.spawnTimeoutMs > this.minSpawnTimeoutMs) {
@@ -269,40 +273,44 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           this.spawnZombie();
         }, this.spawnTimeoutMs);
       }
-    }, 10000); // Check every 10 seconds
+    }, 10000);
   }
 
-  private setupResizeObserver() {
-    this.resizeObserver = new ResizeObserver(() => {
-      this.gameAreaRect =
-        this.gameAreaRef.nativeElement.getBoundingClientRect();
-      // Update all zombie positions when window resizes
-      this.updateAllZombiePositions();
-    });
-    this.resizeObserver.observe(this.gameAreaRef.nativeElement);
+  private scheduleNextKing() {
+    // Schedule king spawn every 5 minutes (300,000ms)
+    const kingSpawnDelay = 300000;
+    this.kingSpawnTimeout = setTimeout(() => {
+      this.spawnKing();
+      this.scheduleNextKing(); // Schedule next king
+    }, kingSpawnDelay);
   }
 
-  private updateAllZombiePositions() {
+  private spawnKing() {
     const gameArea = this.gameAreaRef.nativeElement;
-    this.zombies.forEach((zombie) => {
-      const canvas = gameArea.querySelector(
-        `[data-zombie-id="${zombie.id}"]`
-      ) as HTMLCanvasElement;
-      if (canvas) {
-        // Convert current positions to percentages
-        const rect = gameArea.getBoundingClientRect();
-        zombie.xPercent = (zombie.x / rect.width) * 100;
-        zombie.yPercent = (zombie.y / rect.height) * 100;
+    const rect = gameArea.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
 
-        // Update positions based on new dimensions
-        zombie.x = (zombie.xPercent * rect.width) / 100;
-        zombie.y = (zombie.yPercent * rect.height) / 100;
+    // Kings always spawn at the top
+    const xPercent = Math.random() * 100;
+    const yPercent = 5;
+    const x = (xPercent * width) / 100;
+    const y = (yPercent * height) / 100;
 
-        // Update canvas position
-        canvas.style.left = `${zombie.x}px`;
-        canvas.style.top = `${zombie.y}px`;
-      }
-    });
+    const zombie: ZombieState = {
+      x,
+      y,
+      xPercent,
+      yPercent,
+      facingLeft: xPercent > 50,
+      id: this.nextZombieId++,
+      speed: 0.4, // Kings are slow but menacing
+      type: 'king',
+      health: 8, // Takes 8 hits to defeat
+    };
+
+    this.zombies.push(zombie);
+    this.createZombieSprite(zombie);
   }
 
   private spawnZombie() {
@@ -349,13 +357,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     let speed;
     const speedRoll = Math.random();
     if (speedRoll < 0.2) {
-      // 20% chance for fast zombie
       speed = 1.4 + Math.random() * 0.4; // 1.4x to 1.8x speed
     } else if (speedRoll < 0.5) {
-      // 30% chance for normal zombie
       speed = 0.9 + Math.random() * 0.3; // 0.9x to 1.2x speed
     } else {
-      // 50% chance for slow zombie
       speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed
     }
 
@@ -369,9 +374,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       yPercent,
       facingLeft: xPercent > 50,
       id: this.nextZombieId++,
-      speed: isFatZombie ? speed * 0.8 : speed, // Fat zombies are slightly slower
+      speed: isFatZombie ? speed * 0.8 : speed,
       type: isFatZombie ? 'fat' : 'normal',
-      health: isFatZombie ? 2 : 1, // Fat zombies take 2 hits
+      health: isFatZombie ? 2 : 1,
     };
 
     this.zombies.push(zombie);
@@ -379,28 +384,57 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private createZombieSprite(zombie: ZombieState) {
-    const zombieConfig = {
-      imageUrl:
-        zombie.type === 'fat'
-          ? 'assets/sprites/fat-zombie.png'
-          : 'assets/sprites/zombie.png',
-      frameWidth: 320,
-      frameHeight: 320,
-      totalFrames: 2,
-      fps: 2,
-      displayWidth: zombie.type === 'fat' ? 96 : 72, // Fat zombies are bigger
-      displayHeight: zombie.type === 'fat' ? 96 : 72,
-    };
+    let spriteConfig;
 
-    const canvas = this.spriteAnimationService.loadSprite(zombieConfig);
+    switch (zombie.type) {
+      case 'king':
+        spriteConfig = {
+          imageUrl: 'assets/sprites/zombie-king.png',
+          frameWidth: 320,
+          frameHeight: 320,
+          totalFrames: 2,
+          fps: 2,
+          displayWidth: 144, // King is much larger
+          displayHeight: 144,
+        };
+        break;
+      case 'fat':
+        spriteConfig = {
+          imageUrl: 'assets/sprites/fat-zombie.png',
+          frameWidth: 320,
+          frameHeight: 320,
+          totalFrames: 2,
+          fps: 2,
+          displayWidth: 96,
+          displayHeight: 96,
+        };
+        break;
+      default:
+        spriteConfig = {
+          imageUrl: 'assets/sprites/zombie.png',
+          frameWidth: 320,
+          frameHeight: 320,
+          totalFrames: 2,
+          fps: 2,
+          displayWidth: 72,
+          displayHeight: 72,
+        };
+    }
+
+    const canvas = this.spriteAnimationService.loadSprite(spriteConfig);
     canvas.classList.add('zombie');
     canvas.setAttribute('data-zombie-id', zombie.id.toString());
     canvas.style.position = 'absolute';
     canvas.style.left = `${zombie.x}px`;
     canvas.style.top = `${zombie.y}px`;
     canvas.style.transform = `scaleX(${zombie.facingLeft ? 1 : -1})`;
-    this.gameAreaRef.nativeElement.appendChild(canvas);
 
+    // Add special effects for the king
+    if (zombie.type === 'king') {
+      canvas.style.filter = 'drop-shadow(0 0 10px rgba(255,0,0,0.5))';
+    }
+
+    this.gameAreaRef.nativeElement.appendChild(canvas);
     this.moveZombie(zombie, canvas);
   }
 
@@ -478,6 +512,12 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.zombies = [];
     this.nextZombieId = 0;
     this.lemonadeGiven = 0;
+
+    // Clear existing king spawn timeout
+    if (this.kingSpawnTimeout) {
+      clearTimeout(this.kingSpawnTimeout);
+    }
+
     this.generateNewQuestion();
     this.startZombieSpawning();
   }
@@ -491,13 +531,16 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Cleanup all intervals
+    // Cleanup all intervals and timeouts
     this.audioService.cleanup();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);
     }
     if (this.spawnRateDecreaseInterval) {
       clearInterval(this.spawnRateDecreaseInterval);
+    }
+    if (this.kingSpawnTimeout) {
+      clearTimeout(this.kingSpawnTimeout);
     }
     this.moveIntervals.forEach((interval) => clearInterval(interval));
     this.moveIntervals.clear();
@@ -508,5 +551,37 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleMusic() {
     this.isMusicPlaying = this.audioService.toggle();
+  }
+
+  private setupResizeObserver() {
+    this.resizeObserver = new ResizeObserver(() => {
+      this.gameAreaRect =
+        this.gameAreaRef.nativeElement.getBoundingClientRect();
+      this.updateAllZombiePositions();
+    });
+    this.resizeObserver.observe(this.gameAreaRef.nativeElement);
+  }
+
+  private updateAllZombiePositions() {
+    const gameArea = this.gameAreaRef.nativeElement;
+    this.zombies.forEach((zombie) => {
+      const canvas = gameArea.querySelector(
+        `[data-zombie-id="${zombie.id}"]`
+      ) as HTMLCanvasElement;
+      if (canvas) {
+        // Convert current positions to percentages
+        const rect = gameArea.getBoundingClientRect();
+        zombie.xPercent = (zombie.x / rect.width) * 100;
+        zombie.yPercent = (zombie.y / rect.height) * 100;
+
+        // Update positions based on new dimensions
+        zombie.x = (zombie.xPercent * rect.width) / 100;
+        zombie.y = (zombie.yPercent * rect.height) / 100;
+
+        // Update canvas position
+        canvas.style.left = `${zombie.x}px`;
+        canvas.style.top = `${zombie.y}px`;
+      }
+    });
   }
 }

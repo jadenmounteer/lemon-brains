@@ -6,6 +6,6 @@ export interface ZombieState {
   facingLeft: boolean;
   id: number;
   speed: number; // Movement speed multiplier
-  type: 'normal' | 'fat';
+  type: 'normal' | 'fat' | 'king';
   health: number;
 }
