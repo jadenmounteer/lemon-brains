@@ -10,6 +10,7 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MathService } from '../../services/math.service';
 import { AudioService } from '../../services/audio.service';
+import { FullscreenService } from '../../services/fullscreen.service';
 import { MathQuestion } from '../../models/math-question.interface';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
 import { ZombieState } from '../../models/zombie.interface';
@@ -39,13 +40,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private mathService: MathService,
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
-    private audioService: AudioService
+    private audioService: AudioService,
+    private fullscreenService: FullscreenService
   ) {}
 
   ngOnInit() {
     this.generateNewQuestion();
     this.preventZoom();
-    this.enableFullScreen();
+    this.fullscreenService.enableFullscreen();
   }
 
   ngAfterViewInit() {
@@ -445,34 +447,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private enableFullScreen() {
-    // Add a small delay to ensure the DOM is ready
-    setTimeout(() => {
-      if (
-        document.documentElement.requestFullscreen &&
-        !document.fullscreenElement
-      ) {
-        document.documentElement
-          .requestFullscreen()
-          .catch((err) =>
-            console.log('Error attempting to enable full-screen mode:', err)
-          );
-      }
-
-      // iOS specific full-screen handling
-      const isStandalone =
-        window.matchMedia('(display-mode: standalone)').matches ||
-        (window.navigator as any).standalone ||
-        document.referrer.includes('ios-app://');
-
-      if (isStandalone) {
-        document.documentElement.style.position = 'fixed';
-        document.documentElement.style.width = '100%';
-        document.documentElement.style.height = '100%';
-        document.body.style.position = 'fixed';
-        document.body.style.width = '100%';
-        document.body.style.height = '100%';
-        document.body.style.overflow = 'hidden';
-      }
-    }, 100);
+    this.fullscreenService.enableFullscreen();
   }
 }
