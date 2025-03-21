@@ -358,19 +358,24 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         break;
     }
 
-    // Generate speed with weighted randomization to create distinct speed tiers
-    let speed;
-    const speedRoll = Math.random();
-    if (speedRoll < 0.2) {
-      speed = 1.4 + Math.random() * 0.4; // 1.4x to 1.8x speed
-    } else if (speedRoll < 0.5) {
-      speed = 0.9 + Math.random() * 0.3; // 0.9x to 1.2x speed
-    } else {
-      speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed
-    }
+    // 15% chance to spawn a fat zombie (reduced from 20%)
+    const isFatZombie = Math.random() < 0.15;
 
-    // 20% chance to spawn a fat zombie
-    const isFatZombie = Math.random() < 0.2;
+    let speed;
+    if (isFatZombie) {
+      // Fat zombies are always slow (0.3x to 0.5x speed)
+      speed = 0.3 + Math.random() * 0.2;
+    } else {
+      // Normal zombies have tiered speeds
+      const speedRoll = Math.random();
+      if (speedRoll < 0.2) {
+        speed = 1.4 + Math.random() * 0.4; // 1.4x to 1.8x speed (fast)
+      } else if (speedRoll < 0.5) {
+        speed = 0.9 + Math.random() * 0.3; // 0.9x to 1.2x speed (medium)
+      } else {
+        speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed (slow)
+      }
+    }
 
     const zombie: ZombieState = {
       x,
@@ -379,7 +384,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       yPercent,
       facingLeft: xPercent > 50,
       id: this.nextZombieId++,
-      speed: isFatZombie ? speed * 0.8 : speed,
+      speed: speed,
       type: isFatZombie ? 'fat' : 'normal',
       health: isFatZombie ? 2 : 1,
     };
