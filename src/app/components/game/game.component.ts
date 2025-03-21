@@ -409,22 +409,31 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     const targetX = rect.width / 2;
     const targetY = rect.height * 0.85;
 
-    // Calculate direction to lemonade stand
+    // Calculate initial direction to lemonade stand
     const dx = targetX - zombie.x;
     const dy = targetY - zombie.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Check if zombie has reached the lemonade stand
-    if (distance < 32) {
-      this.handleGameOver();
-      return;
-    }
 
     // Update zombie facing direction
     zombie.facingLeft = dx > 0;
 
     // Base movement interval
     const moveInterval = setInterval(() => {
+      const rect = this.gameAreaRef.nativeElement.getBoundingClientRect();
+      const targetX = rect.width / 2;
+      const targetY = rect.height * 0.85;
+
+      // Recalculate distance for collision detection
+      const dx = targetX - zombie.x;
+      const dy = targetY - zombie.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Check if zombie has reached the lemonade stand
+      if (distance < 32) {
+        this.handleGameOver();
+        return;
+      }
+
       // Base speed of 0.15 multiplied by zombie's speed factor
       const speed = 0.15 * zombie.speed;
       zombie.x += (dx / distance) * speed;
@@ -438,6 +447,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       canvas.style.left = `${zombie.x}px`;
       canvas.style.top = `${zombie.y}px`;
       canvas.style.transform = `scaleX(${zombie.facingLeft ? 1 : -1})`;
+
+      // Update facing direction based on current movement
+      zombie.facingLeft = dx > 0;
     }, 16);
 
     this.moveIntervals.set(zombie.id, moveInterval);
