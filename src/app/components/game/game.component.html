@@ -13,7 +13,12 @@
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>
       <div class="final-score">Lemonade Given: {{ lemonadeGiven }}</div>
-      <button class="restart-button" (click)="restartGame()">Try Again</button>
+      <div class="game-over-buttons">
+        <button class="menu-button" (click)="goToMainMenu()">Main Menu</button>
+        <button class="restart-button" (click)="restartGame()">
+          Try Again
+        </button>
+      </div>
     </div>
   </div>
 

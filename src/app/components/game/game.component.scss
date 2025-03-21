@@ -398,3 +398,38 @@
     margin-bottom: 15px;
   }
 }
+
+.game-over-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  align-items: center;
+
+  @media (max-width: 768px) {
+    gap: 15px;
+    flex-direction: column;
+  }
+
+  .menu-button {
+    position: static;
+    margin: 0;
+    padding: 15px 30px;
+    font-size: 24px;
+    width: auto;
+    height: auto;
+    background-color: #2196f3;
+
+    &:hover {
+      background-color: #1976d2;
+    }
+
+    @media (max-width: 768px) {
+      padding: 12px 24px;
+      font-size: 20px;
+    }
+  }
+
+  .restart-button {
+    margin: 0;
+  }
+}
