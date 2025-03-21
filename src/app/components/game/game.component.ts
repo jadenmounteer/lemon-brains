@@ -153,8 +153,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       frameHeight: 320,
       totalFrames: 2,
       fps: 2,
-      displayWidth: 32,
-      displayHeight: 32,
+      displayWidth: 48,
+      displayHeight: 48,
     };
 
     const canvas = this.spriteAnimationService.loadSprite(zombieConfig);
@@ -200,8 +200,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       // Update facing direction
       zombie.facingLeft = zombie.x > targetX;
 
-      // Move zombie
-      const speed = 0.5;
+      // Move zombie (reduced speed from 0.5 to 0.3)
+      const speed = 0.3;
       zombie.x += (dx / distance) * speed;
       zombie.y += (dy / distance) * speed;
 
