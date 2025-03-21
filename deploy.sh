@@ -3,8 +3,8 @@
 # Get the repository name from git config
 REPO_NAME=$(basename `git rev-parse --show-toplevel`)
 
-# Get the GitHub username from git config
-GITHUB_USERNAME=$(git config user.name)
+# Get the GitHub username from the remote URL instead of git config
+GITHUB_USERNAME=$(git remote get-url origin | sed -n 's/.*github\.com[\/:]\([^/]*\).*/\1/p')
 
 echo "🚀 Deploying $REPO_NAME to GitHub Pages..."
 
