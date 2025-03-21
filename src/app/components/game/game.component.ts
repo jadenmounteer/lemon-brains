@@ -36,6 +36,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
+  private spawnTimeoutMs = 3000; // Starting spawn rate: 3 seconds
+  private minSpawnTimeoutMs = 800; // Fastest spawn rate: 0.8 seconds
+  private spawnRateDecreaseInterval?: ReturnType<typeof setInterval>;
   @Output() exitGame = new EventEmitter<void>();
 
   constructor(
@@ -219,10 +222,34 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private startZombieSpawning() {
-    // Spawn a new zombie every 3 seconds
+    // Initial spawn rate
+    this.spawnTimeoutMs = 3000;
+
+    // Spawn zombies at current rate
     this.zombieSpawnInterval = setInterval(() => {
       this.spawnZombie();
-    }, 3000);
+    }, this.spawnTimeoutMs);
+
+    // Increase difficulty every 10 seconds
+    this.spawnRateDecreaseInterval = setInterval(() => {
+      if (this.spawnTimeoutMs > this.minSpawnTimeoutMs) {
+        // Clear existing spawn interval
+        if (this.zombieSpawnInterval) {
+          clearInterval(this.zombieSpawnInterval);
+        }
+
+        // Decrease spawn time by 200ms
+        this.spawnTimeoutMs = Math.max(
+          this.minSpawnTimeoutMs,
+          this.spawnTimeoutMs - 200
+        );
+
+        // Create new spawn interval with updated rate
+        this.zombieSpawnInterval = setInterval(() => {
+          this.spawnZombie();
+        }, this.spawnTimeoutMs);
+      }
+    }, 10000); // Check every 10 seconds
   }
 
   private setupResizeObserver() {
@@ -388,6 +415,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       clearInterval(this.zombieSpawnInterval);
     }
 
+    // Stop spawn rate progression
+    if (this.spawnRateDecreaseInterval) {
+      clearInterval(this.spawnRateDecreaseInterval);
+    }
+
     // Stop all zombie movement
     this.moveIntervals.forEach((interval) => clearInterval(interval));
     this.moveIntervals.clear();
@@ -410,10 +442,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Existing cleanup code...
+    // Cleanup all intervals
     this.audioService.cleanup();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);
+    }
+    if (this.spawnRateDecreaseInterval) {
+      clearInterval(this.spawnRateDecreaseInterval);
     }
     this.moveIntervals.forEach((interval) => clearInterval(interval));
     this.moveIntervals.clear();
