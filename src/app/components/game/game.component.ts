@@ -79,10 +79,61 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.currentQuestion?.correctAnswer === selectedAnswer) {
       console.log('Correct!');
       this.wrongAnswer = null;
+      this.removeClosestZombie();
       this.generateNewQuestion();
     } else {
       console.log('Wrong answer!');
       this.wrongAnswer = selectedAnswer;
+    }
+  }
+
+  private removeClosestZombie() {
+    if (this.zombies.length === 0) return;
+
+    // Get the game area dimensions
+    const rect = this.gameAreaRef.nativeElement.getBoundingClientRect();
+    const targetX = rect.width / 2;
+    const targetY = rect.height * 0.85;
+
+    // Find the closest zombie
+    let closestZombie = this.zombies[0];
+    let closestDistance = Number.MAX_VALUE;
+
+    this.zombies.forEach((zombie) => {
+      const dx = zombie.x - targetX;
+      const dy = zombie.y - targetY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestZombie = zombie;
+      }
+    });
+
+    // Remove the zombie from our array
+    this.zombies = this.zombies.filter((z) => z.id !== closestZombie.id);
+
+    // Clear the movement interval
+    const interval = this.moveIntervals.get(closestZombie.id);
+    if (interval) {
+      clearInterval(interval);
+      this.moveIntervals.delete(closestZombie.id);
+    }
+
+    // Find and remove the zombie's canvas element with a fade-out animation
+    const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
+      `[data-zombie-id="${closestZombie.id}"]`
+    ) as HTMLCanvasElement;
+
+    if (zombieCanvas) {
+      // Add fade-out animation
+      zombieCanvas.style.transition = 'opacity 0.5s ease-out';
+      zombieCanvas.style.opacity = '0';
+
+      // Remove the element after animation
+      setTimeout(() => {
+        zombieCanvas.remove();
+      }, 500);
     }
   }
 
