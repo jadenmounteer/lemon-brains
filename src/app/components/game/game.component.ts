@@ -26,8 +26,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   zombies: ZombieState[] = [];
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
-  private zombieSpawnInterval?: any;
+  private zombieSpawnInterval?: ReturnType<typeof setInterval>;
   private resizeObserver?: ResizeObserver;
+  private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
+    new Map();
 
   constructor(
     private mathService: MathService,
@@ -103,6 +105,39 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     }, 3000);
   }
 
+  private setupResizeObserver() {
+    this.resizeObserver = new ResizeObserver(() => {
+      this.gameAreaRect =
+        this.gameAreaRef.nativeElement.getBoundingClientRect();
+      // Update all zombie positions when window resizes
+      this.updateAllZombiePositions();
+    });
+    this.resizeObserver.observe(this.gameAreaRef.nativeElement);
+  }
+
+  private updateAllZombiePositions() {
+    const gameArea = this.gameAreaRef.nativeElement;
+    this.zombies.forEach((zombie) => {
+      const canvas = gameArea.querySelector(
+        `[data-zombie-id="${zombie.id}"]`
+      ) as HTMLCanvasElement;
+      if (canvas) {
+        // Convert current positions to percentages
+        const rect = gameArea.getBoundingClientRect();
+        zombie.xPercent = (zombie.x / rect.width) * 100;
+        zombie.yPercent = (zombie.y / rect.height) * 100;
+
+        // Update positions based on new dimensions
+        zombie.x = (zombie.xPercent * rect.width) / 100;
+        zombie.y = (zombie.yPercent * rect.height) / 100;
+
+        // Update canvas position
+        canvas.style.left = `${zombie.x}px`;
+        canvas.style.top = `${zombie.y}px`;
+      }
+    });
+  }
+
   private spawnZombie() {
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
@@ -111,34 +146,44 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Use percentage-based positioning
     const lemonadeStandY = height * 0.9; // 90% from top
-    const padding = 32;
+    const padding = Math.min(32, width * 0.05); // Responsive padding
 
     // Initialize with default values
     let x = 0;
     let y = 0;
+    let xPercent = 0;
+    let yPercent = 0;
 
     // Randomly choose a side to spawn from (0: top, 1: right, 2: left)
     const side = Math.floor(Math.random() * 3);
 
     switch (side) {
       case 0: // top
-        x = Math.random() * (width - padding * 2) + padding;
-        y = 0; // Start at the very top
+        xPercent = Math.random() * (90 - 10) + 10; // 10% to 90% width
+        yPercent = 0;
+        x = (xPercent * width) / 100;
+        y = 0;
         break;
       case 1: // right
-        x = width - padding;
-        y = Math.random() * (lemonadeStandY - padding * 2);
+        xPercent = 95;
+        yPercent = Math.random() * 70; // 0% to 70% height
+        x = (xPercent * width) / 100;
+        y = (yPercent * height) / 100;
         break;
       case 2: // left
-        x = padding;
-        y = Math.random() * (lemonadeStandY - padding * 2);
+        xPercent = 5;
+        yPercent = Math.random() * 70; // 0% to 70% height
+        x = (xPercent * width) / 100;
+        y = (yPercent * height) / 100;
         break;
     }
 
     const zombie: ZombieState = {
       x,
       y,
-      facingLeft: x > width / 2,
+      xPercent,
+      yPercent,
+      facingLeft: xPercent > 50,
       id: this.nextZombieId++,
     };
 
@@ -169,29 +214,26 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.moveZombie(zombie, canvas);
   }
 
-  private setupResizeObserver() {
-    this.resizeObserver = new ResizeObserver(() => {
-      this.gameAreaRect =
-        this.gameAreaRef.nativeElement.getBoundingClientRect();
-    });
-    this.resizeObserver.observe(this.gameAreaRef.nativeElement);
-  }
-
   private moveZombie(zombie: ZombieState, canvas: HTMLCanvasElement) {
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
 
     // Target is the lemonade stand position (matching CSS)
-    const targetX = rect.width / 2; // 50% from left
-    const targetY = rect.height * 0.85; // 85% from top (matches lemonade stand at bottom 15%)
+    const targetXPercent = 50; // Center
+    const targetYPercent = 85; // 85% from top
 
     const moveInterval = setInterval(() => {
+      const rect = gameArea.getBoundingClientRect();
+      const targetX = (targetXPercent * rect.width) / 100;
+      const targetY = (targetYPercent * rect.height) / 100;
+
       const dx = targetX - zombie.x;
       const dy = targetY - zombie.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // If zombie reaches near the lemonade stand
       if (distance < 5) {
+        this.moveIntervals.delete(zombie.id);
         clearInterval(moveInterval);
         // TODO: Implement game over or health reduction logic
         return;
@@ -200,16 +242,22 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       // Update facing direction
       zombie.facingLeft = zombie.x > targetX;
 
-      // Move zombie (reduced speed from 0.5 to 0.3)
+      // Move zombie
       const speed = 0.3;
       zombie.x += (dx / distance) * speed;
       zombie.y += (dy / distance) * speed;
+
+      // Update percentages
+      zombie.xPercent = (zombie.x / rect.width) * 100;
+      zombie.yPercent = (zombie.y / rect.height) * 100;
 
       // Update zombie position
       canvas.style.left = `${zombie.x}px`;
       canvas.style.top = `${zombie.y}px`;
       canvas.style.transform = `scaleX(${zombie.facingLeft ? 1 : -1})`;
     }, 16);
+
+    this.moveIntervals.set(zombie.id, moveInterval);
   }
 
   ngOnDestroy() {
@@ -219,5 +267,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
+    // Clear all move intervals
+    this.moveIntervals.forEach((interval) => clearInterval(interval));
+    this.moveIntervals.clear();
   }
 }
