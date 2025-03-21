@@ -12,9 +12,8 @@ import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MathService } from '../../services/math.service';
 import { AudioService } from '../../services/audio.service';
-import { FullscreenService } from '../../services/fullscreen.service';
-import { MathQuestion } from '../../models/math-question.interface';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
+import { MathQuestion } from '../../models/math-question.interface';
 import { ZombieState } from '../../models/zombie.interface';
 
 @Component({
@@ -43,13 +42,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private mathService: MathService,
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
-    private audioService: AudioService,
-    private fullscreenService: FullscreenService
+    private audioService: AudioService
   ) {}
 
   ngOnInit() {
     this.generateNewQuestion();
-    this.fullscreenService.enableFullscreen();
   }
 
   ngAfterViewInit() {
@@ -427,9 +424,5 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleMusic() {
     this.isMusicPlaying = this.audioService.toggle();
-  }
-
-  private enableFullScreen() {
-    this.fullscreenService.enableFullscreen();
   }
 }
