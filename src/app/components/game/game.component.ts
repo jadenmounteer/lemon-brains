@@ -9,6 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MathService } from '../../services/math.service';
+import { AudioService } from '../../services/audio.service';
 import { MathQuestion } from '../../models/math-question.interface';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
 import { ZombieState } from '../../models/zombie.interface';
@@ -26,6 +27,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   wrongAnswer: number | null = null;
   zombies: ZombieState[] = [];
   isGameOver = false;
+  isMusicPlaying = false;
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
@@ -36,7 +38,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private mathService: MathService,
     private spriteAnimationService: SpriteAnimationService,
-    private router: Router
+    private router: Router,
+    private audioService: AudioService
   ) {}
 
   ngOnInit() {
@@ -48,6 +51,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.initLemonadeStand();
     this.setupResizeObserver();
     this.startZombieSpawning();
+    // Start playing music when game starts
+    this.audioService.play();
+    this.isMusicPlaying = true;
   }
 
   private initLemonadeStand() {
@@ -421,14 +427,19 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    // Stop music when leaving game
+    this.audioService.pause();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);
     }
+    this.moveIntervals.forEach((interval) => clearInterval(interval));
+    this.moveIntervals.clear();
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
     }
-    // Clear all move intervals
-    this.moveIntervals.forEach((interval) => clearInterval(interval));
-    this.moveIntervals.clear();
+  }
+
+  toggleMusic() {
+    this.isMusicPlaying = this.audioService.toggle();
   }
 }

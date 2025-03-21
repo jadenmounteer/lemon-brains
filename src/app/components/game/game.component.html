@@ -4,6 +4,10 @@
       <span class="menu-icon">←</span> Menu
     </button>
 
+    <button class="music-button" (click)="toggleMusic()">
+      <span class="music-icon">{{ isMusicPlaying ? "🔊" : "🔇" }}</span>
+    </button>
+
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>
       <button class="restart-button" (click)="restartGame()">Try Again</button>
