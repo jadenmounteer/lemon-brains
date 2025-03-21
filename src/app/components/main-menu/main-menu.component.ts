@@ -23,9 +23,9 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
         <div #lemonadeContainer class="lemonade-container"></div>
       </div>
       <div class="description">
-        Help the zombies quench their thirst for knowledge! Answer math
-        questions correctly to serve them refreshing lemonade and keep them from
-        reaching your stand.
+        Help the zombies quench their thirst for knowledge! Answer multiple
+        choice questions correctly to serve them refreshing lemonade and keep
+        them from reaching your stand.
       </div>
 
       <div class="settings-panel" [class.open]="showSettings">
