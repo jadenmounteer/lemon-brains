@@ -111,6 +111,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
+    // Create and animate lemonade projectile
+    this.shootLemonadeAt(closestZombie);
+
     // Remove the zombie from our array
     this.zombies = this.zombies.filter((z) => z.id !== closestZombie.id);
 
@@ -136,6 +139,65 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         zombieCanvas.remove();
       }, 500);
     }
+  }
+
+  private shootLemonadeAt(zombie: ZombieState) {
+    console.log('Shooting lemonade at zombie:', zombie.id);
+
+    const lemonadeConfig = {
+      imageUrl: 'assets/sprites/lemonade.png',
+      frameWidth: 128, // Width of one frame (256/2 columns)
+      frameHeight: 128, // Height of one frame (384/3 rows)
+      totalFrames: 1, // We only want to show one frame
+      currentFrame: 0, // Use first frame
+      fps: 1,
+      displayWidth: 96, // Larger display size
+      displayHeight: 96, // Keep it square
+    };
+
+    console.log('Loading lemonade sprite with config:', lemonadeConfig);
+    const canvas = this.spriteAnimationService.loadSprite(lemonadeConfig);
+
+    canvas.classList.add('lemonade-projectile');
+    console.log('Added lemonade-projectile class');
+
+    // Start from lemonade stand position
+    const gameArea = this.gameAreaRef.nativeElement;
+    const rect = gameArea.getBoundingClientRect();
+    const startX = rect.width / 2;
+    const startY = rect.height * 0.85;
+
+    // Set initial position and style
+    canvas.style.position = 'absolute';
+    canvas.style.width = `${lemonadeConfig.displayWidth}px`;
+    canvas.style.height = `${lemonadeConfig.displayHeight}px`;
+    canvas.style.left = `${startX}px`;
+    canvas.style.top = `${startY}px`;
+    canvas.style.opacity = '1';
+    canvas.style.transform = 'translate(-50%, -50%) scale(1) rotate(-45deg)';
+    canvas.style.zIndex = '3';
+
+    console.log('Initial lemonade position:', { startX, startY });
+    gameArea.appendChild(canvas);
+
+    // Animate to zombie position
+    requestAnimationFrame(() => {
+      canvas.style.transition = 'all 0.5s ease-out';
+      canvas.style.left = `${zombie.x + 36}px`;
+      canvas.style.top = `${zombie.y + 36}px`;
+      canvas.style.transform = 'translate(-50%, -50%) scale(0.5) rotate(45deg)';
+      canvas.style.opacity = '0';
+      console.log('Animating to position:', {
+        x: zombie.x + 36,
+        y: zombie.y + 36,
+      });
+    });
+
+    // Remove the projectile after animation
+    setTimeout(() => {
+      canvas.remove();
+      console.log('Removed lemonade projectile');
+    }, 500);
   }
 
   private preventZoom() {
