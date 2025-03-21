@@ -427,8 +427,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    // Stop music when leaving game
-    this.audioService.pause();
+    // Stop music and sound effects when leaving game
+    this.audioService.cleanup();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);
     }
