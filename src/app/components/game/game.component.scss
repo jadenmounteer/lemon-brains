@@ -153,7 +153,7 @@
 }
 
 .game-over-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -163,8 +163,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  z-index: 10;
-  animation: fadeIn 0.5s ease-in;
+  z-index: 1000;
 }
 
 .game-over-text {
@@ -174,6 +173,13 @@
   text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
   margin-bottom: 30px;
   animation: pulse 2s infinite;
+  text-align: center;
+  padding: 0 20px;
+
+  @media (max-width: 768px) {
+    font-size: 48px;
+    margin-bottom: 20px;
+  }
 }
 
 .restart-button {
@@ -186,6 +192,11 @@
   cursor: pointer;
   transition: all 0.3s ease;
   font-family: "Creepster", cursive;
+
+  @media (max-width: 768px) {
+    padding: 12px 24px;
+    font-size: 20px;
+  }
 
   &:hover {
     background-color: #45a049;
