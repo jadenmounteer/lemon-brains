@@ -1,6 +1,12 @@
 <div class="game-container">
   <div class="game-half game-area" #gameArea>
-    <!-- Lemonade stand will be added here dynamically -->
+    <!-- Game over overlay -->
+    <div class="game-over-overlay" *ngIf="isGameOver">
+      <h1 class="game-over-text">Game Over</h1>
+      <button class="restart-button" (click)="restartGame()">
+        Restart Game
+      </button>
+    </div>
   </div>
 
   <div class="game-half question-area">
@@ -12,6 +18,7 @@
           (click)="checkAnswer(option)"
           class="option-button"
           [class.wrong]="wrongAnswer === option"
+          [disabled]="isGameOver"
         >
           {{ option }}
         </button>

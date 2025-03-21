@@ -24,6 +24,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   currentQuestion?: MathQuestion;
   wrongAnswer: number | null = null;
   zombies: ZombieState[] = [];
+  isGameOver = false;
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
@@ -286,7 +287,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       if (distance < 5) {
         this.moveIntervals.delete(zombie.id);
         clearInterval(moveInterval);
-        // TODO: Implement game over or health reduction logic
+        this.handleGameOver();
         return;
       }
 
@@ -309,6 +310,43 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     }, 16);
 
     this.moveIntervals.set(zombie.id, moveInterval);
+  }
+
+  private handleGameOver() {
+    this.isGameOver = true;
+
+    // Stop spawning new zombies
+    if (this.zombieSpawnInterval) {
+      clearInterval(this.zombieSpawnInterval);
+    }
+
+    // Stop all zombie movement
+    this.moveIntervals.forEach((interval) => clearInterval(interval));
+    this.moveIntervals.clear();
+  }
+
+  restartGame() {
+    // Reset game state
+    this.isGameOver = false;
+
+    // Clear all zombies
+    this.zombies = [];
+    const gameArea = this.gameAreaRef.nativeElement;
+    const zombieElements = gameArea.querySelectorAll('.zombie');
+    zombieElements.forEach((zombie: Element) => zombie.remove());
+
+    // Reset zombie ID counter
+    this.nextZombieId = 0;
+
+    // Clear all intervals
+    this.moveIntervals.forEach((interval) => clearInterval(interval));
+    this.moveIntervals.clear();
+
+    // Start spawning zombies again
+    this.startZombieSpawning();
+
+    // Generate new question
+    this.generateNewQuestion();
   }
 
   ngOnDestroy() {
