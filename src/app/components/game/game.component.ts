@@ -29,6 +29,7 @@ export class GameComponent implements OnInit, AfterViewInit {
 
   ngOnInit() {
     this.generateNewQuestion();
+    this.preventZoom();
   }
 
   ngAfterViewInit() {
@@ -40,8 +41,10 @@ export class GameComponent implements OnInit, AfterViewInit {
       imageUrl: 'assets/sprites/lemonade-stand.png',
       frameWidth: 320,
       frameHeight: 320,
-      totalFrames: 2, // Assuming 2 frames based on the dimensions
-      fps: 2,
+      totalFrames: 2,
+      fps: 1,
+      displayWidth: 64,
+      displayHeight: 64,
     };
 
     const canvas = this.spriteAnimationService.loadSprite(lemonadeStandConfig);
@@ -62,5 +65,17 @@ export class GameComponent implements OnInit, AfterViewInit {
       console.log('Wrong answer!');
       this.wrongAnswer = selectedAnswer;
     }
+  }
+
+  private preventZoom() {
+    document.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
   }
 }

@@ -6,6 +6,8 @@ export interface SpriteConfig {
   frameHeight: number;
   totalFrames: number;
   fps: number;
+  displayWidth: number;
+  displayHeight: number;
 }
 
 @Injectable({
@@ -18,8 +20,8 @@ export class SpriteAnimationService {
 
     if (!ctx) return canvas;
 
-    canvas.width = config.frameWidth;
-    canvas.height = config.frameHeight;
+    canvas.width = config.displayWidth;
+    canvas.height = config.displayHeight;
 
     const spriteImage = new Image();
     spriteImage.src = config.imageUrl;
@@ -28,7 +30,7 @@ export class SpriteAnimationService {
 
     spriteImage.onload = () => {
       setInterval(() => {
-        ctx.clearRect(0, 0, config.frameWidth, config.frameHeight);
+        ctx.clearRect(0, 0, config.displayWidth, config.displayHeight);
 
         const frameX =
           (currentFrame % (spriteImage.width / config.frameWidth)) *
@@ -42,8 +44,8 @@ export class SpriteAnimationService {
           config.frameHeight,
           0,
           0,
-          config.frameWidth,
-          config.frameHeight
+          config.displayWidth,
+          config.displayHeight
         );
 
         currentFrame = (currentFrame + 1) % config.totalFrames;
