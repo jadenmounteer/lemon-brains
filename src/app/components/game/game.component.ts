@@ -190,15 +190,18 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private shootLemonadeAt(zombie: ZombieState) {
     console.log('Shooting lemonade at zombie:', zombie.id);
 
+    const rect = this.gameAreaRef.nativeElement.getBoundingClientRect();
+    const projectileSize = Math.min(rect.width, rect.height) * 0.15; // 15% of smallest screen dimension
+
     const lemonadeConfig = {
       imageUrl: 'assets/sprites/lemonade.png',
-      frameWidth: 128, // Width of one frame (256/2 columns)
-      frameHeight: 128, // Height of one frame (384/3 rows)
-      totalFrames: 1, // We only want to show one frame
-      currentFrame: 0, // Use first frame
+      frameWidth: 128,
+      frameHeight: 128,
+      totalFrames: 1,
+      currentFrame: 0,
       fps: 1,
-      displayWidth: 96, // Larger display size
-      displayHeight: 96, // Keep it square
+      displayWidth: projectileSize,
+      displayHeight: projectileSize,
     };
 
     console.log('Loading lemonade sprite with config:', lemonadeConfig);
@@ -209,7 +212,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Start from lemonade stand position
     const gameArea = this.gameAreaRef.nativeElement;
-    const rect = gameArea.getBoundingClientRect();
     const startX = rect.width / 2;
     const startY = rect.height * 0.85;
 
@@ -226,23 +228,22 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     console.log('Initial lemonade position:', { startX, startY });
     gameArea.appendChild(canvas);
 
+    // Calculate offset based on zombie size
+    const zombieOffset =
+      zombie.type === 'king' ? 72 : zombie.type === 'fat' ? 48 : 36;
+
     // Animate to zombie position
     requestAnimationFrame(() => {
       canvas.style.transition = 'all 0.5s ease-out';
-      canvas.style.left = `${zombie.x + 36}px`;
-      canvas.style.top = `${zombie.y + 36}px`;
+      canvas.style.left = `${zombie.x + zombieOffset}px`;
+      canvas.style.top = `${zombie.y + zombieOffset}px`;
       canvas.style.transform = 'translate(-50%, -50%) scale(0.5) rotate(45deg)';
       canvas.style.opacity = '0';
-      console.log('Animating to position:', {
-        x: zombie.x + 36,
-        y: zombie.y + 36,
-      });
     });
 
     // Remove the projectile after animation
     setTimeout(() => {
       canvas.remove();
-      console.log('Removed lemonade projectile');
     }, 500);
   }
 
@@ -447,13 +448,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     const targetX = rect.width / 2;
     const targetY = rect.height * 0.85;
 
-    // Calculate initial direction to lemonade stand
-    const dx = targetX - zombie.x;
-    const dy = targetY - zombie.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Calculate collision distance based on screen size
+    const baseCollisionDistance = Math.min(rect.width, rect.height) * 0.05; // 5% of smallest screen dimension
 
-    // Update zombie facing direction
-    zombie.facingLeft = dx > 0;
+    // Calculate base speed relative to screen size
+    const baseSpeed = Math.min(rect.width, rect.height) * 0.0003; // 0.03% of smallest screen dimension
 
     // Base movement interval
     const moveInterval = setInterval(() => {
@@ -467,13 +466,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // Check if zombie has reached the lemonade stand
-      if (distance < 32) {
+      if (distance < baseCollisionDistance) {
         this.handleGameOver();
         return;
       }
 
-      // Base speed of 0.15 multiplied by zombie's speed factor
-      const speed = 0.15 * zombie.speed;
+      // Base speed multiplied by zombie's speed factor, scaled to screen size
+      const speed = baseSpeed * zombie.speed;
       zombie.x += (dx / distance) * speed;
       zombie.y += (dy / distance) * speed;
 
