@@ -39,9 +39,12 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
 
   @media (max-width: 768px) {
     height: 30vh;
+    padding: 10px;
   }
 }
 
@@ -57,6 +60,14 @@
   max-width: 500px;
   margin: 0 auto;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 10px;
+  }
 
   h2 {
     font-size: 24px;
@@ -75,13 +86,21 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 15px;
   width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 0 10px;
+  box-sizing: border-box;
 
   @media (max-width: 480px) {
     grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 300px;
   }
 }
 
 .option-button {
+  width: 100%;
   padding: 15px 20px;
   font-size: 18px;
   cursor: pointer;
@@ -92,6 +111,12 @@
   transition: all 0.3s ease;
   min-height: 44px;
   touch-action: manipulation;
+  box-sizing: border-box;
+
+  @media (max-width: 768px) {
+    padding: 12px 15px;
+    font-size: 16px;
+  }
 
   &:hover {
     background: #4caf50;
