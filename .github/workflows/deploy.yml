@@ -23,10 +23,14 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build -- --configuration production --base-href /lemon-brains/
+        run: |
+          npm run build -- \
+            --configuration production \
+            --base-href="/lemon-brains/" \
+            --output-path=dist/lemon-brains
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: dist/lemon-brains/browser # The folder the action should deploy
+          folder: dist/lemon-brains # The folder the action should deploy
           branch: gh-pages # The branch the action should deploy to
