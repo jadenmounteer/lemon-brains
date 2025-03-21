@@ -49,11 +49,15 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.preventZoom();
     this.fullscreenService.enableFullscreen();
 
-    // Handle back/forward gestures
+    // Handle back/forward gestures and prevent default browser behavior
     window.addEventListener('popstate', (e) => {
       e.preventDefault();
+      e.stopPropagation();
       this.goToMainMenu();
     });
+
+    // Push an initial state to handle the first back action
+    history.pushState({ page: 'game' }, '', window.location.pathname);
   }
 
   ngAfterViewInit() {
@@ -453,17 +457,21 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up game state
     this.ngOnDestroy();
 
-    // Prevent default navigation behavior
-    history.pushState(null, '', '/');
+    // Use replaceState instead of pushState to avoid browser history stack
+    history.replaceState({ page: 'home' }, '', '/');
 
-    // Navigate using Angular router
+    // Navigate using Angular router with replaceUrl
     this.router.navigate(['/'], {
-      replaceUrl: true, // Replace current history entry instead of adding new one
+      replaceUrl: true,
+      skipLocationChange: true, // This prevents updating the browser's URL
     });
   }
 
   ngOnDestroy() {
-    // Stop music and sound effects when leaving game
+    // Remove popstate listener
+    window.removeEventListener('popstate', this.goToMainMenu);
+
+    // Existing cleanup code...
     this.audioService.cleanup();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);
