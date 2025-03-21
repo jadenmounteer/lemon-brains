@@ -101,10 +101,12 @@
 .lemonade-stand {
   position: absolute;
   left: 50%;
-  bottom: 10%;
-  transform: translateX(-50%);
+  bottom: 15%;
+  transform: translate(-50%, 0);
   image-rendering: pixelated;
   z-index: 2; // Make sure stand appears above zombies
+  width: 64px;
+  height: 64px;
 }
 
 .zombie {
@@ -113,4 +115,5 @@
   pointer-events: none;
   z-index: 1;
   width: 32px;
+  height: 32px;
 }

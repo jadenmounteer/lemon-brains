@@ -58,6 +58,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const canvas = this.spriteAnimationService.loadSprite(lemonadeStandConfig);
     canvas.classList.add('lemonade-stand');
+    canvas.style.position = 'absolute';
+    canvas.style.left = '50%';
+    canvas.style.bottom = '15%';
+    canvas.style.transform = 'translate(-50%, 0)';
+    canvas.style.width = '64px';
+    canvas.style.height = '64px';
+    canvas.style.imageRendering = 'pixelated';
+    canvas.style.zIndex = '2';
     this.gameAreaRef.nativeElement.appendChild(canvas);
   }
 
@@ -173,9 +181,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
 
-    // Target is the lemonade stand position
-    const targetX = rect.width / 2;
-    const targetY = rect.height * 0.85; // Slightly above the lemonade stand
+    // Target is the lemonade stand position (matching CSS)
+    const targetX = rect.width / 2; // 50% from left
+    const targetY = rect.height * 0.85; // 85% from top (matches lemonade stand at bottom 15%)
 
     const moveInterval = setInterval(() => {
       const dx = targetX - zombie.x;
