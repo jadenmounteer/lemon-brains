@@ -282,8 +282,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private scheduleNextKing() {
-    // Schedule king spawn check every 3 minutes (180,000ms)
-    const kingSpawnDelay = 180000;
+    // Schedule king spawn check every 2 minutes (120,000ms)
+    const kingSpawnDelay = 120000;
     this.kingSpawnTimeout = setTimeout(() => {
       // 40% chance to spawn a king
       if (Math.random() < 0.4) {
