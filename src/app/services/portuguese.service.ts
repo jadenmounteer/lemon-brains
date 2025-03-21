@@ -27,6 +27,12 @@ export class PortugueseService {
     { portuguese: 'irmã', english: 'sister', category: 'vocabulary' },
     { portuguese: 'avó', english: 'grandmother', category: 'vocabulary' },
     { portuguese: 'avô', english: 'grandfather', category: 'vocabulary' },
+    { portuguese: 'filho', english: 'son', category: 'vocabulary' },
+    { portuguese: 'filha', english: 'daughter', category: 'vocabulary' },
+    { portuguese: 'tio', english: 'uncle', category: 'vocabulary' },
+    { portuguese: 'tia', english: 'aunt', category: 'vocabulary' },
+    { portuguese: 'primo', english: 'cousin (male)', category: 'vocabulary' },
+    { portuguese: 'prima', english: 'cousin (female)', category: 'vocabulary' },
     // Food and drinks
     { portuguese: 'pão', english: 'bread', category: 'vocabulary' },
     { portuguese: 'café', english: 'coffee', category: 'vocabulary' },
@@ -34,6 +40,13 @@ export class PortugueseService {
     { portuguese: 'arroz', english: 'rice', category: 'vocabulary' },
     { portuguese: 'feijão', english: 'beans', category: 'vocabulary' },
     { portuguese: 'fruta', english: 'fruit', category: 'vocabulary' },
+    { portuguese: 'carne', english: 'meat', category: 'vocabulary' },
+    { portuguese: 'peixe', english: 'fish', category: 'vocabulary' },
+    { portuguese: 'suco', english: 'juice', category: 'vocabulary' },
+    { portuguese: 'cerveja', english: 'beer', category: 'vocabulary' },
+    { portuguese: 'vinho', english: 'wine', category: 'vocabulary' },
+    { portuguese: 'sobremesa', english: 'dessert', category: 'vocabulary' },
+    { portuguese: 'sorvete', english: 'ice cream', category: 'vocabulary' },
     // Common objects
     { portuguese: 'livro', english: 'book', category: 'vocabulary' },
     { portuguese: 'mesa', english: 'table', category: 'vocabulary' },
@@ -41,6 +54,33 @@ export class PortugueseService {
     { portuguese: 'cama', english: 'bed', category: 'vocabulary' },
     { portuguese: 'porta', english: 'door', category: 'vocabulary' },
     { portuguese: 'janela', english: 'window', category: 'vocabulary' },
+    { portuguese: 'computador', english: 'computer', category: 'vocabulary' },
+    { portuguese: 'telefone', english: 'phone', category: 'vocabulary' },
+    { portuguese: 'televisão', english: 'television', category: 'vocabulary' },
+    { portuguese: 'chave', english: 'key', category: 'vocabulary' },
+    { portuguese: 'relógio', english: 'clock/watch', category: 'vocabulary' },
+    // Places
+    { portuguese: 'praia', english: 'beach', category: 'vocabulary' },
+    { portuguese: 'escola', english: 'school', category: 'vocabulary' },
+    {
+      portuguese: 'restaurante',
+      english: 'restaurant',
+      category: 'vocabulary',
+    },
+    { portuguese: 'hospital', english: 'hospital', category: 'vocabulary' },
+    { portuguese: 'mercado', english: 'market', category: 'vocabulary' },
+    { portuguese: 'banco', english: 'bank', category: 'vocabulary' },
+    { portuguese: 'parque', english: 'park', category: 'vocabulary' },
+    { portuguese: 'igreja', english: 'church', category: 'vocabulary' },
+    // Weather and Nature
+    { portuguese: 'sol', english: 'sun', category: 'vocabulary' },
+    { portuguese: 'chuva', english: 'rain', category: 'vocabulary' },
+    { portuguese: 'vento', english: 'wind', category: 'vocabulary' },
+    { portuguese: 'nuvem', english: 'cloud', category: 'vocabulary' },
+    { portuguese: 'mar', english: 'sea', category: 'vocabulary' },
+    { portuguese: 'montanha', english: 'mountain', category: 'vocabulary' },
+    { portuguese: 'floresta', english: 'forest', category: 'vocabulary' },
+    { portuguese: 'rio', english: 'river', category: 'vocabulary' },
   ];
 
   private phrases: PortugueseWord[] = [
@@ -51,12 +91,25 @@ export class PortugueseService {
     { portuguese: 'Olá', english: 'Hello', category: 'phrases' },
     { portuguese: 'Tchau', english: 'Goodbye', category: 'phrases' },
     { portuguese: 'Até logo', english: 'See you later', category: 'phrases' },
+    {
+      portuguese: 'Até amanhã',
+      english: 'See you tomorrow',
+      category: 'phrases',
+    },
+    { portuguese: 'Bem-vindo(a)', english: 'Welcome', category: 'phrases' },
     // Common expressions
     { portuguese: 'Como vai?', english: 'How are you?', category: 'phrases' },
     { portuguese: 'Tudo bem?', english: 'All good?', category: 'phrases' },
     { portuguese: 'Obrigado(a)', english: 'Thank you', category: 'phrases' },
     { portuguese: 'Por favor', english: 'Please', category: 'phrases' },
     { portuguese: 'De nada', english: "You're welcome", category: 'phrases' },
+    {
+      portuguese: 'Prazer',
+      english: 'Nice to meet you',
+      category: 'phrases',
+    },
+    { portuguese: 'Desculpe', english: 'Sorry', category: 'phrases' },
+    { portuguese: 'Parabéns', english: 'Congratulations', category: 'phrases' },
     // Useful phrases
     {
       portuguese: 'Eu não entendo',
@@ -83,6 +136,79 @@ export class PortugueseService {
     {
       portuguese: 'Me ajuda?',
       english: 'Can you help me?',
+      category: 'phrases',
+    },
+    // Restaurant phrases
+    {
+      portuguese: 'A conta, por favor',
+      english: 'The bill, please',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Estou com fome',
+      english: 'I am hungry',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Estou com sede',
+      english: 'I am thirsty',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Está delicioso',
+      english: 'It is delicious',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Quero fazer um pedido',
+      english: 'I want to order',
+      category: 'phrases',
+    },
+    // Travel phrases
+    {
+      portuguese: 'Onde fica o banheiro?',
+      english: 'Where is the bathroom?',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Quanto tempo leva?',
+      english: 'How long does it take?',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Você fala inglês?',
+      english: 'Do you speak English?',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Eu estou perdido(a)',
+      english: 'I am lost',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Que horas são?',
+      english: 'What time is it?',
+      category: 'phrases',
+    },
+    // Emergency phrases
+    {
+      portuguese: 'Preciso de ajuda',
+      english: 'I need help',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Chame a polícia',
+      english: 'Call the police',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'Chame uma ambulância',
+      english: 'Call an ambulance',
+      category: 'phrases',
+    },
+    {
+      portuguese: 'É uma emergência',
+      english: 'It is an emergency',
       category: 'phrases',
     },
   ];
