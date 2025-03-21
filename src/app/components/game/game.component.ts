@@ -389,7 +389,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       id: this.nextZombieId++,
       speed: speed,
       type: isFatZombie ? 'fat' : 'normal',
-      health: isFatZombie ? 2 : 1,
+      health: isFatZombie ? Math.floor(Math.random() * 2) + 2 : 1, // Random 2-3 health for fat zombies
     };
 
     this.zombies.push(zombie);
