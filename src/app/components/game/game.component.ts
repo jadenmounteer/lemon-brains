@@ -35,6 +35,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
+  private boundPopStateHandler: (e: PopStateEvent) => void;
 
   constructor(
     private mathService: MathService,
@@ -42,22 +43,34 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private audioService: AudioService,
     private fullscreenService: FullscreenService
-  ) {}
+  ) {
+    // Bind the handler in constructor so we can properly remove it later
+    this.boundPopStateHandler = this.handlePopState.bind(this);
+  }
+
+  private handlePopState(e: PopStateEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Stay on current page, don't allow browser navigation
+    history.pushState(null, '', window.location.pathname);
+  }
 
   ngOnInit() {
     this.generateNewQuestion();
     this.preventZoom();
     this.fullscreenService.enableFullscreen();
 
-    // Handle back/forward gestures and prevent default browser behavior
-    window.addEventListener('popstate', (e) => {
+    // Prevent default browser navigation
+    window.onpopstate = (e) => {
       e.preventDefault();
-      e.stopPropagation();
       this.goToMainMenu();
-    });
+      return false;
+    };
 
-    // Push an initial state to handle the first back action
-    history.pushState({ page: 'game' }, '', window.location.pathname);
+    // Prevent the page from being added to browser history
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState({}, '', window.location.href);
+    }
   }
 
   ngAfterViewInit() {
@@ -222,18 +235,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private preventZoom() {
-    // Prevent zoom
-    document.addEventListener(
-      'touchmove',
-      (e) => {
-        if (e.touches.length > 1) {
-          e.preventDefault();
-        }
-      },
-      { passive: false }
-    );
-
-    // Prevent Safari's bounce effect
     document.addEventListener(
       'touchmove',
       (e) => {
@@ -242,13 +243,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       { passive: false }
     );
 
-    // Prevent default touch handling
     document.addEventListener(
       'touchstart',
       (e) => {
-        if (e.touches.length > 1) {
-          e.preventDefault();
-        }
+        e.preventDefault();
       },
       { passive: false }
     );
@@ -457,19 +455,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Clean up game state
     this.ngOnDestroy();
 
-    // Use replaceState instead of pushState to avoid browser history stack
-    history.replaceState({ page: 'home' }, '', '/');
-
-    // Navigate using Angular router with replaceUrl
-    this.router.navigate(['/'], {
-      replaceUrl: true,
-      skipLocationChange: true, // This prevents updating the browser's URL
-    });
+    // Use window.location.replace to avoid adding to browser history
+    window.location.replace('/');
   }
 
   ngOnDestroy() {
-    // Remove popstate listener
-    window.removeEventListener('popstate', this.goToMainMenu);
+    // Remove popstate listener properly
+    window.removeEventListener('popstate', this.boundPopStateHandler);
 
     // Existing cleanup code...
     this.audioService.cleanup();

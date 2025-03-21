@@ -6,12 +6,9 @@ export const routes: Routes = [
   {
     path: '',
     component: MainMenuComponent,
-    data: { skipLocationChange: true },
   },
   {
     path: 'game',
     component: GameComponent,
-    data: { skipLocationChange: true },
   },
-  { path: '**', redirectTo: '' },
 ];
