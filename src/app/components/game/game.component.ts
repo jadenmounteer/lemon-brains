@@ -137,30 +137,48 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Create and animate lemonade projectile
     this.shootLemonadeAt(closestZombie);
 
-    // Remove the zombie from our array
-    this.zombies = this.zombies.filter((z) => z.id !== closestZombie.id);
+    // Reduce zombie health
+    closestZombie.health--;
 
-    // Clear the movement interval
-    const interval = this.moveIntervals.get(closestZombie.id);
-    if (interval) {
-      clearInterval(interval);
-      this.moveIntervals.delete(closestZombie.id);
-    }
+    // Only remove zombie if health is 0
+    if (closestZombie.health <= 0) {
+      // Remove the zombie from our array
+      this.zombies = this.zombies.filter((z) => z.id !== closestZombie.id);
 
-    // Find and remove the zombie's canvas element with a fade-out animation
-    const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
-      `[data-zombie-id="${closestZombie.id}"]`
-    ) as HTMLCanvasElement;
+      // Clear the movement interval
+      const interval = this.moveIntervals.get(closestZombie.id);
+      if (interval) {
+        clearInterval(interval);
+        this.moveIntervals.delete(closestZombie.id);
+      }
 
-    if (zombieCanvas) {
-      // Add fade-out animation
-      zombieCanvas.style.transition = 'opacity 0.5s ease-out';
-      zombieCanvas.style.opacity = '0';
+      // Find and remove the zombie's canvas element with a fade-out animation
+      const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
+        `[data-zombie-id="${closestZombie.id}"]`
+      ) as HTMLCanvasElement;
 
-      // Remove the element after animation
-      setTimeout(() => {
-        zombieCanvas.remove();
-      }, 500);
+      if (zombieCanvas) {
+        // Add fade-out animation
+        zombieCanvas.style.transition = 'opacity 0.5s ease-out';
+        zombieCanvas.style.opacity = '0';
+
+        // Remove the element after animation
+        setTimeout(() => {
+          zombieCanvas.remove();
+        }, 500);
+      }
+    } else {
+      // Flash the zombie to indicate it was hit but not defeated
+      const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
+        `[data-zombie-id="${closestZombie.id}"]`
+      ) as HTMLCanvasElement;
+
+      if (zombieCanvas) {
+        zombieCanvas.style.filter = 'brightness(2)';
+        setTimeout(() => {
+          zombieCanvas.style.filter = 'none';
+        }, 200);
+      }
     }
   }
 
@@ -341,6 +359,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed
     }
 
+    // 20% chance to spawn a fat zombie
+    const isFatZombie = Math.random() < 0.2;
+
     const zombie: ZombieState = {
       x,
       y,
@@ -348,7 +369,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       yPercent,
       facingLeft: xPercent > 50,
       id: this.nextZombieId++,
-      speed,
+      speed: isFatZombie ? speed * 0.8 : speed, // Fat zombies are slightly slower
+      type: isFatZombie ? 'fat' : 'normal',
+      health: isFatZombie ? 2 : 1, // Fat zombies take 2 hits
     };
 
     this.zombies.push(zombie);
@@ -357,13 +380,16 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   private createZombieSprite(zombie: ZombieState) {
     const zombieConfig = {
-      imageUrl: 'assets/sprites/zombie.png',
+      imageUrl:
+        zombie.type === 'fat'
+          ? 'assets/sprites/fat-zombie.png'
+          : 'assets/sprites/zombie.png',
       frameWidth: 320,
       frameHeight: 320,
       totalFrames: 2,
       fps: 2,
-      displayWidth: 72,
-      displayHeight: 72,
+      displayWidth: zombie.type === 'fat' ? 96 : 72, // Fat zombies are bigger
+      displayHeight: zombie.type === 'fat' ? 96 : 72,
     };
 
     const canvas = this.spriteAnimationService.loadSprite(zombieConfig);
