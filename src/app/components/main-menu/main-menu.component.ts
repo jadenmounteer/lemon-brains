@@ -28,6 +28,13 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
         them from reaching your stand.
       </div>
 
+      <div class="current-learning">
+        Currently Learning:
+        <span class="curriculum">{{
+          settings.curriculum === 'math' ? 'Mathematics' : 'Portuguese'
+        }}</span>
+      </div>
+
       <div class="settings-panel" [class.open]="showSettings">
         <h2>Game Settings</h2>
         <div class="settings-group">
