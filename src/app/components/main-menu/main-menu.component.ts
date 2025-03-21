@@ -80,10 +80,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range0to5"
                 (change)="updateSettings()"
               />
-              <span class="difficulty-label">
-                Numbers 0-5
-                <small class="difficulty-hint">(Easy)</small>
-              </span>
+              <span class="difficulty-label"> Numbers 0-5 </span>
             </label>
             <label>
               <input
@@ -91,10 +88,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range5to10"
                 (change)="updateSettings()"
               />
-              <span class="difficulty-label">
-                Numbers 5-10
-                <small class="difficulty-hint">(Medium)</small>
-              </span>
+              <span class="difficulty-label"> Numbers 5-10 </span>
             </label>
             <label>
               <input
@@ -102,9 +96,56 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range10to20"
                 (change)="updateSettings()"
               />
+              <span class="difficulty-label"> Numbers 10-20 </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Game Difficulty</h3>
+          <p class="difficulty-description">
+            Choose how challenging the zombies will be:
+          </p>
+          <div class="radio-group">
+            <label>
+              <input
+                type="radio"
+                [(ngModel)]="settings.gameDifficulty"
+                value="easy"
+                (change)="updateSettings()"
+              />
               <span class="difficulty-label">
-                Numbers 10-20
-                <small class="difficulty-hint">(Hard)</small>
+                Easy
+                <small class="difficulty-hint">
+                  More forgiving with slower zombies and more time between
+                  spawns
+                </small>
+              </span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                [(ngModel)]="settings.gameDifficulty"
+                value="normal"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Normal
+                <small class="difficulty-hint"> A balanced challenge </small>
+              </span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                [(ngModel)]="settings.gameDifficulty"
+                value="hard"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Hard
+                <small class="difficulty-hint">
+                  Intense gameplay with faster, more frequent zombies
+                </small>
               </span>
             </label>
           </div>

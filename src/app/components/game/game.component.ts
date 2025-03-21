@@ -15,6 +15,7 @@ import { AudioService } from '../../services/audio.service';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
 import { MathQuestion } from '../../models/math-question.interface';
 import { ZombieState } from '../../models/zombie.interface';
+import { SettingsService, GameSettings } from '../../services/settings.service';
 
 @Component({
   selector: 'app-game',
@@ -38,17 +39,71 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
-  private spawnTimeoutMs = 5000; // Starting spawn rate: 5 seconds
-  private minSpawnTimeoutMs = 1500; // Minimum spawn rate: 1.5 seconds
+  private settings: GameSettings;
+
+  // Difficulty-based settings
+  private spawnTimeoutMs: number;
+  private minSpawnTimeoutMs: number;
   private spawnRateDecreaseInterval?: ReturnType<typeof setInterval>;
+  private difficultySettings: Record<
+    GameSettings['gameDifficulty'],
+    {
+      initialSpawnRate: number;
+      minSpawnRate: number;
+      spawnRateDecrease: number;
+      checkInterval: number;
+      kingHealth: number;
+      fatZombieMinHealth: number;
+      fatZombieMaxHealth: number;
+      speedMultiplier: number;
+    }
+  > = {
+    easy: {
+      initialSpawnRate: 6000,
+      minSpawnRate: 2000,
+      spawnRateDecrease: 100,
+      checkInterval: 20000,
+      kingHealth: 10,
+      fatZombieMinHealth: 3,
+      fatZombieMaxHealth: 4,
+      speedMultiplier: 0.8,
+    },
+    normal: {
+      initialSpawnRate: 5000,
+      minSpawnRate: 1500,
+      spawnRateDecrease: 150,
+      checkInterval: 15000,
+      kingHealth: 8,
+      fatZombieMinHealth: 2,
+      fatZombieMaxHealth: 3,
+      speedMultiplier: 1,
+    },
+    hard: {
+      initialSpawnRate: 4000,
+      minSpawnRate: 1000,
+      spawnRateDecrease: 200,
+      checkInterval: 10000,
+      kingHealth: 6,
+      fatZombieMinHealth: 2,
+      fatZombieMaxHealth: 2,
+      speedMultiplier: 1.2,
+    },
+  };
+
   @Output() exitGame = new EventEmitter<void>();
 
   constructor(
     private mathService: MathService,
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
-    private audioService: AudioService
-  ) {}
+    private audioService: AudioService,
+    private settingsService: SettingsService
+  ) {
+    this.settings = this.settingsService.getCurrentSettings();
+    const difficulty = this.difficultySettings[this.settings.gameDifficulty];
+    this.spawnTimeoutMs = difficulty.initialSpawnRate;
+    this.minSpawnTimeoutMs = difficulty.minSpawnRate;
+  }
 
   ngOnInit() {
     this.generateNewQuestion();
@@ -248,8 +303,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private startZombieSpawning() {
-    // Initial spawn rate
-    this.spawnTimeoutMs = 5000;
+    const difficulty = this.difficultySettings[this.settings.gameDifficulty];
+    this.spawnTimeoutMs = difficulty.initialSpawnRate;
 
     // Spawn zombies at current rate
     this.zombieSpawnInterval = setInterval(() => {
@@ -259,18 +314,18 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Schedule first king spawn
     this.scheduleNextKing();
 
-    // Increase difficulty every 15 seconds
+    // Increase difficulty based on settings
     this.spawnRateDecreaseInterval = setInterval(() => {
-      if (this.spawnTimeoutMs > this.minSpawnTimeoutMs) {
+      if (this.spawnTimeoutMs > difficulty.minSpawnRate) {
         // Clear existing spawn interval
         if (this.zombieSpawnInterval) {
           clearInterval(this.zombieSpawnInterval);
         }
 
-        // Decrease spawn time by 150ms
+        // Decrease spawn time by configured amount
         this.spawnTimeoutMs = Math.max(
-          this.minSpawnTimeoutMs,
-          this.spawnTimeoutMs - 150
+          difficulty.minSpawnRate,
+          this.spawnTimeoutMs - difficulty.spawnRateDecrease
         );
 
         // Create new spawn interval with updated rate
@@ -278,7 +333,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           this.spawnZombie();
         }, this.spawnTimeoutMs);
       }
-    }, 15000); // Check every 15 seconds
+    }, difficulty.checkInterval);
   }
 
   private scheduleNextKing() {
@@ -294,6 +349,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private spawnKing() {
+    const difficulty = this.difficultySettings[this.settings.gameDifficulty];
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
     const width = rect.width;
@@ -312,9 +368,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       yPercent,
       facingLeft: xPercent > 50,
       id: this.nextZombieId++,
-      speed: 0.4, // Kings are slow but menacing
+      speed: 0.4 * difficulty.speedMultiplier,
       type: 'king',
-      health: 8, // Takes 8 hits to defeat
+      health: difficulty.kingHealth,
     };
 
     this.zombies.push(zombie);
@@ -322,6 +378,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private spawnZombie() {
+    const difficulty = this.difficultySettings[this.settings.gameDifficulty];
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
     const width = rect.width;
@@ -367,16 +424,16 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     let speed;
     if (isFatZombie) {
       // Fat zombies are always slow (0.3x to 0.5x speed)
-      speed = 0.3 + Math.random() * 0.2;
+      speed = (0.3 + Math.random() * 0.2) * difficulty.speedMultiplier;
     } else {
       // Normal zombies have tiered speeds
       const speedRoll = Math.random();
       if (speedRoll < 0.2) {
-        speed = 1.4 + Math.random() * 0.4; // 1.4x to 1.8x speed (fast)
+        speed = (1.4 + Math.random() * 0.4) * difficulty.speedMultiplier; // fast
       } else if (speedRoll < 0.5) {
-        speed = 0.9 + Math.random() * 0.3; // 0.9x to 1.2x speed (medium)
+        speed = (0.9 + Math.random() * 0.3) * difficulty.speedMultiplier; // medium
       } else {
-        speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed (slow)
+        speed = (0.5 + Math.random() * 0.3) * difficulty.speedMultiplier; // slow
       }
     }
 
@@ -389,7 +446,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       id: this.nextZombieId++,
       speed: speed,
       type: isFatZombie ? 'fat' : 'normal',
-      health: isFatZombie ? Math.floor(Math.random() * 2) + 2 : 1, // Random 2-3 health for fat zombies
+      health: isFatZombie
+        ? Math.floor(
+            Math.random() *
+              (difficulty.fatZombieMaxHealth -
+                difficulty.fatZombieMinHealth +
+                1)
+          ) + difficulty.fatZombieMinHealth
+        : 1,
     };
 
     this.zombies.push(zombie);
@@ -537,7 +601,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     }
 
     // Reset spawn timing
-    this.spawnTimeoutMs = 5000; // Reset to initial spawn rate
+    this.spawnTimeoutMs = this.minSpawnTimeoutMs; // Reset to initial spawn rate
 
     this.generateNewQuestion();
     this.startZombieSpawning();
