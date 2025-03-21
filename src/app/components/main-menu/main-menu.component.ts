@@ -83,7 +83,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               />
               <span class="difficulty-label">
                 Easy
-                <small class="difficulty-hint">Numbers from 1 to 10</small>
+                <small class="difficulty-hint">Numbers from 1 to 5</small>
               </span>
             </label>
             <label class="difficulty-option">
@@ -95,7 +95,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               />
               <span class="difficulty-label">
                 Medium
-                <small class="difficulty-hint">Numbers from 1 to 20</small>
+                <small class="difficulty-hint">Numbers from 1 to 10</small>
               </span>
             </label>
             <label class="difficulty-option">
@@ -107,7 +107,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               />
               <span class="difficulty-label">
                 Hard
-                <small class="difficulty-hint">Numbers from 1 to 50</small>
+                <small class="difficulty-hint">Numbers from 1 to 20</small>
               </span>
             </label>
           </div>
