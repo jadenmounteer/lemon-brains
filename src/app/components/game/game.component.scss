@@ -1,8 +1,9 @@
 .game-container {
   display: flex;
   width: 100%;
-  min-height: 100vh;
+  height: 100vh; // Full viewport height
   flex-direction: row; // Default for desktop
+  overflow: hidden; // Prevent scrolling
 
   @media (max-width: 768px) {
     flex-direction: column; // Stack vertically on mobile
@@ -11,18 +12,16 @@
 
 .game-half {
   flex: 1;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 300px; // Ensure minimum height on mobile
+  height: 100%; // Change from 100vh to 100%
+  position: relative;
+  padding: 0; // Remove padding that might affect positioning
 }
 
 .game-area {
   background-color: #f0f0f0;
   border-right: 2px solid #ccc;
-  position: relative;
-  overflow: hidden;
+  position: relative; // Change from absolute to relative
+  overflow: hidden; // Hide zombies until they enter the game area
 
   @media (max-width: 768px) {
     border-right: none;
@@ -32,6 +31,10 @@
 
 .question-area {
   background-color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .placeholder-text {
@@ -101,4 +104,13 @@
   bottom: 10%;
   transform: translateX(-50%);
   image-rendering: pixelated;
+  z-index: 2; // Make sure stand appears above zombies
+}
+
+.zombie {
+  position: absolute;
+  image-rendering: pixelated;
+  pointer-events: none;
+  z-index: 1;
+  width: 32px;
 }
