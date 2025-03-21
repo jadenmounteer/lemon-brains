@@ -63,24 +63,28 @@ export class MathService {
   }
 
   private generateNumbers(operation: string): { num1: number; num2: number } {
-    const difficulty = this.settings.difficulty;
-    let range: { min: number; max: number };
+    let availableRanges: { min: number; max: number }[] = [];
+
+    if (this.settings.numberRanges.range0to5) {
+      availableRanges.push({ min: 0, max: 5 });
+    }
+    if (this.settings.numberRanges.range5to10) {
+      availableRanges.push({ min: 5, max: 10 });
+    }
+    if (this.settings.numberRanges.range10to20) {
+      availableRanges.push({ min: 10, max: 20 });
+    }
+
+    if (availableRanges.length === 0) {
+      // Default to 0-5 if no ranges selected
+      availableRanges.push({ min: 0, max: 5 });
+    }
+
+    // Randomly select a range
+    const range =
+      availableRanges[Math.floor(Math.random() * availableRanges.length)];
     let num1: number;
     let num2: number;
-
-    switch (difficulty) {
-      case 'easy':
-        range = { min: 1, max: 5 };
-        break;
-      case 'medium':
-        range = { min: 1, max: 10 };
-        break;
-      case 'hard':
-        range = { min: 5, max: 20 };
-        break;
-      default:
-        range = { min: 1, max: 10 };
-    }
 
     switch (operation) {
       case 'addition':
@@ -95,29 +99,19 @@ export class MathService {
         }
         break;
       case 'multiplication':
-        // For multiplication, use full range for easy, but limit factors for medium/hard
-        if (difficulty === 'easy') {
-          num1 =
-            Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
-          num2 =
-            Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
-        } else {
-          // For medium and hard, limit one factor to make it more manageable
-          const maxFactor = Math.min(10, Math.floor(Math.sqrt(range.max)));
-          num1 = Math.floor(Math.random() * maxFactor) + 1;
-          num2 = Math.floor(Math.random() * (range.max / num1)) + 1;
-        }
+        // For multiplication, limit one factor to make it more manageable
+        const maxFactor = Math.min(10, Math.floor(Math.sqrt(range.max)));
+        num1 = Math.floor(Math.random() * maxFactor) + 1;
+        num2 = Math.floor(Math.random() * (range.max / num1)) + 1;
         break;
       case 'division':
-        if (difficulty === 'easy') {
-          // For easy, ensure clean division with small numbers
-          num2 = Math.floor(Math.random() * 3) + 1; // divisors 1-3
-          num1 = Math.floor(Math.random() * 2) + 1; // quotient 1-2
-        } else {
-          // For medium and hard, still ensure clean division
-          num2 = Math.floor(Math.random() * (Math.sqrt(range.max) - 1)) + 1;
-          num1 = Math.floor(Math.random() * (range.max / num2)) + 1;
-        }
+        // For division, ensure clean division with reasonable numbers
+        num2 =
+          Math.floor(Math.random() * Math.min(5, range.max - range.min)) + 1; // divisor
+        num1 =
+          Math.floor(
+            Math.random() * Math.min(5, (range.max - range.min) / num2)
+          ) + 1; // quotient
         break;
       default:
         throw new Error('Invalid operation');

@@ -8,7 +8,11 @@ export interface GameSettings {
     multiplication: boolean;
     division: boolean;
   };
-  difficulty: 'easy' | 'medium' | 'hard';
+  numberRanges: {
+    range0to5: boolean;
+    range5to10: boolean;
+    range10to20: boolean;
+  };
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -18,7 +22,11 @@ const DEFAULT_SETTINGS: GameSettings = {
     multiplication: true,
     division: true,
   },
-  difficulty: 'medium',
+  numberRanges: {
+    range0to5: true,
+    range5to10: false,
+    range10to20: false,
+  },
 };
 
 @Injectable({

@@ -69,45 +69,42 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
         </div>
 
         <div class="settings-group">
-          <h3>Difficulty</h3>
+          <h3>Number Ranges</h3>
           <p class="difficulty-description">
-            Choose how challenging the numbers should be:
+            Select which number ranges to include in questions:
           </p>
-          <div class="radio-group">
-            <label class="difficulty-option">
+          <div class="checkbox-group">
+            <label>
               <input
-                type="radio"
-                [(ngModel)]="settings.difficulty"
-                value="easy"
+                type="checkbox"
+                [(ngModel)]="settings.numberRanges.range0to5"
                 (change)="updateSettings()"
               />
               <span class="difficulty-label">
-                Easy
-                <small class="difficulty-hint">Numbers from 1 to 5</small>
+                Numbers 0-5
+                <small class="difficulty-hint">(Easy)</small>
               </span>
             </label>
-            <label class="difficulty-option">
+            <label>
               <input
-                type="radio"
-                [(ngModel)]="settings.difficulty"
-                value="medium"
+                type="checkbox"
+                [(ngModel)]="settings.numberRanges.range5to10"
                 (change)="updateSettings()"
               />
               <span class="difficulty-label">
-                Medium
-                <small class="difficulty-hint">Numbers from 1 to 10</small>
+                Numbers 5-10
+                <small class="difficulty-hint">(Medium)</small>
               </span>
             </label>
-            <label class="difficulty-option">
+            <label>
               <input
-                type="radio"
-                [(ngModel)]="settings.difficulty"
-                value="hard"
+                type="checkbox"
+                [(ngModel)]="settings.numberRanges.range10to20"
                 (change)="updateSettings()"
               />
               <span class="difficulty-label">
-                Hard
-                <small class="difficulty-hint">Numbers from 5 to 20</small>
+                Numbers 10-20
+                <small class="difficulty-hint">(Hard)</small>
               </span>
             </label>
           </div>
@@ -180,7 +177,13 @@ export class MainMenuComponent implements AfterViewInit {
   }
 
   isValidSettings(): boolean {
-    return Object.values(this.settings.questionTypes).some((value) => value);
+    const hasQuestionType = Object.values(this.settings.questionTypes).some(
+      (value) => value
+    );
+    const hasNumberRange = Object.values(this.settings.numberRanges).some(
+      (value) => value
+    );
+    return hasQuestionType && hasNumberRange;
   }
 
   toggleMusic() {
