@@ -512,6 +512,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   restartGame() {
     this.isGameOver = false;
+
+    // Remove all zombie sprites from the DOM
+    const gameArea = this.gameAreaRef.nativeElement;
+    const zombieSprites = gameArea.querySelectorAll('.zombie');
+    zombieSprites.forEach((sprite: HTMLElement) => sprite.remove());
+
+    // Clear game state
     this.zombies = [];
     this.nextZombieId = 0;
     this.lemonadeGiven = 0;
@@ -520,6 +527,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.kingSpawnTimeout) {
       clearTimeout(this.kingSpawnTimeout);
     }
+
+    // Reset spawn timing
+    this.spawnTimeoutMs = 5000; // Reset to initial spawn rate
 
     this.generateNewQuestion();
     this.startZombieSpawning();
