@@ -8,8 +8,11 @@
       <span class="music-icon">{{ isMusicPlaying ? "🔊" : "🔇" }}</span>
     </button>
 
+    <div class="lemonade-counter">🍋 {{ lemonadeGiven }}</div>
+
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>
+      <div class="final-score">Lemonade Given: {{ lemonadeGiven }}</div>
       <button class="restart-button" (click)="restartGame()">Try Again</button>
     </div>
   </div>

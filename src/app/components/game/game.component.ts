@@ -30,6 +30,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   zombies: ZombieState[] = [];
   isGameOver = false;
   isMusicPlaying = false;
+  lemonadeGiven = 0;
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
@@ -106,6 +107,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     console.log('Correct!');
     this.wrongAnswer = null;
     this.removeClosestZombie();
+    this.lemonadeGiven++;
     this.generateNewQuestion();
   }
 
@@ -429,6 +431,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isGameOver = false;
     this.zombies = [];
     this.nextZombieId = 0;
+    this.lemonadeGiven = 0;
     this.generateNewQuestion();
     this.startZombieSpawning();
   }
