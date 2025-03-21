@@ -76,7 +76,7 @@ export class MathService {
         range = { min: 1, max: 10 };
         break;
       case 'hard':
-        range = { min: 1, max: 20 };
+        range = { min: 5, max: 20 };
         break;
       default:
         range = { min: 1, max: 10 };
