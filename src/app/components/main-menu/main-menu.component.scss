@@ -119,6 +119,17 @@
   &:active {
     transform: scale(0.95);
   }
+
+  &[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none !important;
+
+    &:hover {
+      background-color: #4caf50;
+      transform: none;
+    }
+  }
 }
 
 @keyframes pulse {
@@ -175,4 +186,138 @@
     padding: 12px 24px;
     font-size: 20px;
   }
+}
+
+.settings-panel {
+  background-color: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px auto;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  display: none;
+  box-sizing: border-box;
+
+  &.open {
+    display: block;
+  }
+
+  h2 {
+    font-family: "Creepster", cursive;
+    font-size: 32px;
+    color: #8b4513;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  h3 {
+    font-size: 20px;
+    color: #333;
+    margin-bottom: 10px;
+  }
+}
+
+.settings-group {
+  margin-bottom: 20px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.checkbox-group,
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    color: #666;
+    cursor: pointer;
+    padding: 5px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      color: #333;
+    }
+
+    input {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+  }
+}
+
+.button-group {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 20px;
+  padding: 0 20px;
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+}
+
+.settings-button {
+  padding: 15px 30px;
+  font-size: 20px;
+  font-family: "Creepster", cursive;
+  background-color: #666;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    background-color: #555;
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.difficulty-description {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 12px;
+  text-align: left;
+}
+
+.difficulty-option {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border-radius: 6px;
+  transition: background-color 0.2s ease;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+}
+
+.difficulty-label {
+  display: flex;
+  flex-direction: column;
+  margin-left: 10px;
+}
+
+.difficulty-hint {
+  font-size: 14px;
+  color: #888;
+  margin-top: 2px;
 }

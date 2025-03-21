@@ -85,7 +85,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   checkAnswer(selectedAnswer: number) {
-    if (this.currentQuestion?.correctAnswer === selectedAnswer) {
+    if (this.currentQuestion?.answer === selectedAnswer) {
       console.log('Correct!');
       this.wrongAnswer = null;
       this.removeClosestZombie();
