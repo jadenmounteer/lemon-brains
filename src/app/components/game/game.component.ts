@@ -48,6 +48,12 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.generateNewQuestion();
     this.preventZoom();
     this.fullscreenService.enableFullscreen();
+
+    // Handle back/forward gestures
+    window.addEventListener('popstate', (e) => {
+      e.preventDefault();
+      this.goToMainMenu();
+    });
   }
 
   ngAfterViewInit() {
@@ -212,8 +218,29 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private preventZoom() {
+    // Prevent zoom
     document.addEventListener(
       'touchmove',
+      (e) => {
+        if (e.touches.length > 1) {
+          e.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+
+    // Prevent Safari's bounce effect
+    document.addEventListener(
+      'touchmove',
+      (e) => {
+        e.preventDefault();
+      },
+      { passive: false }
+    );
+
+    // Prevent default touch handling
+    document.addEventListener(
+      'touchstart',
       (e) => {
         if (e.touches.length > 1) {
           e.preventDefault();
@@ -425,8 +452,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   goToMainMenu() {
     // Clean up game state
     this.ngOnDestroy();
-    // Navigate to main menu
-    this.router.navigate(['/']);
+
+    // Prevent default navigation behavior
+    history.pushState(null, '', '/');
+
+    // Navigate using Angular router
+    this.router.navigate(['/'], {
+      replaceUrl: true, // Replace current history entry instead of adding new one
+    });
   }
 
   ngOnDestroy() {
