@@ -39,7 +39,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
   private spawnTimeoutMs = 5000; // Starting spawn rate: 5 seconds
-  private minSpawnTimeoutMs = 2000; // Slowest spawn rate: 2 seconds
+  private minSpawnTimeoutMs = 1500; // Minimum spawn rate: 1.5 seconds
   private spawnRateDecreaseInterval?: ReturnType<typeof setInterval>;
   @Output() exitGame = new EventEmitter<void>();
 
@@ -259,7 +259,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     // Schedule first king spawn
     this.scheduleNextKing();
 
-    // Increase difficulty every 30 seconds
+    // Increase difficulty every 15 seconds
     this.spawnRateDecreaseInterval = setInterval(() => {
       if (this.spawnTimeoutMs > this.minSpawnTimeoutMs) {
         // Clear existing spawn interval
@@ -267,10 +267,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           clearInterval(this.zombieSpawnInterval);
         }
 
-        // Decrease spawn time by 100ms
+        // Decrease spawn time by 150ms
         this.spawnTimeoutMs = Math.max(
           this.minSpawnTimeoutMs,
-          this.spawnTimeoutMs - 100
+          this.spawnTimeoutMs - 150
         );
 
         // Create new spawn interval with updated rate
@@ -278,7 +278,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           this.spawnZombie();
         }, this.spawnTimeoutMs);
       }
-    }, 30000); // Check every 30 seconds
+    }, 15000); // Check every 15 seconds
   }
 
   private scheduleNextKing() {
