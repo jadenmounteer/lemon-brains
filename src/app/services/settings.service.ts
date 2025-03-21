@@ -2,11 +2,18 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 
 export interface GameSettings {
+  curriculum: 'math' | 'portuguese';
   questionTypes: {
     addition: boolean;
     subtraction: boolean;
     multiplication: boolean;
     division: boolean;
+  };
+  portugueseTypes: {
+    vocabulary: boolean;
+    phrases: boolean;
+    numbers: boolean;
+    colors: boolean;
   };
   numberRanges: {
     range0to5: boolean;
@@ -47,11 +54,18 @@ Hard mode creates intense gameplay with faster, more frequent zombies
 }
 
 const DEFAULT_SETTINGS: GameSettings = {
+  curriculum: 'math',
   questionTypes: {
     addition: true,
     subtraction: true,
     multiplication: true,
     division: true,
+  },
+  portugueseTypes: {
+    vocabulary: true,
+    phrases: true,
+    numbers: true,
+    colors: true,
   },
   numberRanges: {
     range0to5: true,

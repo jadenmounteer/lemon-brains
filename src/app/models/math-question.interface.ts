@@ -1,5 +1,5 @@
 export interface MathQuestion {
   question: string;
-  options: number[];
-  answer: number;
+  options: (number | string)[];
+  answer: number | string;
 }

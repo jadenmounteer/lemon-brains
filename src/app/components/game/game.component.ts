@@ -11,6 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { MathService } from '../../services/math.service';
+import { PortugueseService } from '../../services/portuguese.service';
 import { AudioService } from '../../services/audio.service';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
 import { MathQuestion } from '../../models/math-question.interface';
@@ -102,6 +103,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   constructor(
     private mathService: MathService,
+    private portugueseService: PortugueseService,
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
     private audioService: AudioService,
@@ -151,7 +153,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   generateNewQuestion() {
-    this.currentQuestion = this.mathService.generateQuestion();
+    this.currentQuestion =
+      this.settings.curriculum === 'math'
+        ? this.mathService.generateQuestion()
+        : this.portugueseService.generateQuestion();
   }
 
   checkAnswer(selectedAnswer: number) {

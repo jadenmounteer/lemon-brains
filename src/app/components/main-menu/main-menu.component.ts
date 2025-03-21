@@ -31,6 +31,41 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
       <div class="settings-panel" [class.open]="showSettings">
         <h2>Game Settings</h2>
         <div class="settings-group">
+          <h3>Curriculum</h3>
+          <p class="difficulty-description">Choose what you want to learn:</p>
+          <div class="radio-group">
+            <label>
+              <input
+                type="radio"
+                [(ngModel)]="settings.curriculum"
+                value="math"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Math
+                <small class="difficulty-hint"
+                  >Practice basic math operations</small
+                >
+              </span>
+            </label>
+            <label>
+              <input
+                type="radio"
+                [(ngModel)]="settings.curriculum"
+                value="portuguese"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Portuguese
+                <small class="difficulty-hint"
+                  >Learn basic Portuguese vocabulary and phrases</small
+                >
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-group" *ngIf="settings.curriculum === 'math'">
           <h3>Question Types</h3>
           <div class="checkbox-group">
             <label>
@@ -68,7 +103,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
           </div>
         </div>
 
-        <div class="settings-group">
+        <div class="settings-group" *ngIf="settings.curriculum === 'math'">
           <h3>Number Ranges</h3>
           <p class="difficulty-description">
             Select which number ranges to include in questions:
@@ -80,7 +115,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range0to5"
                 (change)="updateSettings()"
               />
-              <span class="difficulty-label"> Numbers 0-5 </span>
+              <span class="difficulty-label">Numbers 0-5</span>
             </label>
             <label>
               <input
@@ -88,7 +123,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range5to10"
                 (change)="updateSettings()"
               />
-              <span class="difficulty-label"> Numbers 5-10 </span>
+              <span class="difficulty-label">Numbers 5-10</span>
             </label>
             <label>
               <input
@@ -96,7 +131,68 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
                 [(ngModel)]="settings.numberRanges.range10to20"
                 (change)="updateSettings()"
               />
-              <span class="difficulty-label"> Numbers 10-20 </span>
+              <span class="difficulty-label">Numbers 10-20</span>
+            </label>
+          </div>
+        </div>
+
+        <div
+          class="settings-group"
+          *ngIf="settings.curriculum === 'portuguese'"
+        >
+          <h3>Portuguese Topics</h3>
+          <div class="checkbox-group">
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="settings.portugueseTypes.vocabulary"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Basic Vocabulary
+                <small class="difficulty-hint"
+                  >Common words like house, dog, cat</small
+                >
+              </span>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="settings.portugueseTypes.phrases"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Common Phrases
+                <small class="difficulty-hint"
+                  >Greetings and basic expressions</small
+                >
+              </span>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="settings.portugueseTypes.numbers"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Numbers
+                <small class="difficulty-hint"
+                  >Basic numbers in Portuguese</small
+                >
+              </span>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                [(ngModel)]="settings.portugueseTypes.colors"
+                (change)="updateSettings()"
+              />
+              <span class="difficulty-label">
+                Colors
+                <small class="difficulty-hint"
+                  >Basic colors in Portuguese</small
+                >
+              </span>
             </label>
           </div>
         </div>
@@ -131,7 +227,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
               />
               <span class="difficulty-label">
                 Normal
-                <small class="difficulty-hint"> A balanced challenge </small>
+                <small class="difficulty-hint">A balanced challenge</small>
               </span>
             </label>
             <label>
