@@ -45,6 +45,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   ngOnInit() {
     this.generateNewQuestion();
     this.preventZoom();
+    this.enableFullScreen();
   }
 
   ngAfterViewInit() {
@@ -441,5 +442,37 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleMusic() {
     this.isMusicPlaying = this.audioService.toggle();
+  }
+
+  private enableFullScreen() {
+    // Add a small delay to ensure the DOM is ready
+    setTimeout(() => {
+      if (
+        document.documentElement.requestFullscreen &&
+        !document.fullscreenElement
+      ) {
+        document.documentElement
+          .requestFullscreen()
+          .catch((err) =>
+            console.log('Error attempting to enable full-screen mode:', err)
+          );
+      }
+
+      // iOS specific full-screen handling
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as any).standalone ||
+        document.referrer.includes('ios-app://');
+
+      if (isStandalone) {
+        document.documentElement.style.position = 'fixed';
+        document.documentElement.style.width = '100%';
+        document.documentElement.style.height = '100%';
+        document.body.style.position = 'fixed';
+        document.body.style.width = '100%';
+        document.body.style.height = '100%';
+        document.body.style.overflow = 'hidden';
+      }
+    }, 100);
   }
 }
