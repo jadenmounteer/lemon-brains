@@ -97,6 +97,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         this.handleCorrectAnswer();
       } else {
         this.wrongAnswer = selectedAnswer;
+        // Play zombie sound and spawn a new zombie
+        this.audioService.playZombieSound();
+        this.spawnZombie();
+
         setTimeout(() => {
           this.wrongAnswer = null;
         }, 1000);

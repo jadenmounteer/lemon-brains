@@ -61,14 +61,18 @@ export class AudioService {
     // Play zombie sounds at random intervals between 5 and 15 seconds
     this.zombieSoundInterval = setInterval(() => {
       if (this.isMusicPlaying) {
-        // Create a new Audio instance each time to allow overlapping sounds
-        const zombieSound = new Audio('assets/audio/zombie sound.mp3');
-        zombieSound.volume = this.zombieSound.volume;
-        zombieSound.play().catch((error) => {
-          console.warn('Zombie sound playback failed:', error);
-        });
+        this.playZombieSound();
       }
     }, Math.random() * 10000 + 5000); // Random interval between 5000ms and 15000ms
+  }
+
+  playZombieSound() {
+    // Create a new Audio instance each time to allow overlapping sounds
+    const zombieSound = new Audio('assets/audio/zombie sound.mp3');
+    zombieSound.volume = this.zombieSound.volume;
+    zombieSound.play().catch((error) => {
+      console.warn('Zombie sound playback failed:', error);
+    });
   }
 
   private stopRandomZombieSounds() {
