@@ -5,4 +5,5 @@ export interface ZombieState {
   yPercent: number;
   facingLeft: boolean;
   id: number;
+  speed: number; // Movement speed multiplier
 }

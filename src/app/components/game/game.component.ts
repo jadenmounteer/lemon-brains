@@ -308,10 +308,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     switch (side) {
       case 0: // top
-        xPercent = Math.random() * (90 - 10) + 10; // 10% to 90% width
-        yPercent = 0;
+        xPercent = Math.random() * 100;
+        yPercent = 5;
         x = (xPercent * width) / 100;
-        y = 0;
+        y = (yPercent * height) / 100;
         break;
       case 1: // right
         xPercent = 95;
@@ -327,6 +327,20 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         break;
     }
 
+    // Generate speed with weighted randomization to create distinct speed tiers
+    let speed;
+    const speedRoll = Math.random();
+    if (speedRoll < 0.2) {
+      // 20% chance for fast zombie
+      speed = 1.4 + Math.random() * 0.4; // 1.4x to 1.8x speed
+    } else if (speedRoll < 0.5) {
+      // 30% chance for normal zombie
+      speed = 0.9 + Math.random() * 0.3; // 0.9x to 1.2x speed
+    } else {
+      // 50% chance for slow zombie
+      speed = 0.5 + Math.random() * 0.3; // 0.5x to 0.8x speed
+    }
+
     const zombie: ZombieState = {
       x,
       y,
@@ -334,6 +348,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       yPercent,
       facingLeft: xPercent > 50,
       id: this.nextZombieId++,
+      speed,
     };
 
     this.zombies.push(zombie);
@@ -364,35 +379,28 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private moveZombie(zombie: ZombieState, canvas: HTMLCanvasElement) {
-    const gameArea = this.gameAreaRef.nativeElement;
-    const rect = gameArea.getBoundingClientRect();
+    const rect = this.gameAreaRef.nativeElement.getBoundingClientRect();
+    const targetX = rect.width / 2;
+    const targetY = rect.height * 0.85;
 
-    // Target is the lemonade stand position (matching CSS)
-    const targetXPercent = 50; // Center
-    const targetYPercent = 85; // 85% from top
+    // Calculate direction to lemonade stand
+    const dx = targetX - zombie.x;
+    const dy = targetY - zombie.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
 
+    // Check if zombie has reached the lemonade stand
+    if (distance < 32) {
+      this.handleGameOver();
+      return;
+    }
+
+    // Update zombie facing direction
+    zombie.facingLeft = dx > 0;
+
+    // Base movement interval
     const moveInterval = setInterval(() => {
-      const rect = gameArea.getBoundingClientRect();
-      const targetX = (targetXPercent * rect.width) / 100;
-      const targetY = (targetYPercent * rect.height) / 100;
-
-      const dx = targetX - zombie.x;
-      const dy = targetY - zombie.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      // If zombie reaches near the lemonade stand
-      if (distance < 5) {
-        this.moveIntervals.delete(zombie.id);
-        clearInterval(moveInterval);
-        this.handleGameOver();
-        return;
-      }
-
-      // Update facing direction
-      zombie.facingLeft = zombie.x > targetX;
-
-      // Move zombie (reduced speed from 0.3 to 0.15)
-      const speed = 0.15;
+      // Base speed of 0.15 multiplied by zombie's speed factor
+      const speed = 0.15 * zombie.speed;
       zombie.x += (dx / distance) * speed;
       zombie.y += (dy / distance) * speed;
 
@@ -400,7 +408,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       zombie.xPercent = (zombie.x / rect.width) * 100;
       zombie.yPercent = (zombie.y / rect.height) * 100;
 
-      // Update zombie position
+      // Update zombie position and direction
       canvas.style.left = `${zombie.x}px`;
       canvas.style.top = `${zombie.y}px`;
       canvas.style.transform = `scaleX(${zombie.facingLeft ? 1 : -1})`;
