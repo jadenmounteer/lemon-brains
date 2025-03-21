@@ -256,10 +256,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       this.spawnZombie();
     }, this.spawnTimeoutMs);
 
-    // Schedule first king spawn after 5 minutes
+    // Schedule first king spawn
     this.scheduleNextKing();
 
-    // Increase difficulty every minute
+    // Increase difficulty every 30 seconds
     this.spawnRateDecreaseInterval = setInterval(() => {
       if (this.spawnTimeoutMs > this.minSpawnTimeoutMs) {
         // Clear existing spawn interval
@@ -267,10 +267,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           clearInterval(this.zombieSpawnInterval);
         }
 
-        // Decrease spawn time by 50ms
+        // Decrease spawn time by 100ms
         this.spawnTimeoutMs = Math.max(
           this.minSpawnTimeoutMs,
-          this.spawnTimeoutMs - 50
+          this.spawnTimeoutMs - 100
         );
 
         // Create new spawn interval with updated rate
@@ -278,15 +278,18 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
           this.spawnZombie();
         }, this.spawnTimeoutMs);
       }
-    }, 60000); // Check every minute
+    }, 30000); // Check every 30 seconds
   }
 
   private scheduleNextKing() {
-    // Schedule king spawn every 5 minutes (300,000ms)
-    const kingSpawnDelay = 300000;
+    // Schedule king spawn check every 3 minutes (180,000ms)
+    const kingSpawnDelay = 180000;
     this.kingSpawnTimeout = setTimeout(() => {
-      this.spawnKing();
-      this.scheduleNextKing(); // Schedule next king
+      // 40% chance to spawn a king
+      if (Math.random() < 0.4) {
+        this.spawnKing();
+      }
+      this.scheduleNextKing(); // Schedule next king check
     }, kingSpawnDelay);
   }
 
