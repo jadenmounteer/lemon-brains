@@ -56,6 +56,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMinHealth: number;
       fatZombieMaxHealth: number;
       speedMultiplier: number;
+      kingSpawnDelay: number;
+      kingSpawnChance: number;
     }
   > = {
     easy: {
@@ -67,6 +69,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMinHealth: 3,
       fatZombieMaxHealth: 4,
       speedMultiplier: 0.8,
+      kingSpawnDelay: 180000, // 3 minutes
+      kingSpawnChance: 0.3, // 30% chance
     },
     normal: {
       initialSpawnRate: 5000,
@@ -77,6 +81,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMinHealth: 2,
       fatZombieMaxHealth: 3,
       speedMultiplier: 1,
+      kingSpawnDelay: 120000, // 2 minutes
+      kingSpawnChance: 0.4, // 40% chance
     },
     hard: {
       initialSpawnRate: 4000,
@@ -87,6 +93,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMinHealth: 2,
       fatZombieMaxHealth: 2,
       speedMultiplier: 1.2,
+      kingSpawnDelay: 90000, // 1.5 minutes
+      kingSpawnChance: 0.5, // 50% chance
     },
   };
 
@@ -337,15 +345,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private scheduleNextKing() {
-    // Schedule king spawn check every 2 minutes (120,000ms)
-    const kingSpawnDelay = 120000;
+    const difficulty = this.difficultySettings[this.settings.gameDifficulty];
     this.kingSpawnTimeout = setTimeout(() => {
-      // 40% chance to spawn a king
-      if (Math.random() < 0.4) {
+      // Check spawn chance based on difficulty
+      if (Math.random() < difficulty.kingSpawnChance) {
         this.spawnKing();
       }
       this.scheduleNextKing(); // Schedule next king check
-    }, kingSpawnDelay);
+    }, difficulty.kingSpawnDelay);
   }
 
   private spawnKing() {
