@@ -29,8 +29,9 @@
         <button
           *ngFor="let option of currentQuestion.options"
           (click)="checkAnswer(option)"
-          class="option-button"
+          [class.selected]="selectedAnswer === option"
           [class.wrong]="wrongAnswer === option"
+          [disabled]="selectedAnswer !== null"
         >
           {{ option }}
         </button>

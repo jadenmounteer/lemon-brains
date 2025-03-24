@@ -29,6 +29,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('gameArea') gameAreaRef!: ElementRef;
   currentQuestion?: MathQuestion;
   wrongAnswer: number | null = null;
+  selectedAnswer: number | string | null = null;
   zombies: ZombieState[] = [];
   isGameOver = false;
   isMusicPlaying = false;
@@ -153,6 +154,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   generateNewQuestion() {
+    this.selectedAnswer = null;
     this.currentQuestion =
       this.settings.curriculum === 'math'
         ? this.mathService.generateQuestion()
@@ -162,16 +164,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   checkAnswer(selectedAnswer: number | string) {
     if (this.currentQuestion) {
       if (selectedAnswer === this.currentQuestion.answer) {
+        this.selectedAnswer = selectedAnswer;
         this.handleCorrectAnswer();
       } else {
         this.wrongAnswer = selectedAnswer as number;
         // Play zombie sound and spawn a new zombie
         this.audioService.playZombieSound();
         this.spawnZombie();
-
-        setTimeout(() => {
-          this.wrongAnswer = null;
-        }, 1000);
       }
     }
   }
