@@ -31,6 +31,8 @@ Spawn rate decrease: 100ms every 20 seconds
 King zombie health: 10 hits
 Fat zombie health: 3-4 hits
 Speed multiplier: 0.8x (20% slower)
+10% chance to spawn a double zombie
+
 Normal Mode:
 Initial spawn rate: 5 seconds
 Minimum spawn rate: 1.5 seconds
@@ -38,6 +40,8 @@ Spawn rate decrease: 150ms every 15 seconds
 King zombie health: 8 hits
 Fat zombie health: 2-3 hits
 Speed multiplier: 1x (normal speed)
+25% chance to spawn a double zombie
+
 Hard Mode:
 Initial spawn rate: 4 seconds
 Minimum spawn rate: 1 second
@@ -45,10 +49,7 @@ Spawn rate decrease: 200ms every 10 seconds
 King zombie health: 6 hits (dies faster but spawns more frequently)
 Fat zombie health: 2 hits
 Speed multiplier: 1.2x (20% faster)
-The difficulty settings create distinct experiences:
-Easy mode is more forgiving with slower zombies and more time between spawns
-Normal mode provides a balanced challenge
-Hard mode creates intense gameplay with faster, more frequent zombies
+40% chance to spawn a double zombie
 
  */
 }

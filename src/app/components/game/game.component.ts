@@ -60,6 +60,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speedMultiplier: number;
       kingSpawnDelay: number;
       kingSpawnChance: number;
+      doubleSpawnChance: number;
     }
   > = {
     easy: {
@@ -73,6 +74,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speedMultiplier: 0.8,
       kingSpawnDelay: 180000, // 3 minutes
       kingSpawnChance: 0.3, // 30% chance
+      doubleSpawnChance: 0.1, // 10% chance for double spawn
     },
     normal: {
       initialSpawnRate: 5000,
@@ -85,6 +87,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speedMultiplier: 1,
       kingSpawnDelay: 120000, // 2 minutes
       kingSpawnChance: 0.4, // 40% chance
+      doubleSpawnChance: 0.25, // 25% chance for double spawn
     },
     hard: {
       initialSpawnRate: 4000,
@@ -97,6 +100,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speedMultiplier: 1.2,
       kingSpawnDelay: 90000, // 1.5 minutes
       kingSpawnChance: 0.5, // 50% chance
+      doubleSpawnChance: 0.4, // 40% chance for double spawn
     },
   };
 
@@ -320,7 +324,16 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     // Spawn zombies at current rate
     this.zombieSpawnInterval = setInterval(() => {
+      // Always spawn at least one zombie
       this.spawnZombie();
+
+      // Check for double spawn based on difficulty
+      if (Math.random() < difficulty.doubleSpawnChance) {
+        // Add a small delay for the second zombie to make it look more natural
+        setTimeout(() => {
+          this.spawnZombie();
+        }, 200);
+      }
     }, this.spawnTimeoutMs);
 
     // Schedule first king spawn
