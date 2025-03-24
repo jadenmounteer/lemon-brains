@@ -767,8 +767,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    // Show QUENCHED! message
+    // Show QUENCHED! message and play sound
     this.showQuenched = true;
+    this.audioService.playQuenchedSound();
 
     // Remove regular zombies after animation
     setTimeout(() => {

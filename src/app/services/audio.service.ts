@@ -6,8 +6,10 @@ import { Injectable } from '@angular/core';
 export class AudioService {
   private music: HTMLAudioElement;
   private zombieSound: HTMLAudioElement;
+  private quenchedSound: HTMLAudioElement;
   private isMusicPlaying = false;
   private zombieSoundInterval?: ReturnType<typeof setInterval>;
+  private isMuted = false;
 
   constructor() {
     this.music = new Audio();
@@ -17,6 +19,8 @@ export class AudioService {
     this.zombieSound = new Audio();
     this.zombieSound.src = 'assets/audio/zombie sound.mp3';
     this.zombieSound.volume = 0.7; // Slightly lower volume for sound effect
+
+    this.quenchedSound = new Audio('assets/audio/quenched.m4a');
   }
 
   play() {
@@ -82,9 +86,22 @@ export class AudioService {
     }
   }
 
+  playQuenchedSound() {
+    if (!this.isMuted) {
+      this.quenchedSound.currentTime = 0;
+      this.quenchedSound.play();
+    }
+  }
+
   // Clean up method to be called when the game is destroyed
   cleanup() {
     this.pause();
     this.stopRandomZombieSounds();
+    this.music.pause();
+    this.music.currentTime = 0;
+    this.zombieSound.pause();
+    this.zombieSound.currentTime = 0;
+    this.quenchedSound.pause();
+    this.quenchedSound.currentTime = 0;
   }
 }
