@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
+import { trigger, transition, style, animate } from '@angular/animations';
 import { MathService } from '../../services/math.service';
 import { PortugueseService } from '../../services/portuguese.service';
 import { AudioService } from '../../services/audio.service';
@@ -24,6 +25,23 @@ import { SettingsService, GameSettings } from '../../services/settings.service';
   imports: [CommonModule],
   templateUrl: './game.component.html',
   styleUrl: './game.component.scss',
+  animations: [
+    trigger('powerUpAnimation', [
+      transition(':enter', [
+        style({ opacity: 0, transform: 'translate(-50%, -50%) scale(0)' }),
+        animate(
+          '0.5s ease-out',
+          style({ opacity: 1, transform: 'translate(-50%, -50%) scale(1)' })
+        ),
+      ]),
+      transition(':leave', [
+        animate(
+          '0.3s ease-in',
+          style({ opacity: 0, transform: 'translate(-50%, -50%) scale(0)' })
+        ),
+      ]),
+    ]),
+  ],
 })
 export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('gameArea') gameAreaRef!: ElementRef;
@@ -35,6 +53,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   isMusicPlaying = false;
   lemonadeGiven = 0;
   scoreMultiplier = 1;
+  showPowerUp = false;
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
@@ -179,6 +198,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         this.wrongAnswer = selectedAnswer as number;
         this.scoreMultiplier = 1;
         this.correctStreak = 0;
+        this.showPowerUp = false; // Hide power-up on wrong answer
         // Play zombie sound and spawn a new zombie
         this.audioService.playZombieSound();
         this.spawnZombie();
@@ -195,6 +215,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.correctStreak++;
     if (this.correctStreak > 1) {
       this.scoreMultiplier = this.correctStreak;
+    }
+    // Check for power-up at 10 correct answers
+    if (this.correctStreak === 10) {
+      this.showPowerUp = true;
     }
     this.generateNewQuestion();
   }
@@ -622,6 +646,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isGameOver = false;
     this.scoreMultiplier = 1;
     this.correctStreak = 0;
+    this.showPowerUp = false;
 
     // Remove all zombie sprites from the DOM
     const gameArea = this.gameAreaRef.nativeElement;
@@ -706,5 +731,41 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         canvas.style.top = `${zombie.y}px`;
       }
     });
+  }
+
+  activatePowerUp() {
+    if (!this.showPowerUp) return;
+
+    // Create explosion effect for each zombie
+    this.zombies.forEach((zombie) => {
+      const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
+        `[data-zombie-id="${zombie.id}"]`
+      ) as HTMLCanvasElement;
+
+      if (zombieCanvas) {
+        // Add explosion effect
+        zombieCanvas.style.transition = 'all 0.3s ease-out';
+        zombieCanvas.style.transform = 'scale(1.5)';
+        zombieCanvas.style.filter = 'brightness(2)';
+        zombieCanvas.style.opacity = '0';
+      }
+    });
+
+    // Clear all movement intervals
+    this.moveIntervals.forEach((interval) => clearInterval(interval));
+    this.moveIntervals.clear();
+
+    // Remove all zombies after animation
+    setTimeout(() => {
+      this.zombies = [];
+      const zombieSprites =
+        this.gameAreaRef.nativeElement.querySelectorAll('.zombie');
+      zombieSprites.forEach((sprite: HTMLElement) => sprite.remove());
+    }, 300);
+
+    // Reset power-up state
+    this.showPowerUp = false;
+    this.correctStreak = 0;
+    this.scoreMultiplier = 1;
   }
 }

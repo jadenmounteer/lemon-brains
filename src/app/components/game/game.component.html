@@ -15,6 +15,15 @@
       >
     </div>
 
+    <button
+      *ngIf="showPowerUp"
+      class="power-up-button"
+      (click)="activatePowerUp()"
+      [@powerUpAnimation]
+    >
+      ⚡
+    </button>
+
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>
       <div class="final-score">Lemonade Given: {{ lemonadeGiven }}</div>
