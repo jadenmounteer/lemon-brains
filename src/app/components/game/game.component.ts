@@ -737,8 +737,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   activatePowerUp() {
     if (!this.showPowerUp) return;
 
-    // Create explosion effect for each zombie
-    this.zombies.forEach((zombie) => {
+    // Filter out king zombies and regular zombies
+    const regularZombies = this.zombies.filter(
+      (zombie) => zombie.type !== 'king'
+    );
+    const kingZombies = this.zombies.filter((zombie) => zombie.type === 'king');
+
+    // Create explosion effect for regular zombies only
+    regularZombies.forEach((zombie) => {
       const zombieCanvas = this.gameAreaRef.nativeElement.querySelector(
         `[data-zombie-id="${zombie.id}"]`
       ) as HTMLCanvasElement;
@@ -752,19 +758,32 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       }
     });
 
-    // Clear all movement intervals
-    this.moveIntervals.forEach((interval) => clearInterval(interval));
-    this.moveIntervals.clear();
+    // Clear movement intervals for regular zombies only
+    regularZombies.forEach((zombie) => {
+      const interval = this.moveIntervals.get(zombie.id);
+      if (interval) {
+        clearInterval(interval);
+        this.moveIntervals.delete(zombie.id);
+      }
+    });
 
     // Show QUENCHED! message
     this.showQuenched = true;
 
-    // Remove all zombies after animation
+    // Remove regular zombies after animation
     setTimeout(() => {
-      this.zombies = [];
-      const zombieSprites =
-        this.gameAreaRef.nativeElement.querySelectorAll('.zombie');
-      zombieSprites.forEach((sprite: HTMLElement) => sprite.remove());
+      // Keep king zombies in the array
+      this.zombies = kingZombies;
+
+      // Remove only regular zombie sprites
+      regularZombies.forEach((zombie) => {
+        const zombieSprite = this.gameAreaRef.nativeElement.querySelector(
+          `[data-zombie-id="${zombie.id}"]`
+        );
+        if (zombieSprite) {
+          zombieSprite.remove();
+        }
+      });
     }, 300);
 
     // Hide QUENCHED! message after a delay
