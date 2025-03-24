@@ -64,6 +64,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     new Map();
   private settings: GameSettings;
   private correctStreak = 0;
+  private powerUpThreshold = 10; // Initial threshold for power-up
 
   // Difficulty-based settings
   private spawnTimeoutMs: number;
@@ -217,8 +218,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     if (this.correctStreak > 1) {
       this.scoreMultiplier = this.correctStreak;
     }
-    // Check for power-up at 10 correct answers
-    if (this.correctStreak === 10) {
+    // Check for power-up at current threshold
+    if (this.correctStreak === this.powerUpThreshold) {
       this.showPowerUp = true;
     }
     this.generateNewQuestion();
@@ -648,6 +649,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.scoreMultiplier = 1;
     this.correctStreak = 0;
     this.showPowerUp = false;
+    this.powerUpThreshold = 10; // Reset threshold on game restart
 
     // Remove all zombie sprites from the DOM
     const gameArea = this.gameAreaRef.nativeElement;
@@ -792,7 +794,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showQuenched = false;
     }, 1500);
 
-    // Reset power-up state
+    // Increase power-up threshold and reset state
+    this.powerUpThreshold += 5;
     this.showPowerUp = false;
     this.correctStreak = 0;
     this.scoreMultiplier = 1;
