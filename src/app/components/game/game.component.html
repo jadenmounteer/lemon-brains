@@ -8,7 +8,12 @@
       <span class="music-icon">{{ isMusicPlaying ? "🔊" : "🔇" }}</span>
     </button>
 
-    <div class="lemonade-counter">🍋 {{ lemonadeGiven }}</div>
+    <div class="lemonade-counter">
+      🍋 {{ lemonadeGiven }}
+      <span *ngIf="scoreMultiplier > 1" class="multiplier"
+        >x{{ scoreMultiplier }}</span
+      >
+    </div>
 
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>

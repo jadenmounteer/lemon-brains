@@ -380,11 +380,34 @@
   color: #4caf50;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+
+  .multiplier {
+    position: absolute;
+    left: calc(100% + 4px);
+    top: 50%;
+    transform: translateY(-50%);
+    color: #ff9800;
+    font-size: 1.1em;
+    animation: pulse 1s ease-in-out;
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 4px 8px;
+    border-radius: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+  }
 
   @media (max-width: 768px) {
     top: 10px;
     font-size: 18px;
     padding: 6px 12px;
+
+    .multiplier {
+      font-size: 1em;
+      padding: 3px 6px;
+    }
   }
 }
 
