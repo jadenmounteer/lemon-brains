@@ -43,6 +43,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
   private settings: GameSettings;
+  private correctStreak = 0;
 
   // Difficulty-based settings
   private spawnTimeoutMs: number;
@@ -176,7 +177,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         this.handleCorrectAnswer();
       } else {
         this.wrongAnswer = selectedAnswer as number;
-        this.scoreMultiplier = 1; // Reset multiplier on wrong answer
+        this.scoreMultiplier = 1;
+        this.correctStreak = 0;
         // Play zombie sound and spawn a new zombie
         this.audioService.playZombieSound();
         this.spawnZombie();
@@ -190,7 +192,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.selectedAnswer = null;
     this.removeClosestZombie();
     this.lemonadeGiven++;
-    this.scoreMultiplier++;
+    this.correctStreak++;
+    if (this.correctStreak > 1) {
+      this.scoreMultiplier = this.correctStreak;
+    }
     this.generateNewQuestion();
   }
 
@@ -615,7 +620,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   restartGame() {
     this.isGameOver = false;
-    this.scoreMultiplier = 1; // Reset multiplier on restart
+    this.scoreMultiplier = 1;
+    this.correctStreak = 0;
 
     // Remove all zombie sprites from the DOM
     const gameArea = this.gameAreaRef.nativeElement;
