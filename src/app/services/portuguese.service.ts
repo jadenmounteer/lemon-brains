@@ -43,10 +43,15 @@ export class PortugueseService {
     { portuguese: 'carne', english: 'meat', category: 'vocabulary' },
     { portuguese: 'peixe', english: 'fish', category: 'vocabulary' },
     { portuguese: 'suco', english: 'juice', category: 'vocabulary' },
-    { portuguese: 'cerveja', english: 'beer', category: 'vocabulary' },
-    { portuguese: 'vinho', english: 'wine', category: 'vocabulary' },
-    { portuguese: 'sobremesa', english: 'dessert', category: 'vocabulary' },
+    { portuguese: 'lanche', english: 'snack', category: 'vocabulary' },
+    { portuguese: 'biscoito', english: 'cookie', category: 'vocabulary' },
     { portuguese: 'sorvete', english: 'ice cream', category: 'vocabulary' },
+    {
+      portuguese: 'batata frita',
+      english: 'french fries',
+      category: 'vocabulary',
+    },
+
     // Common objects
     { portuguese: 'livro', english: 'book', category: 'vocabulary' },
     { portuguese: 'mesa', english: 'table', category: 'vocabulary' },
