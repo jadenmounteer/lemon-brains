@@ -167,6 +167,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   checkAnswer(selectedAnswer: number | string) {
     if (this.currentQuestion) {
+      // Clear previous wrong answer state
+      this.wrongAnswer = null;
+
       if (selectedAnswer === this.currentQuestion.answer) {
         this.selectedAnswer = selectedAnswer;
         this.handleCorrectAnswer();
@@ -182,6 +185,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private handleCorrectAnswer() {
     console.log('Correct!');
     this.wrongAnswer = null;
+    this.selectedAnswer = null;
     this.removeClosestZombie();
     this.lemonadeGiven++;
     this.generateNewQuestion();
