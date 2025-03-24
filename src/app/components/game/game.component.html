@@ -24,6 +24,10 @@
       ⚡
     </button>
 
+    <div *ngIf="showQuenched" class="quenched-message" [@powerUpAnimation]>
+      QUENCHED!
+    </div>
+
     <div *ngIf="isGameOver" class="game-over-overlay">
       <h1 class="game-over-text">Game Over!</h1>
       <div class="final-score">Lemonade Given: {{ lemonadeGiven }}</div>

@@ -54,6 +54,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   lemonadeGiven = 0;
   scoreMultiplier = 1;
   showPowerUp = false;
+  showQuenched = false;
   private nextZombieId = 0;
   private gameAreaRect?: DOMRect;
   private zombieSpawnInterval?: ReturnType<typeof setInterval>;
@@ -755,6 +756,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.moveIntervals.forEach((interval) => clearInterval(interval));
     this.moveIntervals.clear();
 
+    // Show QUENCHED! message
+    this.showQuenched = true;
+
     // Remove all zombies after animation
     setTimeout(() => {
       this.zombies = [];
@@ -762,6 +766,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
         this.gameAreaRef.nativeElement.querySelectorAll('.zombie');
       zombieSprites.forEach((sprite: HTMLElement) => sprite.remove());
     }, 300);
+
+    // Hide QUENCHED! message after a delay
+    setTimeout(() => {
+      this.showQuenched = false;
+    }, 1500);
 
     // Reset power-up state
     this.showPowerUp = false;
