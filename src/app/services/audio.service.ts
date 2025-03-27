@@ -13,7 +13,7 @@ export class AudioService {
 
   constructor() {
     this.music = new Audio();
-    this.music.src = 'assets/audio/soundtrack.mp3';
+    this.music.src = 'assets/audio/soundtrack.m4a';
     this.music.loop = true;
 
     this.zombieSound = new Audio();
