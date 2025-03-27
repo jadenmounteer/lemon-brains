@@ -418,6 +418,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private spawnKing() {
+    this.audioService.playKingZombieSpawnSound();
     const difficulty = this.difficultySettings[this.settings.gameDifficulty];
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();

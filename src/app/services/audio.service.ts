@@ -10,6 +10,7 @@ export class AudioService {
   private isMusicPlaying = false;
   private zombieSoundInterval?: ReturnType<typeof setInterval>;
   private isMuted = false;
+  private kingZombieSpawnSound: HTMLAudioElement;
 
   constructor() {
     this.music = new Audio();
@@ -22,6 +23,9 @@ export class AudioService {
 
     this.quenchedSound = new Audio('assets/audio/quenched.m4a');
     this.quenchedSound.volume = 0.4;
+
+    this.kingZombieSpawnSound = new Audio('assets/audio/bow-to-me.m4a');
+    this.kingZombieSpawnSound.volume = 0.4;
   }
 
   play() {
@@ -94,6 +98,13 @@ export class AudioService {
     }
   }
 
+  playKingZombieSpawnSound() {
+    if (!this.isMuted) {
+      this.kingZombieSpawnSound.currentTime = 0;
+      this.kingZombieSpawnSound.play();
+    }
+  }
+
   // Clean up method to be called when the game is destroyed
   cleanup() {
     this.pause();
@@ -104,5 +115,7 @@ export class AudioService {
     this.zombieSound.currentTime = 0;
     this.quenchedSound.pause();
     this.quenchedSound.currentTime = 0;
+    this.kingZombieSpawnSound.pause();
+    this.kingZombieSpawnSound.currentTime = 0;
   }
 }
