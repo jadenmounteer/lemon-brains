@@ -87,7 +87,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   > = {
     easy: {
-      initialSpawnRate: 6000,
+      initialSpawnRate: 5000,
       minSpawnRate: 2000,
       spawnRateDecrease: 100,
       checkInterval: 20000,
@@ -100,7 +100,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       doubleSpawnChance: 0.25, // 25% chance for double spawn
     },
     normal: {
-      initialSpawnRate: 5000,
+      initialSpawnRate: 4000,
       minSpawnRate: 1500,
       spawnRateDecrease: 150,
       checkInterval: 15000,
@@ -113,7 +113,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       doubleSpawnChance: 0.5, // 50% chance for double spawn
     },
     hard: {
-      initialSpawnRate: 4000,
+      initialSpawnRate: 3000,
       minSpawnRate: 1000,
       spawnRateDecrease: 200,
       checkInterval: 10000,
