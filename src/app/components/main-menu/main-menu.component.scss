@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: flex-start;
   background-color: #f0f0f0;
-  padding: 40px 20px;
+  padding: 20px;
   text-align: center;
   box-sizing: border-box;
   overflow-y: auto;
@@ -215,13 +215,35 @@
   }
 }
 
+.current-learning {
+  margin-bottom: 20px;
+  padding: 10px 20px;
+  background-color: rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  font-size: 1.2em;
+
+  .curriculum {
+    color: #ffd700;
+    font-weight: bold;
+  }
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 300px;
+  margin-top: 0;
+}
+
 .settings-panel {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 600px;
   background-color: white;
   border-radius: 12px;
   padding: 20px;
-  margin: 20px auto;
-  max-width: 400px;
-  width: 90%;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   display: none;
   box-sizing: border-box;
@@ -281,26 +303,6 @@
   }
 }
 
-.button-group {
-  display: flex;
-  gap: 15px;
-  justify-content: center;
-  margin-top: auto;
-  padding: 20px 0;
-  width: 100%;
-  box-sizing: border-box;
-
-  @media (max-width: 480px) {
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    position: relative;
-    bottom: 0;
-    background-color: transparent;
-    padding: 10px 0;
-  }
-}
-
 .settings-button {
   padding: 15px 30px;
   font-size: 20px;
@@ -353,22 +355,4 @@
   font-size: 14px;
   color: #888;
   margin-top: 2px;
-}
-
-.current-learning {
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
-  padding: 0.8rem 1.2rem;
-  margin: 1rem 0;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.95);
-  font-size: 1.1rem;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
-
-  .curriculum {
-    color: #ffeb3b;
-    font-weight: bold;
-    margin-left: 0.5rem;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
-  }
 }
