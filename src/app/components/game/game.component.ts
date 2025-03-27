@@ -228,6 +228,13 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private removeClosestZombie() {
     if (this.zombies.length === 0) return;
 
+    // Add logging
+    console.log('Attempting to remove closest zombie');
+    console.log(
+      'Current zombies before removal: ',
+      this.zombies.map((z) => z.id)
+    );
+
     // Get the game area dimensions
     const rect = this.gameAreaRef.nativeElement.getBoundingClientRect();
     const targetX = rect.width / 2;
@@ -440,6 +447,9 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private spawnZombie() {
+    // Add logging
+    console.log(`Spawning zombie with ID: ${this.nextZombieId}`);
+
     const difficulty = this.difficultySettings[this.settings.gameDifficulty];
     const gameArea = this.gameAreaRef.nativeElement;
     const rect = gameArea.getBoundingClientRect();
@@ -520,6 +530,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
     this.zombies.push(zombie);
     this.createZombieSprite(zombie);
+    console.log(
+      `Current zombies: `,
+      this.zombies.map((z) => z.id)
+    );
   }
 
   private createZombieSprite(zombie: ZombieState) {
