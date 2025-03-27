@@ -97,7 +97,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       speedMultiplier: 0.8,
       kingSpawnDelay: 180000, // 3 minutes
       kingSpawnChance: 0.3, // 30% chance
-      doubleSpawnChance: 0.1, // 10% chance for double spawn
+      doubleSpawnChance: 0.25, // 25% chance for double spawn
     },
     normal: {
       initialSpawnRate: 5000,
@@ -109,8 +109,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMaxHealth: 3,
       speedMultiplier: 1,
       kingSpawnDelay: 120000, // 2 minutes
-      kingSpawnChance: 0.4, // 40% chance
-      doubleSpawnChance: 0.25, // 25% chance for double spawn
+      kingSpawnChance: 0.6, // 60% chance
+      doubleSpawnChance: 0.5, // 50% chance for double spawn
     },
     hard: {
       initialSpawnRate: 4000,
@@ -122,8 +122,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       fatZombieMaxHealth: 2,
       speedMultiplier: 1.2,
       kingSpawnDelay: 90000, // 1.5 minutes
-      kingSpawnChance: 0.5, // 50% chance
-      doubleSpawnChance: 0.4, // 40% chance for double spawn
+      kingSpawnChance: 0.8, // 80% chance
+      doubleSpawnChance: 0.9, // 90% chance for double spawn
     },
   };
 
