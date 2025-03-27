@@ -17,10 +17,11 @@ export class AudioService {
     this.music.loop = true;
 
     this.zombieSound = new Audio();
-    this.zombieSound.src = 'assets/audio/zombie sound.mp3';
-    this.zombieSound.volume = 0.7; // Slightly lower volume for sound effect
+    this.zombieSound.src = 'assets/audio/zombie sound.m4a';
+    this.zombieSound.volume = 0.2; // Slightly lower volume for sound effect
 
     this.quenchedSound = new Audio('assets/audio/quenched.m4a');
+    this.quenchedSound.volume = 0.4;
   }
 
   play() {
@@ -67,12 +68,12 @@ export class AudioService {
       if (this.isMusicPlaying) {
         this.playZombieSound();
       }
-    }, Math.random() * 10000 + 5000); // Random interval between 5000ms and 15000ms
+    }, Math.random() * 10000 + 30000); // Random interval
   }
 
   playZombieSound() {
     // Create a new Audio instance each time to allow overlapping sounds
-    const zombieSound = new Audio('assets/audio/zombie sound.mp3');
+    const zombieSound = new Audio('assets/audio/zombie sound.m4a');
     zombieSound.volume = this.zombieSound.volume;
     zombieSound.play().catch((error) => {
       console.warn('Zombie sound playback failed:', error);
