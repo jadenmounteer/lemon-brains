@@ -13,7 +13,7 @@
 }
 
 .main-menu {
-  position: relative;
+  position: absolute;
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
@@ -24,6 +24,8 @@
   padding-bottom: env(safe-area-inset-bottom, 20px);
   text-align: center;
   box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: linear-gradient(180deg, #fcf34091 0%, #fcf340 100%);
   isolation: isolate;
 
