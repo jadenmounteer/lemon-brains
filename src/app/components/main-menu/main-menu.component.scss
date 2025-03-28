@@ -57,6 +57,22 @@
 
 .human-brain {
   width: 20vh;
+  position: relative;
+  animation: brain-float 15s infinite;
+}
+
+@keyframes brain-float {
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-20px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .title-container {
