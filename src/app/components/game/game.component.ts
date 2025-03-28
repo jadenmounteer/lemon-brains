@@ -19,6 +19,14 @@ import { MathQuestion } from '../../models/math-question.interface';
 import { ZombieState } from '../../models/zombie.interface';
 import { SettingsService, GameSettings } from '../../services/settings.service';
 import { ColorQuestionsService } from '../../services/color-questions.service';
+import { ShapeQuestionsService } from '../../services/shape-questions.service';
+
+interface Question {
+  question: string;
+  answer: string | number;
+  options: any[];
+  curriculum: 'math' | 'portuguese' | 'colors' | 'shapes';
+}
 
 @Component({
   selector: 'app-game',
@@ -46,9 +54,9 @@ import { ColorQuestionsService } from '../../services/color-questions.service';
 })
 export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('gameArea') gameAreaRef!: ElementRef;
-  currentQuestion?: MathQuestion;
-  wrongAnswer: number | null = null;
-  selectedAnswer: number | string | null = null;
+  currentQuestion: Question | null = null;
+  wrongAnswer: string | number | null = null;
+  selectedAnswer: string | number | null = null;
   zombies: ZombieState[] = [];
   isGameOver = false;
   isMusicPlaying = false;
@@ -137,7 +145,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
     private audioService: AudioService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private shapeQuestionsService: ShapeQuestionsService
   ) {
     this.settings = this.settingsService.getCurrentSettings();
     const difficulty = this.difficultySettings[this.settings.gameDifficulty];
@@ -184,33 +193,54 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   generateNewQuestion() {
     this.selectedAnswer = null;
-    if (this.settings.curriculum === 'colors') {
-      this.currentQuestion = this.colorQuestionsService.generateQuestion();
-    } else {
-      this.currentQuestion =
-        this.settings.curriculum === 'math'
-          ? this.mathService.generateQuestion()
-          : this.portugueseService.generateQuestion();
+    switch (this.settings.curriculum) {
+      case 'colors': {
+        const colorQ = this.colorQuestionsService.generateQuestion();
+        this.currentQuestion = {
+          ...colorQ,
+          curriculum: 'colors',
+        };
+        break;
+      }
+      case 'shapes': {
+        const shapeQ = this.shapeQuestionsService.generateQuestion();
+        this.currentQuestion = {
+          ...shapeQ,
+          curriculum: 'shapes',
+        };
+        break;
+      }
+      case 'math': {
+        const mathQ = this.mathService.generateQuestion();
+        this.currentQuestion = {
+          ...mathQ,
+          curriculum: 'math',
+        };
+        break;
+      }
+      case 'portuguese': {
+        const portQ = this.portugueseService.generateQuestion();
+        this.currentQuestion = {
+          ...portQ,
+          curriculum: 'portuguese',
+        };
+        break;
+      }
     }
   }
 
-  checkAnswer(selectedAnswer: number | string) {
-    if (this.currentQuestion) {
-      // Clear previous wrong answer state
-      this.wrongAnswer = null;
+  checkAnswer(answer: string | number) {
+    this.selectedAnswer = answer;
+    const isCorrect =
+      this.settings.curriculum === 'shapes'
+        ? answer === this.currentQuestion?.answer
+        : answer === this.currentQuestion?.answer;
 
-      if (selectedAnswer === this.currentQuestion.answer) {
-        this.selectedAnswer = selectedAnswer;
-        this.handleCorrectAnswer();
-      } else {
-        this.wrongAnswer = selectedAnswer as number;
-        this.scoreMultiplier = 1;
-        this.correctStreak = 0;
-        this.showPowerUp = false; // Hide power-up on wrong answer
-        // Play zombie sound and spawn a new zombie
-        this.audioService.playZombieSound();
-        this.spawnZombie();
-      }
+    if (isCorrect) {
+      this.handleCorrectAnswer();
+    } else {
+      this.wrongAnswer = answer;
+      this.handleWrongAnswer();
     }
   }
 
@@ -229,6 +259,16 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
       this.showPowerUp = true;
     }
     this.generateNewQuestion();
+  }
+
+  private handleWrongAnswer() {
+    console.log('Wrong answer!');
+    this.wrongAnswer = null;
+    this.selectedAnswer = null;
+    this.showPowerUp = false; // Hide power-up on wrong answer
+    // Play zombie sound and spawn a new zombie
+    this.audioService.playZombieSound();
+    this.spawnZombie();
   }
 
   private removeClosestZombie() {
@@ -725,8 +765,26 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     this.isMusicPlaying = this.audioService.toggle();
   }
 
-  getColorHex(colorName: string | number): string {
-    return this.colorQuestionsService.getColorHex(String(colorName));
+  getColorHex(
+    option: string | number | { name: string; color: string }
+  ): string {
+    if (typeof option === 'object' && 'color' in option) {
+      return option.color;
+    }
+    return this.colorQuestionsService.getColorHex(String(option));
+  }
+
+  getSvgPath(
+    shapeName: string | number | { name: string; color: string }
+  ): string {
+    if (typeof shapeName === 'object' && 'name' in shapeName) {
+      return this.shapeQuestionsService.getShapeSvg(shapeName.name);
+    }
+    return this.shapeQuestionsService.getShapeSvg(String(shapeName));
+  }
+
+  getOptionValue(option: any): string | number {
+    return this.settings.curriculum === 'shapes' ? option.name : option;
   }
 
   private setupResizeObserver() {

@@ -44,25 +44,36 @@
     <div class="question-container" *ngIf="!isGameOver && currentQuestion">
       <h2>{{ currentQuestion.question }}</h2>
 
-      <div
-        *ngIf="settings.curriculum === 'colors'"
-        class="color-block"
-        [style.background-color]="getColorHex(currentQuestion.answer)"
-      ></div>
-
-      <div class="options color-options">
+      <div class="options">
         <button
           *ngFor="let option of currentQuestion.options"
-          (click)="checkAnswer(option)"
-          [class.selected]="selectedAnswer === option"
-          [class.wrong]="wrongAnswer === option"
+          (click)="checkAnswer(getOptionValue(option))"
+          [class.selected]="selectedAnswer === getOptionValue(option)"
+          [class.wrong]="wrongAnswer === getOptionValue(option)"
           [disabled]="selectedAnswer !== null"
-          [ngClass]="{ 'color-option': settings.curriculum === 'colors' }"
+          [ngClass]="{
+            'color-option': currentQuestion.curriculum === 'colors',
+            'shape-option': currentQuestion.curriculum === 'shapes'
+          }"
           [style.background-color]="
-            settings.curriculum === 'colors' ? getColorHex(option) : ''
+            currentQuestion.curriculum === 'colors' ? getColorHex(option) : ''
           "
         >
-          <span *ngIf="settings.curriculum !== 'colors'">{{ option }}</span>
+          <span
+            *ngIf="!['colors', 'shapes'].includes(currentQuestion.curriculum)"
+            >{{ option }}</span
+          >
+          <svg
+            *ngIf="currentQuestion.curriculum === 'shapes'"
+            viewBox="0 0 100 100"
+          >
+            <path
+              [attr.d]="getSvgPath(option)"
+              [attr.fill]="option.color"
+              stroke="#333"
+              stroke-width="2"
+            ></path>
+          </svg>
         </button>
       </div>
     </div>

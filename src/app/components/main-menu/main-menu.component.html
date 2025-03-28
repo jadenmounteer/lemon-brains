@@ -46,6 +46,8 @@
         ? "Mathematics"
         : settings.curriculum === "portuguese"
         ? "Portuguese"
+        : settings.curriculum === "shapes"
+        ? "Shapes"
         : "Colors"
     }}</span>
   </div>
@@ -83,6 +85,21 @@
             Portuguese
             <small class="difficulty-hint"
               >Learn basic Portuguese vocabulary and phrases</small
+            >
+          </span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            [(ngModel)]="settings.curriculum"
+            name="curriculum"
+            value="shapes"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Shapes
+            <small class="difficulty-hint"
+              >Learn to identify different shapes</small
             >
           </span>
         </label>

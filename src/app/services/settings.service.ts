@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 
 export interface GameSettings {
-  curriculum: 'math' | 'portuguese' | 'colors';
+  curriculum: 'math' | 'portuguese' | 'colors' | 'shapes';
   questionTypes: {
     addition: boolean;
     subtraction: boolean;
