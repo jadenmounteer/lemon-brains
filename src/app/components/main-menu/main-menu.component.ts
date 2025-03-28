@@ -1,11 +1,4 @@
-import {
-  Component,
-  EventEmitter,
-  Output,
-  ViewChild,
-  ElementRef,
-  AfterViewInit,
-} from '@angular/core';
+import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AudioService } from '../../services/audio.service';
@@ -19,9 +12,8 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
   templateUrl: './main-menu.component.html',
   styleUrl: './main-menu.component.scss',
 })
-export class MainMenuComponent implements AfterViewInit {
+export class MainMenuComponent {
   @Output() startGame = new EventEmitter<void>();
-  @ViewChild('lemonadeContainer') lemonadeContainer!: ElementRef;
   settings: GameSettings;
   showSettings = false;
   isMusicPlaying = false;
@@ -32,26 +24,6 @@ export class MainMenuComponent implements AfterViewInit {
     private spriteAnimationService: SpriteAnimationService
   ) {
     this.settings = this.settingsService.getCurrentSettings();
-  }
-
-  ngAfterViewInit() {
-    this.initLemonadeAnimation();
-  }
-
-  private initLemonadeAnimation() {
-    const lemonadeConfig = {
-      imageUrl: 'assets/sprites/lemonade.png',
-      frameWidth: 128, // Width of one frame (256/2 columns)
-      frameHeight: 128, // Height of one frame (384/3 rows)
-      totalFrames: 6, // Total frames in sprite sheet
-      fps: 4, // Slower animation speed
-      displayWidth: 128, // Larger display size
-      displayHeight: 128, // Keep it square
-    };
-
-    const canvas = this.spriteAnimationService.loadSprite(lemonadeConfig);
-    canvas.classList.add('menu-lemonade');
-    this.lemonadeContainer.nativeElement.appendChild(canvas);
   }
 
   onStartGameClick() {
