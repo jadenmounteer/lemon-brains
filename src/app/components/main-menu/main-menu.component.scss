@@ -27,6 +27,8 @@
   background: linear-gradient(180deg, #fcf34091 0%, #fcf340 100%);
   isolation: isolate;
 
+  overflow-y: auto;
+
   &::before {
     content: "";
     position: fixed;
@@ -52,6 +54,7 @@
     justify-content: flex-start;
     padding: 20px 20px max(env(safe-area-inset-bottom), 20px);
     gap: 20px;
+    overflow-y: auto;
   }
 }
 
