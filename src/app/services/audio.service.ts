@@ -16,7 +16,7 @@ export class AudioService {
     this.music = new Audio();
     this.music.src = 'assets/audio/soundtrack.m4a';
     this.music.loop = true;
-    this.music.volume = 0.4;
+    this.music.volume = 0.1;
     this.zombieSound = new Audio();
     this.zombieSound.src = 'assets/audio/zombie sound.m4a';
     this.zombieSound.volume = 0.2; // Slightly lower volume for sound effect

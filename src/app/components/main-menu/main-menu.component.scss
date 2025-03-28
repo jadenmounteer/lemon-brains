@@ -26,6 +26,7 @@
   box-sizing: border-box;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overflow-x: hidden;
   background: linear-gradient(180deg, #fcf34091 0%, #fcf340 100%);
   isolation: isolate;
   height: 100vh;
