@@ -61,6 +61,20 @@
     padding: 20px 20px max(env(safe-area-inset-bottom), 20px);
     gap: 20px;
   }
+
+  // The footer for the PWA app
+  @media all and (display-mode: standalone) {
+    &::after {
+      content: "";
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: env(safe-area-inset-bottom);
+      background: #fcf340;
+      z-index: 1;
+    }
+  }
 }
 
 .human-brain {
