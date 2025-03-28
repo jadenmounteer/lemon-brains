@@ -18,67 +18,16 @@
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
+  background: linear-gradient(180deg, #fcf34091 0%, #fcf340 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 20px;
   padding-bottom: env(safe-area-inset-bottom, 20px);
   text-align: center;
-  box-sizing: border-box;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overflow-x: hidden;
-  background: linear-gradient(180deg, #fcf34091 0%, #fcf340 100%);
-  isolation: isolate;
-  height: 100vh;
-  height: -webkit-fill-available;
-  height: 100dvh;
-  margin: 0;
-  padding-bottom: max(env(safe-area-inset-bottom), 20px);
-
-  &::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(
-      circle at 50% 50%,
-      rgba(255, 255, 255, 0.1) 0%,
-      transparent 70%
-    );
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  @supports (-webkit-touch-callout: none) {
-    min-height: -webkit-fill-available;
-    padding-bottom: max(env(safe-area-inset-bottom), 20px);
-  }
-
-  @media (max-width: 768px) {
-    justify-content: flex-start;
-    padding: 20px 20px max(env(safe-area-inset-bottom), 20px);
-    gap: 20px;
-  }
-
-  // The footer for the PWA app
-  @media all and (display-mode: standalone) {
-    &::after {
-      content: "";
-      position: fixed;
-      bottom: calc(-1 * env(safe-area-inset-bottom));
-      left: 0;
-      right: 0;
-      height: calc(env(safe-area-inset-bottom) + 1px);
-      background: #fcf340;
-      z-index: 1;
-    }
-  }
+  z-index: 1;
 }
 
 .human-brain {
