@@ -1,12 +1,14 @@
 .main-menu {
   width: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   background-color: #f0f0f0;
   padding: 20px;
+  padding-bottom: env(safe-area-inset-bottom, 20px);
   text-align: center;
   box-sizing: border-box;
   overflow-y: auto;
@@ -15,13 +17,13 @@
 
   @supports (-webkit-touch-callout: none) {
     min-height: -webkit-fill-available;
+    padding-bottom: max(env(safe-area-inset-bottom), 20px);
   }
 
-  @media (max-width: 480px) {
-    padding: 20px;
-    justify-content: space-between;
-    height: 100vh;
-    overflow-y: auto;
+  @media (max-width: 768px) {
+    justify-content: flex-start;
+    padding: 20px 20px max(env(safe-area-inset-bottom), 20px);
+    gap: 20px;
   }
 }
 
@@ -74,6 +76,10 @@
       image-rendering: pixelated;
     }
   }
+
+  @media (max-width: 768px) {
+    margin-bottom: 10px;
+  }
 }
 
 .description {
@@ -86,7 +92,7 @@
 
   @media (max-width: 768px) {
     font-size: 18px;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
     line-height: 1.4;
   }
 
@@ -218,13 +224,19 @@
 .current-learning {
   margin-bottom: 20px;
   padding: 10px 20px;
-  background-color: rgba(0, 0, 0, 0.1);
+  background-color: rgba(0, 0, 0, 0.15);
   border-radius: 20px;
   font-size: 1.2em;
+  color: #333;
 
   .curriculum {
-    color: #ffd700;
+    color: #cc8f00;
     font-weight: bold;
+    text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    margin-bottom: 10px;
   }
 }
 
@@ -234,7 +246,11 @@
   gap: 10px;
   width: 100%;
   max-width: 300px;
-  margin-top: 0;
+
+  @media (max-width: 768px) {
+    margin-top: 0;
+    margin-bottom: env(safe-area-inset-bottom, 20px);
+  }
 }
 
 .settings-panel {
@@ -247,6 +263,7 @@
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   display: none;
   box-sizing: border-box;
+  margin-bottom: env(safe-area-inset-bottom, 20px);
 
   &.open {
     display: block;
