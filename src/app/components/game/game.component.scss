@@ -14,12 +14,8 @@
   background-color: white;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
-
-  /* Add these lines to override html/body background */
-  & + html,
-  & + body {
-    background: white !important;
-  }
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .game-container {
