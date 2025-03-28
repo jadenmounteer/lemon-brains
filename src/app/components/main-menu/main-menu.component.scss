@@ -13,7 +13,11 @@
 }
 
 .main-menu {
-  position: absolute;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
@@ -67,10 +71,10 @@
     &::after {
       content: "";
       position: fixed;
-      bottom: 0;
+      bottom: calc(-1 * env(safe-area-inset-bottom));
       left: 0;
       right: 0;
-      height: env(safe-area-inset-bottom);
+      height: calc(env(safe-area-inset-bottom) + 1px);
       background: #fcf340;
       z-index: 1;
     }
