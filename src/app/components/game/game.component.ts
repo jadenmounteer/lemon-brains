@@ -18,6 +18,7 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
 import { MathQuestion } from '../../models/math-question.interface';
 import { ZombieState } from '../../models/zombie.interface';
 import { SettingsService, GameSettings } from '../../services/settings.service';
+import { ColorQuestionsService } from '../../services/color-questions.service';
 
 @Component({
   selector: 'app-game',
@@ -62,7 +63,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
-  private settings: GameSettings;
+  settings: GameSettings;
   private correctStreak = 0;
   private powerUpThreshold = 10; // Initial threshold for power-up
 
@@ -132,6 +133,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   constructor(
     private mathService: MathService,
     private portugueseService: PortugueseService,
+    private colorQuestionsService: ColorQuestionsService,
     private spriteAnimationService: SpriteAnimationService,
     private router: Router,
     private audioService: AudioService,
@@ -182,10 +184,14 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   generateNewQuestion() {
     this.selectedAnswer = null;
-    this.currentQuestion =
-      this.settings.curriculum === 'math'
-        ? this.mathService.generateQuestion()
-        : this.portugueseService.generateQuestion();
+    if (this.settings.curriculum === 'colors') {
+      this.currentQuestion = this.colorQuestionsService.generateQuestion();
+    } else {
+      this.currentQuestion =
+        this.settings.curriculum === 'math'
+          ? this.mathService.generateQuestion()
+          : this.portugueseService.generateQuestion();
+    }
   }
 
   checkAnswer(selectedAnswer: number | string) {
@@ -717,6 +723,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleMusic() {
     this.isMusicPlaying = this.audioService.toggle();
+  }
+
+  getColorHex(colorName: string | number): string {
+    return this.colorQuestionsService.getColorHex(String(colorName));
   }
 
   private setupResizeObserver() {

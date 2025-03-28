@@ -43,15 +43,26 @@
   <div class="game-half question-area">
     <div class="question-container" *ngIf="!isGameOver && currentQuestion">
       <h2>{{ currentQuestion.question }}</h2>
-      <div class="options">
+
+      <div
+        *ngIf="settings.curriculum === 'colors'"
+        class="color-block"
+        [style.background-color]="getColorHex(currentQuestion.answer)"
+      ></div>
+
+      <div class="options color-options">
         <button
           *ngFor="let option of currentQuestion.options"
           (click)="checkAnswer(option)"
           [class.selected]="selectedAnswer === option"
           [class.wrong]="wrongAnswer === option"
           [disabled]="selectedAnswer !== null"
+          [ngClass]="{ 'color-option': settings.curriculum === 'colors' }"
+          [style.background-color]="
+            settings.curriculum === 'colors' ? getColorHex(option) : ''
+          "
         >
-          {{ option }}
+          <span *ngIf="settings.curriculum !== 'colors'">{{ option }}</span>
         </button>
       </div>
     </div>

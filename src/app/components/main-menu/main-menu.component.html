@@ -42,7 +42,11 @@
   <div class="current-learning">
     Currently Learning:
     <span class="curriculum">{{
-      settings.curriculum === "math" ? "Mathematics" : "Portuguese"
+      settings.curriculum === "math"
+        ? "Mathematics"
+        : settings.curriculum === "portuguese"
+        ? "Portuguese"
+        : "Colors"
     }}</span>
   </div>
 
@@ -79,6 +83,21 @@
             Portuguese
             <small class="difficulty-hint"
               >Learn basic Portuguese vocabulary and phrases</small
+            >
+          </span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            [(ngModel)]="settings.curriculum"
+            name="curriculum"
+            value="colors"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Colors
+            <small class="difficulty-hint"
+              >Learn to identify different colors</small
             >
           </span>
         </label>
