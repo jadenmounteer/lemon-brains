@@ -516,9 +516,9 @@ export class KingdomScene extends Phaser.Scene {
           this.game.events.emit(KingdomEvents.MARKET_TOAST, {
             message:
               kind === 'stairs'
-                ? 'Stairs must snap to a wall'
+                ? 'Stairs must snap beside a wall'
                 : kind === 'drawbridge'
-                  ? 'Drawbridge must snap into a wall gap'
+                  ? 'Drawbridge must snap to a wall or wall gap'
                   : 'Cannot place on another object',
           });
         }

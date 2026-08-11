@@ -263,7 +263,7 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'drawbridge',
     name: 'Drawbridge',
-    blurb: 'Gate in the wall line. Closes during raids.',
+    blurb: 'Snaps into a wall gap, or onto a wall segment to replace it. Closes during raids.',
     cost: 50,
   },
   {

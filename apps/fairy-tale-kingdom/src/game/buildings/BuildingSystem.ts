@@ -94,8 +94,8 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   keep: { w: 80, h: 64 },
 };
 
-const STAIR_SNAP_DIST = 48;
-const GATE_SNAP_DIST = 56;
+const STAIR_SNAP_DIST = 96;
+const GATE_SNAP_DIST = 96;
 
 /** Snap world coord to fortification cell center. */
 export function fortSnap(n: number): number {
@@ -118,6 +118,8 @@ export class BuildingSystem {
   private wallGhostExtras: Phaser.GameObjects.Image[] = [];
   private ghostValid = false;
   private ghostWallId: string | null = null;
+  /** When placing a drawbridge on a wall segment, replace this wall on commit. */
+  private ghostReplaceWallId: string | null = null;
   /** Cached wall run under the cursor for commit. */
   private wallRunPreview: Point[] = [];
   private raidActive = false;
@@ -886,6 +888,7 @@ export class BuildingSystem {
     this.wallRunPreview = [];
     this.ghostValid = false;
     this.ghostWallId = null;
+    this.ghostReplaceWallId = null;
   }
 
   private clearWallGhostExtras(): void {
@@ -916,6 +919,7 @@ export class BuildingSystem {
 
   updateGhost(worldX: number, worldY: number): void {
     if (!this.ghost || !this.placeKind) return;
+    this.ghostReplaceWallId = null;
 
     if (this.placeKind === 'stairs') {
       const snap = this.findWallSnap(worldX, worldY);
@@ -924,7 +928,7 @@ export class BuildingSystem {
         this.ghostWallId = snap.wallId;
         this.ghostValid = this.canPlaceAt('stairs', snap.x, snap.y, snap.wallId);
       } else {
-        this.ghost.setPosition(snapCoord(worldX), snapCoord(worldY));
+        this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
         this.ghostWallId = null;
         this.ghostValid = false;
       }
@@ -933,7 +937,15 @@ export class BuildingSystem {
       if (snap) {
         this.ghost.setPosition(snap.x, snap.y);
         this.ghostWallId = null;
-        this.ghostValid = this.canPlaceAt('drawbridge', snap.x, snap.y);
+        this.ghostReplaceWallId = snap.replaceWallId ?? null;
+        this.ghostValid = this.canPlaceAt(
+          'drawbridge',
+          snap.x,
+          snap.y,
+          null,
+          0,
+          snap.replaceWallId
+        );
       } else {
         this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
         this.ghostValid = false;
@@ -997,6 +1009,7 @@ export class BuildingSystem {
     const x = this.ghost.x;
     const y = this.ghost.y;
     const wallId = this.ghostWallId ?? undefined;
+    const replaceWallId = this.ghostReplaceWallId;
     const rotation = kind === 'bridge' ? this.placeRotation : undefined;
     const wallRun =
       kind === 'wall' && this.wallRunPreview.length > 0
@@ -1010,6 +1023,9 @@ export class BuildingSystem {
         }
       }
     } else {
+      if (replaceWallId) {
+        this.replaceWallWithGate(replaceWallId);
+      }
       this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId, rotation });
     }
     this.recomputeHouseLabels();
@@ -1018,6 +1034,21 @@ export class BuildingSystem {
     this.rebuildPathGrid();
     this.onLayoutChanged?.();
     return true;
+  }
+
+  /** Quietly remove a wall segment (and its stairs) so a drawbridge can take its cell. */
+  private replaceWallWithGate(wallId: string): void {
+    const wall = this.getById(wallId);
+    if (!wall || wall.kind !== 'wall') return;
+    const stairs = this.buildings.filter(
+      (s) => s.kind === 'stairs' && s.attachedWallId === wall.id
+    );
+    for (const s of stairs) {
+      this.onDestroyed?.(s);
+      this.removeRecord(s);
+    }
+    this.onDestroyed?.(wall);
+    this.removeRecord(wall);
   }
 
   /**
@@ -1540,14 +1571,11 @@ export class BuildingSystem {
   private findGateSnap(
     worldX: number,
     worldY: number
-  ): { x: number; y: number } | null {
-    const x = fortSnap(worldX);
-    const y = fortSnap(worldY);
-    if (this.hasOrthogonalWall(x, y) && !this.fortOccupied(x, y)) {
-      return { x, y };
-    }
-    let best: { x: number; y: number } | null = null;
-    let bestD = GATE_SNAP_DIST;
+  ): { x: number; y: number; replaceWallId?: string } | null {
+    // Prefer an empty fort cell that already sits in the wall line (true gap).
+    let bestGap: { x: number; y: number } | null = null;
+    let bestGapD = GATE_SNAP_DIST;
+    let bestGapScore = -1;
     for (const w of this.buildings) {
       if (w.kind !== 'wall') continue;
       const candidates = [
@@ -1558,14 +1586,38 @@ export class BuildingSystem {
       ];
       for (const c of candidates) {
         if (this.fortOccupied(c.x, c.y)) continue;
+        if (!this.hasOrthogonalWall(c.x, c.y)) continue;
         const d = Phaser.Math.Distance.Between(worldX, worldY, c.x, c.y);
-        if (d < bestD) {
-          bestD = d;
-          best = c;
+        if (d >= GATE_SNAP_DIST) continue;
+        // Prefer cells flanked by walls on opposite sides (a real gate hole).
+        const flanked =
+          (Boolean(this.wallAt(c.x - FORT_TILE, c.y)) &&
+            Boolean(this.wallAt(c.x + FORT_TILE, c.y))) ||
+          (Boolean(this.wallAt(c.x, c.y - FORT_TILE)) &&
+            Boolean(this.wallAt(c.x, c.y + FORT_TILE)));
+        const score = flanked ? 2 : 1;
+        if (score > bestGapScore || (score === bestGapScore && d < bestGapD)) {
+          bestGapScore = score;
+          bestGapD = d;
+          bestGap = c;
         }
       }
     }
-    return best;
+    if (bestGap) return bestGap;
+
+    // No gap: snap onto the nearest wall segment and replace it with a gate.
+    let bestWall: BuildingRecord | null = null;
+    let bestWallD = GATE_SNAP_DIST;
+    for (const w of this.buildings) {
+      if (w.kind !== 'wall') continue;
+      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
+      if (d < bestWallD) {
+        bestWallD = d;
+        bestWall = w;
+      }
+    }
+    if (!bestWall) return null;
+    return { x: bestWall.x, y: bestWall.y, replaceWallId: bestWall.id };
   }
 
   private snapOrphanDrawbridges(): void {
@@ -1573,33 +1625,45 @@ export class BuildingSystem {
       if (b.kind !== 'drawbridge') continue;
       if (this.hasOrthogonalWall(b.x, b.y)) continue;
       const snap = this.findGateSnap(b.x, b.y);
-      if (!snap) continue;
+      if (!snap || snap.replaceWallId) continue;
       b.x = snap.x;
       b.y = snap.y;
       b.sprite.setPosition(snap.x, snap.y);
     }
   }
 
+  /**
+   * Stairs sit on the empty fort cell beside a wall (toward the cursor),
+   * so they don't stack on the battlements or collide with neighbor segments.
+   */
   private findWallSnap(
     worldX: number,
     worldY: number
   ): { x: number; y: number; wallId: string } | null {
-    let best: BuildingRecord | null = null;
+    let best: { x: number; y: number; wallId: string } | null = null;
     let bestD = STAIR_SNAP_DIST;
     for (const w of this.buildings) {
       if (w.kind !== 'wall') continue;
-      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
-      if (d < bestD) {
-        bestD = d;
-        best = w;
+      const sides = [
+        { x: w.x, y: w.y + FORT_TILE },
+        { x: w.x, y: w.y - FORT_TILE },
+        { x: w.x + FORT_TILE, y: w.y },
+        { x: w.x - FORT_TILE, y: w.y },
+      ];
+      for (const side of sides) {
+        if (this.fortOccupied(side.x, side.y)) continue;
+        // Also accept when the pointer is on the wall itself — still pick this side
+        // if it's the nearest free approach cell for that wall.
+        const dSide = Phaser.Math.Distance.Between(worldX, worldY, side.x, side.y);
+        const dWall = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
+        const d = Math.min(dSide, dWall + FORT_TILE * 0.35);
+        if (d < bestD) {
+          bestD = d;
+          best = { x: side.x, y: side.y, wallId: w.id };
+        }
       }
     }
-    if (!best) return null;
-    return {
-      x: snapCoord(best.x + 14),
-      y: snapCoord(best.y + 4),
-      wallId: best.id,
-    };
+    return best;
   }
 
   private tileAt(worldX: number, worldY: number): number | null {
@@ -1669,12 +1733,22 @@ export class BuildingSystem {
     x: number,
     y: number,
     wallId?: string | null,
-    rotation: 0 | 90 = 0
+    rotation: 0 | 90 = 0,
+    replaceWallId?: string | null
   ): boolean {
     if (kind === 'field' && !this.canPlaceField()) return false;
     if (kind === 'stairs' && !wallId) return false;
-    if (kind === 'drawbridge' && !this.hasOrthogonalWall(x, y)) return false;
-    if (isFortKind(kind) && this.fortOccupied(x, y)) return false;
+    if (kind === 'drawbridge') {
+      if (replaceWallId) {
+        const wall = this.getById(replaceWallId);
+        if (!wall || wall.kind !== 'wall') return false;
+      } else if (!this.hasOrthogonalWall(x, y)) {
+        return false;
+      }
+    }
+    if (isFortKind(kind) && this.fortOccupied(x, y, replaceWallId ?? undefined)) {
+      return false;
+    }
     const candidate =
       kind === 'bridge' ? bridgeAabb(x, y, rotation) : footprintAabb(kind, x, y);
     // Bridges need water; docks may sit on/beside water. Everything else must be dry land.
@@ -1692,16 +1766,22 @@ export class BuildingSystem {
       if (intersects(candidate, keepBox)) return false;
     }
     for (const b of this.buildings) {
-      // Stairs intentionally sit on/against their attached wall segment
+      // Stairs sit against walls; ignore fort collision so continuous runs work.
+      if (kind === 'stairs' && isFortKind(b.kind)) continue;
+      // Drawbridge replacing this wall segment, or stairs attached to it.
       if (wallId && b.id === wallId) continue;
+      if (replaceWallId && b.id === replaceWallId) continue;
       const bBox =
         b.kind === 'bridge'
           ? bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0))
           : footprintAabb(b.kind, b.x, b.y);
       if (intersects(candidate, bBox)) return false;
     }
-    for (const unit of this.getUnitBodies()) {
-      if (intersects(candidate, unit)) return false;
+    // Fort pieces / stairs shouldn't be blocked by idle subjects near the wall.
+    if (kind !== 'stairs' && kind !== 'drawbridge' && kind !== 'wall') {
+      for (const unit of this.getUnitBodies()) {
+        if (intersects(candidate, unit)) return false;
+      }
     }
     return true;
   }
