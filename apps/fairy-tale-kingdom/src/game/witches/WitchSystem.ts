@@ -148,15 +148,16 @@ export class WitchSystem {
       t.sprite.setTint(0xcc8899);
       t.data.thought = 'I’ve been turned into a pig!';
     } else if (curse === 'poison') {
-      t.data.sick = true;
+      t.data.hp = Math.max(1, t.data.hp - 12);
       t.data.thought = 'The poison apple burns…';
     } else if (curse === 'aged') {
       t.data.body = 'gaunt';
       t.data.ageYears = Math.max(t.data.ageYears, 70);
       t.data.thought = 'Cursed to wither…';
     } else if (curse === 'sickness') {
-      t.data.sick = true;
-      t.data.thought = 'A witch’s plague…';
+      t.data.hp = Math.max(1, t.data.hp - 10);
+      t.data.happiness = Math.max(0, t.data.happiness - 15);
+      t.data.thought = 'A witch’s hex leaves me weak…';
     }
     this.subjects.adjustHappiness(targetId, -20);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {

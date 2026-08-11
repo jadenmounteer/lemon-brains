@@ -36,8 +36,12 @@ export class TaskSystem {
   }
 
   update(deltaMs: number, raidActive: boolean): void {
+    // Meals always run — raids used to cancel eating and people starved with full stores.
+    this.assignHungryEaters();
+    this.tickEats(deltaMs);
+
     if (raidActive) {
-      this.subjects.cancelInterrupts(['repair', 'chat', 'harvest', 'eat']);
+      this.subjects.cancelInterrupts(['repair', 'chat', 'harvest']);
       this.repairAccumMs = 0;
       this.harvestAccumMs = 0;
       this.chatRollAccumMs = 0;
@@ -45,8 +49,6 @@ export class TaskSystem {
     }
 
     this.subjects.clearFleeInterrupts();
-    this.assignHungryEaters();
-    this.tickEats(deltaMs);
     this.assignHarvest();
     this.assignRepairs();
     this.tickHarvest(deltaMs);
@@ -57,11 +59,22 @@ export class TaskSystem {
 
   private assignHungryEaters(): void {
     if (!this.hunger) return;
+    // Skip assign when the larder is empty — avoids interrupt spam / "Found no food" loops
+    if (this.hunger.currentFood() < Phase12Balance.mealCost) return;
     for (const managed of this.subjects.listManaged()) {
-      if (managed.interrupt) continue;
-      if (managed.data.onWall) continue;
-      // Sick subjects must still eat — blocking meals trapped the whole realm
+      if (managed.data.allegiance === 'camp') continue;
+      if (!this.subjects.needsMeals(managed.data.role)) continue;
       if (managed.data.hunger < Phase12Balance.hungerInterruptAt) continue;
+      // Meals preempt peacetime chores so harvesters don't starve next to full stores
+      if (
+        managed.interrupt &&
+        (managed.interrupt.kind === 'harvest' ||
+          managed.interrupt.kind === 'repair' ||
+          managed.interrupt.kind === 'chat')
+      ) {
+        this.subjects.clearInterrupt(managed.data.id);
+      }
+      if (managed.interrupt) continue;
       this.subjects.beginEat(managed.data.id);
     }
   }
@@ -70,8 +83,9 @@ export class TaskSystem {
     for (const managed of this.subjects.withInterrupt('eat')) {
       if (managed.interrupt?.remainingMs == null) continue;
       managed.interrupt.remainingMs -= deltaMs;
-      const arrived = !managed.moving;
-      if (managed.interrupt.remainingMs > 0 && !arrived) continue;
+      // Finish when the meal timer ends (don't wait on pathing — that caused starvation
+      // while walking across the map or hopping path segments).
+      if (managed.interrupt.remainingMs > 0) continue;
       this.settleEat(managed.data.id);
     }
   }
@@ -134,10 +148,14 @@ export class TaskSystem {
       if (managed.interrupt || managed.data.onWall) continue;
       // When food is critical, even the sick must try to harvest
       if (managed.data.sick && !this.foodLow()) continue;
-      const field = this.buildings.nearestField(
-        managed.sprite.x,
-        managed.sprite.y
-      );
+      const bound =
+        managed.data.workplaceId && managed.data.job === 'farmer'
+          ? this.buildings.getById(managed.data.workplaceId)
+          : null;
+      const field =
+        bound?.kind === 'field'
+          ? bound
+          : this.buildings.nearestField(managed.sprite.x, managed.sprite.y);
       if (!field) break;
       if (claimed.has(field.id)) continue;
       this.subjects.beginHarvest(managed.data.id, field.id);
@@ -187,25 +205,30 @@ export class TaskSystem {
       managed.data.activity = 'harvest';
       managed.data.activityLabel = 'Harvesting the fields';
 
+      const stand = this.subjects.standPointAt(
+        field.x,
+        field.y,
+        field.id,
+        managed.data.id,
+        { radius: 20 }
+      );
       const dist = Phaser.Math.Distance.Between(
         managed.sprite.x,
         managed.sprite.y,
-        field.x,
-        field.y
+        stand.x,
+        stand.y
       );
       if (dist > EconomyBalance.harvestRange) {
-        this.subjects.nudgeToward(managed.data.id, field.x, field.y, 45);
+        this.subjects.nudgeToward(managed.data.id, stand.x, stand.y, 45);
         continue;
       }
 
+      this.subjects.playWorkAnim(managed.data.id);
       const amount = Math.max(1, Math.round(EconomyBalance.foodPerHarvestTick * mult));
       this.hunger?.addFood(amount);
-
-      // Passive schedule peasants near fields also produce when not interrupted
     }
 
-    // Passive harvest: peasants on field work near a field (sick harvest slowly so
-    // a hunger plague cannot freeze food production forever)
+    // Passive harvest: peasants on field work near a field
     for (const managed of this.subjects.listManaged()) {
       if (managed.data.role !== 'peasant') continue;
       if (managed.interrupt) continue;
@@ -218,6 +241,8 @@ export class TaskSystem {
         EconomyBalance.harvestRange
       );
       if (!field) continue;
+      managed.data.activityLabel = 'Harvesting the fields';
+      this.subjects.playWorkAnim(managed.data.id);
       const sickMult = managed.data.sick ? 0.25 : 1;
       const amount = Math.max(
         1,

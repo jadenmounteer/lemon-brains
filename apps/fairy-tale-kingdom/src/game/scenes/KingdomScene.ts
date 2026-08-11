@@ -296,6 +296,7 @@ export class KingdomScene extends Phaser.Scene {
       }
     );
     this.bubbles = new SpeechBubbleSystem(this);
+    this.subjects.setBubbles(this.bubbles);
     this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
     this.security = new SecuritySystem(
       this,

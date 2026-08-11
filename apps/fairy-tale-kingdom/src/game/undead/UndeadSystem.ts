@@ -276,9 +276,7 @@ export class UndeadSystem {
     this.subjects.transformRole(id, 'zombie');
     this.subjects.clearInterrupt(id);
     managed.data.thought = 'Braaaains…';
-    if (!this.security.isActive()) {
-      this.security.begin('zombie', managed.sprite.x, managed.sprite.y, 170);
-    }
+    // Quarantine cordons disabled for now — soldiers still fight zombies.
   }
 
   // --- Zombies -------------------------------------------------------------

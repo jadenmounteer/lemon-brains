@@ -119,7 +119,7 @@ const bishopBase: ScheduleSlot[] = [
 const physicianBase: ScheduleSlot[] = [
   { startHour: 0, endHour: 5, activity: 'sleep', zone: 'home', label: 'Resting' },
   { startHour: 5, endHour: 12, activity: 'heal', zone: 'infirmary', label: 'Tending the infirmary' },
-  { startHour: 12, endHour: 18, activity: 'heal', zone: 'path', label: 'Visiting the sick' },
+  { startHour: 12, endHour: 18, activity: 'heal', zone: 'path', label: 'Tending the wounded' },
   { startHour: 18, endHour: 21, activity: 'idle_keep', zone: 'keep', label: 'Reporting at the keep' },
   { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
 ];

@@ -22,19 +22,11 @@ export class SecuritySystem {
   ) {}
 
   begin(kind: Exclude<SecurityEvent, null>, x: number, y: number, radius = 140): void {
-    this.event = kind;
-    this.center = { x, y };
-    this.radius = radius;
-    this.barkMs = 0;
-    const msg =
-      kind === 'zombie'
-        ? 'Stay back! Quarantine!'
-        : kind === 'raid'
-          ? 'Raid incoming — get indoors!'
-          : 'Siege at the walls — civilians clear the bailey!';
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, { message: msg });
-    this.orderCiviliansFlee();
-    this.barkGuards(msg);
+    // Quarantine / civilian cordons disabled for now — kept as a no-op so callers stay safe.
+    void kind;
+    void x;
+    void y;
+    void radius;
   }
 
   clear(): void {

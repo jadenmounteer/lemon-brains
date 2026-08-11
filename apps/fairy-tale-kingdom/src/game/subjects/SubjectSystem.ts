@@ -11,10 +11,13 @@ import {
   type UnitRole,
 } from '../art/assetManifest';
 import type { SavedSubject } from '../../kingdom/LayoutRepository';
-import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
+import type {
+  Aabb,
+  BuildingRecord,
+  BuildingSystem,
+} from '../buildings/BuildingSystem';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
-import { getSandboxRuntime } from '../sandboxRuntime';
 import {
   BUILDING_ROLE_CAPACITY,
   civilianJobForBuilding,
@@ -31,19 +34,24 @@ import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { genderForNewSubject, genderLabel } from './gender';
 import { pickName } from './names';
+import { presenceLineFor } from './presenceLines';
 import { roleLabel, scheduleSummary, slotAtHour } from './schedules';
 import type {
+  ActivityId,
   BodyCondition,
   BuildingResident,
   CareerTodoItem,
   CurseKind,
   InterruptKind,
+  ScheduleSlot,
   Subject,
   SubjectGoal,
   SubjectInterrupt,
   SubjectSnapshot,
+  ZoneId,
 } from './types';
 import { randomPointInZone, ringOffset, type Point, type WorldBounds } from './zones';
+import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 
 export type ManagedSubject = {
   data: Subject;
@@ -51,6 +59,33 @@ export type ManagedSubject = {
   moving: boolean;
   fleeCooldownMs: number;
   interrupt: SubjectInterrupt | null;
+  /** Active on-site pose: work bob or sleep tilt. */
+  presenceAnim: 'work' | 'sleep' | null;
+  /** Cooldown before another presence speech blurb. */
+  presenceBlurbMs: number;
+};
+
+type ScheduleSite = {
+  x: number;
+  y: number;
+  sticky: boolean;
+  mode: 'sleep' | 'work' | 'zone';
+  buildingId?: string;
+};
+
+const PRESENCE_ARRIVE_R = 34;
+const PRESENCE_BLURB_MIN_MS = 9000;
+const PRESENCE_BLURB_SPAN_MS = 6000;
+
+const ZONE_BUILDING: Partial<Record<ZoneId, BuildKind>> = {
+  cathedral: 'cathedral',
+  infirmary: 'infirmary',
+  dungeon: 'dungeon',
+  tavern: 'tavern',
+  barracks: 'barracks',
+  gallows: 'gallows',
+  cemetery: 'cemetery',
+  field: 'field',
 };
 
 /** Civic buildings patrols pause at while cycling their inspection route. */
@@ -83,11 +118,13 @@ export class SubjectSystem {
   private dayEmitAccumMs = 0;
   private healAccumMs = 0;
   private rescueAccumMs = 0;
+  private presenceAccumMs = 0;
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
   private pathGrid: PathGrid | null = null;
   private security: SecuritySystem | null = null;
   private encampments: EncampmentSystem | null = null;
+  private bubbles: SpeechBubbleSystem | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
@@ -119,6 +156,10 @@ export class SubjectSystem {
   /** Wired after construction — camp point/radius lookups for living camp garrisons. */
   setEncampments(encampments: EncampmentSystem): void {
     this.encampments = encampments;
+  }
+
+  setBubbles(bubbles: SpeechBubbleSystem): void {
+    this.bubbles = bubbles;
   }
 
   setOnChanged(cb: () => void): void {
@@ -820,16 +861,33 @@ export class SubjectSystem {
     });
   }
 
+  /** Living kingdom subjects that use the food stores (not undead / camp hostiles). */
+  needsMeals(role: UnitRole): boolean {
+    return (
+      role !== 'zombie' &&
+      role !== 'vampire_wife' &&
+      role !== 'witch' &&
+      role !== 'necromancer'
+    );
+  }
+
   beginEat(subjectId: string): void {
     const managed = this.getById(subjectId);
-    if (!managed || managed.interrupt || managed.data.onWall) return;
+    if (!managed || managed.interrupt) return;
+    if (managed.data.allegiance === 'camp') return;
+    if (!this.needsMeals(managed.data.role)) return;
     managed.interrupt = {
       kind: 'eat',
       remainingMs: Phase12Balance.eatDurationMs,
     };
     managed.data.activity = 'eat';
-    managed.data.activityLabel = 'Seeking a meal';
+    managed.data.activityLabel = managed.data.onWall
+      ? 'Eating on the wall'
+      : 'Having a meal';
 
+    // Wall units eat in place; others may stroll toward a tavern/home for flavor
+    // but the meal completes on a timer even if they never arrive.
+    if (managed.data.onWall) return;
     const tavern = this.buildings
       ?.list()
       .find((b) => b.kind === 'tavern' && b.hp > 0);
@@ -837,124 +895,81 @@ export class SubjectSystem {
       this.nudgeToward(subjectId, tavern.x, tavern.y, 50);
       return;
     }
-    const home = this.buildings?.getHousePoint(managed.data.houseId);
+    const home = this.homePointFor(managed.data.houseId);
     if (home) {
       this.nudgeToward(subjectId, home.x, home.y, 50);
     }
   }
 
-  healNearestSick(physicianId: string): boolean {
+  healNearestInjured(physicianId: string): boolean {
     const doc = this.getById(physicianId);
-    if (!doc || doc.data.role !== 'physician' || doc.data.sick) return false;
-
-    const needsCare = (s: ManagedSubject) =>
-      s.data.id !== physicianId &&
-      (s.data.sick || s.data.hp < s.data.maxHp);
+    if (!doc || doc.data.role !== 'physician') return false;
 
     let best: ManagedSubject | null = null;
-    let bestScore = Infinity;
+    let bestD = Infinity;
     for (const s of this.subjects) {
-      if (!needsCare(s)) continue;
+      if (s.data.id === physicianId) continue;
+      if (s.data.hp >= s.data.maxHp) continue;
       const d = Phaser.Math.Distance.Between(
         doc.sprite.x,
         doc.sprite.y,
         s.sprite.x,
         s.sprite.y
       );
-      // Prefer sick over wounded; then nearer
-      const score = d + (s.data.sick ? 0 : 40);
-      if (score < bestScore && d < CombatBalance.physicianHealRange + 80) {
-        bestScore = score;
+      if (d < bestD && d < CombatBalance.physicianHealRange + 80) {
+        bestD = d;
         best = s;
       }
     }
     if (!best) return false;
 
-    const d = Phaser.Math.Distance.Between(
-      doc.sprite.x,
-      doc.sprite.y,
-      best.sprite.x,
-      best.sprite.y
-    );
-    if (d > CombatBalance.physicianHealRange) {
+    if (bestD > CombatBalance.physicianHealRange) {
       this.nudgeToward(physicianId, best.sprite.x, best.sprite.y, 45);
       doc.data.activity = 'heal';
       doc.data.activityLabel = `Seeking ${best.data.name}`;
       return false;
     }
 
-    const wasSick = best.data.sick;
-    const wasHurt = best.data.hp < best.data.maxHp;
-    if (wasSick) {
-      best.data.sick = false;
-      best.data.hunger = Math.max(
-        0,
-        best.data.hunger - CombatBalance.physicianHealHunger
-      );
-    }
-    if (wasHurt) {
-      best.data.hp = Math.min(
-        best.data.maxHp,
-        best.data.hp + CombatBalance.physicianHealHp
-      );
-    }
+    best.data.hp = Math.min(
+      best.data.maxHp,
+      best.data.hp + CombatBalance.physicianHealHp
+    );
     this.applyHpTint(best);
     doc.data.activity = 'heal';
-    doc.data.activityLabel = wasSick
-      ? `Healing ${best.data.name}`
-      : `Bandaging ${best.data.name}`;
+    doc.data.activityLabel = `Bandaging ${best.data.name}`;
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: wasSick
-        ? `${doc.data.name} healed ${best.data.name}`
-        : `${doc.data.name} tended ${best.data.name}'s wounds`,
+      message: `${doc.data.name} tended ${best.data.name}'s wounds`,
     });
     this.onChanged?.();
     return true;
+  }
+
+  /** @deprecated Sickness removed — physicians heal injuries via healNearestInjured. */
+  healNearestSick(physicianId: string): boolean {
+    return this.healNearestInjured(physicianId);
   }
 
   applyStarvation(amount: number): void {
     this.raiseHungerAll(amount);
   }
 
-  private sickHungerThreshold(): number {
-    return getSandboxRuntime().sickness.sickAtHunger;
-  }
-
   private dieHungerThreshold(): number {
     return Phase12Balance.dieAtHunger;
   }
 
+  /** Hunger level that starts souring mood (sickness is disabled). */
+  private hungerUnhappyThreshold(): number {
+    return Phase12Balance.sickAtHunger;
+  }
+
   raiseHungerAll(amount: number): void {
-    const sickAt = this.sickHungerThreshold();
     const dieAt = this.dieHungerThreshold();
-    const sickChance = Phase12Balance.hungerSickChance;
     for (const s of [...this.subjects]) {
       if (s.data.allegiance === 'camp') continue;
+      if (!this.needsMeals(s.data.role)) continue;
       s.data.hunger = Math.min(100, s.data.hunger + amount);
-      const wasSick = s.data.sick;
-
-      if (s.data.hunger < sickAt) {
-        // Fed enough that hunger-sickness clears; meals also ease milder illness
-        if (s.data.sick) s.data.sick = false;
-      } else if (!s.data.sick && Math.random() < sickChance) {
-        // Rare: crossing the hunger line does not auto-plague the whole kingdom
-        s.data.sick = true;
-      }
-
-      if (s.data.sick && !wasSick) {
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: `${s.data.name} fell sick from hunger`,
-        });
-        // Keep meal interrupts — becoming sick must not cancel the cure
-        if (
-          s.interrupt?.kind === 'repair' ||
-          s.interrupt?.kind === 'harvest' ||
-          s.interrupt?.kind === 'fish' ||
-          s.interrupt?.kind === 'crew'
-        ) {
-          s.interrupt = null;
-        }
-      }
+      // Sickness disabled for now — hunger still rises and can starve.
+      if (s.data.sick) s.data.sick = false;
       this.applyHpTint(s);
       if (s.data.hunger >= dieAt) {
         const name = s.data.name;
@@ -971,10 +986,9 @@ export class SubjectSystem {
   }
 
   recoverHunger(amount: number): void {
-    const sickAt = this.sickHungerThreshold();
     for (const s of this.subjects) {
       s.data.hunger = Math.max(0, s.data.hunger - amount);
-      if (s.data.hunger < sickAt) s.data.sick = false;
+      if (s.data.sick) s.data.sick = false;
       this.applyHpTint(s);
     }
   }
@@ -983,9 +997,7 @@ export class SubjectSystem {
     const managed = this.getById(id);
     if (!managed) return;
     managed.data.hunger = Math.max(0, managed.data.hunger - amount);
-    if (managed.data.hunger < this.sickHungerThreshold()) {
-      managed.data.sick = false;
-    }
+    if (managed.data.sick) managed.data.sick = false;
     this.applyHpTint(managed);
   }
 
@@ -1000,12 +1012,10 @@ export class SubjectSystem {
   }
 
   tickHappiness(): void {
+    const hungryAt = this.hungerUnhappyThreshold();
     for (const s of this.subjects) {
       if (s.data.allegiance === 'camp') continue;
-      if (s.data.hunger >= this.sickHungerThreshold()) {
-        s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
-      }
-      if (s.data.sick) {
+      if (s.data.hunger >= hungryAt) {
         s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
       }
       if (s.data.happiness < Phase12Balance.defectHappinessThreshold) {
@@ -1156,6 +1166,16 @@ export class SubjectSystem {
     }
     this.migrateMonarchs();
     this.ensureMarker();
+    // Sickness / quarantine disabled — clear leftover sick/flee state from older saves
+    for (const s of this.subjects) {
+      s.data.sick = false;
+      if (s.data.activity === 'flee') {
+        const slot = slotAtHour(s.data.role, this.clock.hour);
+        s.data.activity = slot.activity;
+        s.data.activityLabel = slot.label;
+        s.data.zone = slot.zone;
+      }
+    }
   }
 
   serialize(): SavedSubject[] {
@@ -1463,10 +1483,24 @@ export class SubjectSystem {
         ) {
           continue;
         }
-        if (!managed.moving && Math.random() < deltaMs * 0.0004) {
+        const slot = slotAtHour(managed.data.role, this.clock.hour);
+        const site = this.resolveScheduleSite(managed, slot);
+        const dist = Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          site.x,
+          site.y
+        );
+        if (site.sticky) {
+          if (!managed.moving && dist > PRESENCE_ARRIVE_R) {
+            this.nudgeTowardSchedule(managed);
+          }
+          // On-site: hold position (no random wander)
+        } else if (!managed.moving && Math.random() < deltaMs * 0.0004) {
           this.nudgeTowardSchedule(managed);
         }
       }
+      this.tickPresence(deltaMs);
     }
 
     this.tickDefectWalks();
@@ -1475,9 +1509,9 @@ export class SubjectSystem {
     if (this.healAccumMs >= 2500) {
       this.healAccumMs = 0;
       for (const s of this.subjects) {
-        if (s.data.role !== 'physician' || s.data.sick) continue;
+        if (s.data.role !== 'physician') continue;
         if (s.interrupt) continue;
-        this.healNearestSick(s.data.id);
+        this.healNearestInjured(s.data.id);
       }
     }
 
@@ -1876,6 +1910,7 @@ export class SubjectSystem {
       return;
     }
 
+    this.clearActivityAnim(managed);
     this.scene.tweens.killTweensOf(managed.sprite);
     managed.moving = false;
 
@@ -1907,6 +1942,81 @@ export class SubjectSystem {
         onArrive?.();
       },
     });
+  }
+
+  /** Reset sleep/work pose before walking or leaving a slot. */
+  clearActivityAnim(managed: ManagedSubject): void {
+    if (managed.presenceAnim) {
+      this.scene.tweens.killTweensOf(managed.sprite);
+      managed.presenceAnim = null;
+    }
+    if (!managed.sprite.active) return;
+    managed.sprite.setRotation(0);
+    managed.sprite.setAlpha(1);
+    this.applyBodyScale(managed);
+  }
+
+  playWorkAnim(id: string): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || managed.moving) return;
+    if (managed.presenceAnim === 'work') return;
+    this.clearActivityAnim(managed);
+    managed.presenceAnim = 'work';
+    const baseY = managed.sprite.y;
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      y: baseY - 2,
+      duration: 220,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  playSleepAnim(id: string): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || managed.moving) return;
+    if (managed.presenceAnim === 'sleep') return;
+    this.clearActivityAnim(managed);
+    managed.presenceAnim = 'sleep';
+    managed.sprite.setRotation(1.2);
+    managed.sprite.setAlpha(0.92);
+    const baseY = managed.sprite.y;
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      y: baseY + 1,
+      duration: 900,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  /** Spaced stand point around a site so co-workers / family don't stack. */
+  standPointAt(
+    x: number,
+    y: number,
+    groupKey: string,
+    subjectId: string,
+    opts?: { indoor?: boolean; radius?: number }
+  ): Point {
+    const peers = this.subjects.filter(
+      (s) =>
+        s.data.workplaceId === groupKey ||
+        s.data.houseId === groupKey ||
+        (s.interrupt?.kind === 'harvest' && s.interrupt.targetId === groupKey)
+    );
+    let idx = peers.findIndex((s) => s.data.id === subjectId);
+    if (idx < 0) idx = peers.length;
+    const off = ringOffset(
+      idx,
+      Math.max(peers.length, idx + 1),
+      opts?.radius ?? 18
+    );
+    const px = x + off.x;
+    const py = y + off.y + (opts?.indoor ? 6 : 0);
+    if (opts?.indoor) return { x: px, y: py };
+    return this.snapToWalkable(px, py);
   }
 
   refreshSelectedSnapshot(): SubjectSnapshot | null {
@@ -2017,7 +2127,7 @@ export class SubjectSystem {
       maxHp,
       onWall: Boolean(opts?.onWall),
       hunger,
-      sick: opts?.sick ?? hunger >= getSandboxRuntime().sickness.sickAtHunger,
+      sick: false,
       temporaryPrincess: Boolean(opts?.temporaryPrincess),
       married: Boolean(opts?.married),
       happiness,
@@ -2045,6 +2155,8 @@ export class SubjectSystem {
       data,
       sprite,
       moving: false,
+      presenceAnim: null,
+      presenceBlurbMs: 2000 + Math.random() * 4000,
       fleeCooldownMs: 0,
       interrupt: opts?.interrupt ?? null,
     };
@@ -2105,10 +2217,6 @@ export class SubjectSystem {
 
   private applyHpTint(managed: ManagedSubject): void {
     if (this.selectedId === managed.data.id) return;
-    if (managed.data.sick) {
-      managed.sprite.setTint(0xa0d080);
-      return;
-    }
     const ratio = managed.data.hp / managed.data.maxHp;
     if (ratio <= 0.35) {
       managed.sprite.setTint(0xff6666);
@@ -2149,10 +2257,283 @@ export class SubjectSystem {
       ) {
         continue;
       }
+      const prev = managed.data.activity;
       const slot = slotAtHour(managed.data.role, this.clock.hour);
       managed.data.activity = slot.activity;
       managed.data.activityLabel = slot.label;
       managed.data.zone = slot.zone;
+      if (
+        prev !== slot.activity &&
+        (prev === 'sleep' || managed.presenceAnim)
+      ) {
+        this.clearActivityAnim(managed);
+      }
+    }
+  }
+
+  private isStickyActivity(activity: ActivityId): boolean {
+    return (
+      activity === 'sleep' ||
+      activity === 'work' ||
+      activity === 'harvest' ||
+      activity === 'heal' ||
+      activity === 'train' ||
+      activity === 'juggle' ||
+      activity === 'execute' ||
+      activity === 'gather'
+    );
+  }
+
+  private resolveScheduleSite(
+    managed: ManagedSubject,
+    slot: ScheduleSlot
+  ): ScheduleSite {
+    const home = this.homePointFor(managed.data.houseId);
+    const rawFallback = randomPointInZone(slot.zone, this.world, home);
+    const fallback = this.snapToWalkable(rawFallback.x, rawFallback.y);
+
+    if (managed.data.allegiance === 'camp' && managed.data.campId) {
+      if (slot.activity === 'sleep' && home) {
+        const pt = this.standPointAt(
+          home.x,
+          home.y,
+          managed.data.houseId,
+          managed.data.id,
+          { radius: 16 }
+        );
+        return { ...pt, sticky: true, mode: 'sleep' };
+      }
+      const wander = this.pickCampWanderTarget(
+        managed.data.campId,
+        home,
+        fallback
+      );
+      return { ...wander, sticky: false, mode: 'zone' };
+    }
+
+    if (slot.activity === 'sleep') {
+      if (home) {
+        const pt = this.standPointAt(
+          home.x,
+          home.y,
+          managed.data.houseId || 'home',
+          managed.data.id,
+          { indoor: true, radius: 14 }
+        );
+        return { ...pt, sticky: true, mode: 'sleep' };
+      }
+      return { ...fallback, sticky: true, mode: 'sleep' };
+    }
+
+    if (slot.activity === 'patrol') {
+      const patrol = this.pickPatrolTarget(managed, fallback);
+      return { ...patrol, sticky: false, mode: 'zone' };
+    }
+
+    // Bound workplace (farmer→field, baker→bakery, guard→dungeon, …)
+    if (managed.data.workplaceId && this.buildings) {
+      const b = this.buildings.getById(managed.data.workplaceId);
+      if (b && this.isStickyActivity(slot.activity)) {
+        const outdoor =
+          b.kind === 'field' ||
+          b.kind === 'dock' ||
+          b.kind === 'gallows' ||
+          b.kind === 'road' ||
+          b.kind === 'bridge';
+        const pt = this.standPointAt(b.x, b.y, b.id, managed.data.id, {
+          indoor: !outdoor,
+          radius: outdoor ? 20 : 14,
+        });
+        return {
+          ...pt,
+          sticky: true,
+          mode: 'work',
+          buildingId: b.id,
+        };
+      }
+    }
+
+    // Role capacity building when no workplace bound yet
+    if (this.isStickyActivity(slot.activity) && this.buildings) {
+      const roleB = this.nearestCapacityBuilding(managed);
+      if (roleB) {
+        const outdoor =
+          roleB.kind === 'field' ||
+          roleB.kind === 'dock' ||
+          roleB.kind === 'gallows';
+        const pt = this.standPointAt(
+          roleB.x,
+          roleB.y,
+          roleB.id,
+          managed.data.id,
+          { indoor: !outdoor, radius: 16 }
+        );
+        return {
+          ...pt,
+          sticky: true,
+          mode: 'work',
+          buildingId: roleB.id,
+        };
+      }
+    }
+
+    // Zone named after a building kind (cathedral, infirmary, …)
+    const zoneKind = ZONE_BUILDING[slot.zone];
+    if (zoneKind && this.buildings && this.isStickyActivity(slot.activity)) {
+      const b = this.pickBuildingOfKind(zoneKind, managed.sprite.x, managed.sprite.y);
+      if (b) {
+        const outdoor = zoneKind === 'field' || zoneKind === 'gallows';
+        const pt = this.standPointAt(b.x, b.y, b.id, managed.data.id, {
+          indoor: !outdoor,
+          radius: 16,
+        });
+        return {
+          ...pt,
+          sticky: true,
+          mode: 'work',
+          buildingId: b.id,
+        };
+      }
+    }
+
+    // Field work without workplace: nearest / round-robin field
+    if (
+      slot.zone === 'field' &&
+      (slot.activity === 'work' || slot.activity === 'train') &&
+      this.buildings
+    ) {
+      const field =
+        this.buildings.nearestField(managed.sprite.x, managed.sprite.y) ??
+        this.buildings.list().find((b) => b.kind === 'field' && b.hp > 0);
+      if (field) {
+        const pt = this.standPointAt(
+          field.x,
+          field.y,
+          field.id,
+          managed.data.id,
+          { radius: 20 }
+        );
+        return {
+          ...pt,
+          sticky: true,
+          mode: 'work',
+          buildingId: field.id,
+        };
+      }
+    }
+
+    return { ...fallback, sticky: false, mode: 'zone' };
+  }
+
+  private nearestCapacityBuilding(
+    managed: ManagedSubject
+  ): BuildingRecord | null {
+    if (!this.buildings) return null;
+    const role = managed.data.role;
+    let best: BuildingRecord | null = null;
+    let bestD = Infinity;
+    for (const b of this.buildings.list()) {
+      if (b.hp <= 0) continue;
+      const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
+      if (caps?.[role] == null) continue;
+      const d = Phaser.Math.Distance.Between(
+        managed.sprite.x,
+        managed.sprite.y,
+        b.x,
+        b.y
+      );
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  private pickBuildingOfKind(
+    kind: BuildKind,
+    x: number,
+    y: number
+  ): BuildingRecord | null {
+    if (!this.buildings) return null;
+    let best: BuildingRecord | null = null;
+    let bestD = Infinity;
+    for (const b of this.buildings.list()) {
+      if (b.kind !== kind || b.hp <= 0) continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  private tickPresence(deltaMs: number): void {
+    this.presenceAccumMs += deltaMs;
+    const pulse = this.presenceAccumMs >= 400;
+    if (pulse) this.presenceAccumMs = 0;
+
+    for (const managed of this.subjects) {
+      if (!managed.sprite.active || managed.moving || managed.interrupt) {
+        continue;
+      }
+      if (
+        managed.data.activity === 'ball' ||
+        managed.data.activity === 'festival' ||
+        managed.data.activity === 'flee'
+      ) {
+        if (managed.presenceAnim) this.clearActivityAnim(managed);
+        continue;
+      }
+
+      const slot = slotAtHour(managed.data.role, this.clock.hour);
+      const site = this.resolveScheduleSite(managed, slot);
+      const dist = Phaser.Math.Distance.Between(
+        managed.sprite.x,
+        managed.sprite.y,
+        site.x,
+        site.y
+      );
+      const onSite = dist <= PRESENCE_ARRIVE_R + 8;
+
+      if (!site.sticky || !onSite) {
+        if (managed.presenceAnim) this.clearActivityAnim(managed);
+        continue;
+      }
+
+      if (pulse) {
+        if (site.mode === 'sleep' || slot.activity === 'sleep') {
+          this.playSleepAnim(managed.data.id);
+        } else if (site.mode === 'work' || this.isStickyActivity(slot.activity)) {
+          this.playWorkAnim(managed.data.id);
+          if (
+            managed.data.role === 'peasant' &&
+            (slot.activity === 'work' || slot.zone === 'field') &&
+            site.buildingId
+          ) {
+            const b = this.buildings?.getById(site.buildingId);
+            if (b?.kind === 'field') {
+              managed.data.activityLabel = 'Harvesting the fields';
+            }
+          }
+        }
+      }
+
+      managed.presenceBlurbMs -= deltaMs;
+      if (managed.presenceBlurbMs <= 0 && onSite) {
+        managed.presenceBlurbMs =
+          PRESENCE_BLURB_MIN_MS + Math.random() * PRESENCE_BLURB_SPAN_MS;
+        const line = presenceLineFor({
+          activity: slot.activity,
+          role: managed.data.role,
+          job: managed.data.job,
+        });
+        if (line && this.bubbles) {
+          this.bubbles.say(managed.sprite, line);
+          managed.data.thought = line;
+        }
+      }
     }
   }
 
@@ -2165,15 +2546,8 @@ export class SubjectSystem {
     managed.data.activityLabel = slot.label;
     managed.data.zone = slot.zone;
 
-    const home = this.homePointFor(managed.data.houseId);
-    const rawFallback = randomPointInZone(slot.zone, this.world, home);
-    const fallback = this.snapToWalkable(rawFallback.x, rawFallback.y);
-    let target =
-      managed.data.allegiance === 'camp' && managed.data.campId
-        ? this.pickCampWanderTarget(managed.data.campId, home, fallback)
-        : slot.activity === 'patrol'
-          ? this.pickPatrolTarget(managed, fallback)
-          : fallback;
+    let site = this.resolveScheduleSite(managed, slot);
+    let target = { x: site.x, y: site.y };
 
     // Soft block: civilians prefer not to path into an active security cordon.
     if (
@@ -2181,6 +2555,7 @@ export class SubjectSystem {
       !isMilitaryRole(managed.data.role) &&
       this.security.inQuarantine(target.x, target.y)
     ) {
+      const home = this.homePointFor(managed.data.houseId);
       const retry = randomPointInZone(slot.zone, this.world, home);
       if (!this.security.inQuarantine(retry.x, retry.y)) {
         target = retry;
@@ -2188,6 +2563,18 @@ export class SubjectSystem {
         return;
       }
     }
+
+    // Already on sticky site — stay put
+    if (site.sticky) {
+      const dist = Phaser.Math.Distance.Between(
+        managed.sprite.x,
+        managed.sprite.y,
+        target.x,
+        target.y
+      );
+      if (dist <= PRESENCE_ARRIVE_R) return;
+    }
+
     this.nudgeToward(managed.data.id, target.x, target.y, 40);
   }
 
@@ -2293,9 +2680,7 @@ export class SubjectSystem {
       role: managed.data.role,
       roleLabel: roleLabel(managed.data.role),
       genderLabel: genderLabel(managed.data.gender),
-      activityLabel: managed.data.sick
-        ? `${managed.data.activityLabel} (sick)`
-        : managed.data.activityLabel,
+      activityLabel: managed.data.activityLabel,
       homeLabel: managed.data.houseId
         ? (this.buildings?.houseLabel(managed.data.houseId) ?? 'a house')
         : 'no house (orphaned)',
