@@ -57,58 +57,84 @@ function drawTerrain(scene: Phaser.Scene) {
 
   // 0 grass
   fillRect(ctx, 0, 0, TILE_SIZE, TILE_SIZE, palette.grass);
-  for (let i = 0; i < 8; i++) {
-    pixel(ctx, 2 + ((i * 3) % 14), 3 + ((i * 5) % 12), palette.grassLight);
+  for (let i = 0; i < 10; i++) {
+    pixel(ctx, 1 + ((i * 3) % 14), 2 + ((i * 5) % 13), palette.grassLight);
   }
+  pixel(ctx, 7, 9, palette.grassDark);
 
-  // 1 grass alt
+  // 1 grass alt — denser tufts
   fillRect(ctx, TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, palette.grass);
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 8; i++) {
     pixel(
       ctx,
       TILE_SIZE + 1 + ((i * 4) % 14),
-      2 + ((i * 7) % 13),
+      1 + ((i * 7) % 14),
       palette.grassDark
     );
   }
+  fillRect(ctx, TILE_SIZE + 4, 10, 2, 3, palette.grassLight);
+  fillRect(ctx, TILE_SIZE + 10, 5, 2, 3, palette.grassLight);
 
   // 2 dirt
   fillRect(ctx, TILE_SIZE * 2, 0, TILE_SIZE, TILE_SIZE, palette.dirt);
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 7; i++) {
     pixel(
       ctx,
-      TILE_SIZE * 2 + 2 + i * 2,
-      4 + (i % 3) * 3,
+      TILE_SIZE * 2 + 1 + i * 2,
+      3 + (i % 4) * 3,
       palette.dirtDark
     );
   }
+  fillRect(ctx, TILE_SIZE * 2 + 6, 7, 3, 2, palette.stone);
 
-  // 3 dirt edge (dirt with grass fringe)
+  // 3 dirt edge
   fillRect(ctx, TILE_SIZE * 3, 0, TILE_SIZE, TILE_SIZE, palette.dirt);
   fillRect(ctx, TILE_SIZE * 3, 0, TILE_SIZE, 3, palette.grass);
   fillRect(ctx, TILE_SIZE * 3, TILE_SIZE - 3, TILE_SIZE, 3, palette.grass);
+  fillRect(ctx, TILE_SIZE * 3, 0, 2, TILE_SIZE, palette.grass);
+  fillRect(ctx, TILE_SIZE * 3 + 14, 0, 2, TILE_SIZE, palette.grass);
 
-  // 4 water
+  // 4 water — depth bands + ripples
   fillRect(ctx, TILE_SIZE * 4, 0, TILE_SIZE, TILE_SIZE, palette.water);
+  fillRect(ctx, TILE_SIZE * 4, 0, TILE_SIZE, 3, palette.waterLight);
+  fillRect(ctx, TILE_SIZE * 4, 12, TILE_SIZE, 4, 0x2a5578);
   for (let i = 0; i < 5; i++) {
-    pixel(
+    fillRect(
       ctx,
-      TILE_SIZE * 4 + 2 + i * 2,
+      TILE_SIZE * 4 + 1 + i * 3,
       4 + (i % 3) * 3,
+      4,
+      1,
       palette.waterLight
     );
   }
+  pixel(ctx, TILE_SIZE * 4 + 5, 7, 0xffffff);
+  pixel(ctx, TILE_SIZE * 4 + 11, 10, 0xc8e4f4);
 
-  // 5 forest
+  // 5 forest — layered canopy + trunks
   fillRect(ctx, TILE_SIZE * 5, 0, TILE_SIZE, TILE_SIZE, palette.forest);
-  fillRect(ctx, TILE_SIZE * 5 + 4, 4, 4, 8, palette.forestDark);
-  fillRect(ctx, TILE_SIZE * 5 + 9, 6, 4, 7, palette.grassDark);
-  pixel(ctx, TILE_SIZE * 5 + 2, 12, palette.grassLight);
+  fillRect(ctx, TILE_SIZE * 5, 12, TILE_SIZE, 4, palette.forestDark);
+  fillRect(ctx, TILE_SIZE * 5 + 2, 9, 3, 6, palette.woodDark);
+  fillRect(ctx, TILE_SIZE * 5 + 0, 2, 7, 8, palette.forestDark);
+  fillRect(ctx, TILE_SIZE * 5 + 1, 3, 5, 5, palette.grassDark);
+  fillRect(ctx, TILE_SIZE * 5 + 9, 10, 3, 5, palette.woodDark);
+  fillRect(ctx, TILE_SIZE * 5 + 7, 3, 7, 8, palette.grassDark);
+  fillRect(ctx, TILE_SIZE * 5 + 8, 4, 5, 5, palette.forest);
+  pixel(ctx, TILE_SIZE * 5 + 3, 4, palette.grassLight);
+  pixel(ctx, TILE_SIZE * 5 + 10, 5, palette.grass);
+  pixel(ctx, TILE_SIZE * 5 + 5, 7, palette.grassLight);
 
-  // 6 mountain
+  // 6 mountain — jagged peaks + snow + cliff face
   fillRect(ctx, TILE_SIZE * 6, 0, TILE_SIZE, TILE_SIZE, palette.mountain);
-  fillRect(ctx, TILE_SIZE * 6 + 3, 3, 10, 10, palette.mountainLight);
-  fillRect(ctx, TILE_SIZE * 6 + 6, 1, 4, 4, palette.stone);
+  fillRect(ctx, TILE_SIZE * 6 + 1, 8, 14, 8, palette.mountainLight);
+  fillRect(ctx, TILE_SIZE * 6 + 4, 3, 8, 6, palette.stone);
+  fillRect(ctx, TILE_SIZE * 6 + 6, 1, 4, 3, 0xe8eef2);
+  fillRect(ctx, TILE_SIZE * 6 + 5, 2, 2, 1, 0xe8eef2);
+  fillRect(ctx, TILE_SIZE * 6 + 9, 2, 2, 1, 0xe8eef2);
+  fillRect(ctx, TILE_SIZE * 6 + 2, 10, 3, 5, palette.stoneDark);
+  fillRect(ctx, TILE_SIZE * 6 + 11, 9, 3, 6, palette.stoneDark);
+  pixel(ctx, TILE_SIZE * 6 + 7, 7, palette.ink);
+  pixel(ctx, TILE_SIZE * 6 + 8, 8, palette.ink);
 
   tex.refresh();
 }
@@ -160,12 +186,24 @@ function drawUnitFrame(
   facing: 'down' | 'left' | 'right' | 'up',
   walkStep: number | null
 ) {
+  if (role === 'troll') {
+    drawTrollFrame(ctx, originX, facing, walkStep);
+    return;
+  }
+  if (role === 'ogre') {
+    drawOgreFrame(ctx, originX, facing, walkStep);
+    return;
+  }
+  if (role === 'dragon') {
+    drawDragonFrame(ctx, originX, facing, walkStep);
+    return;
+  }
+
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
   const cloth = clothFor(role);
-  const tall = role === 'giant' || role === 'ogre' || role === 'troll' ? -2 : 0;
-  const dragonish = role === 'dragon';
+  const tall = role === 'giant' ? -2 : 0;
 
   fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
 
@@ -179,21 +217,9 @@ function drawUnitFrame(
   fillRect(ctx, originX + 11, 10 + baseY + tall, 1, 8 - tall, palette.ink);
 
   fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 6, palette.skin);
-  if (dragonish) {
-    fillRect(ctx, originX + 4, 4 + baseY + tall, 8, 6, cloth);
-    fillRect(ctx, originX + 3, 6 + baseY + tall, 2, 2, palette.gold);
-    fillRect(ctx, originX + 11, 6 + baseY + tall, 2, 2, palette.gold);
-    // wing hint
-    fillRect(ctx, originX + 1, 10 + baseY, 3, 5, cloth);
-    fillRect(ctx, originX + 12, 10 + baseY, 3, 5, cloth);
-  }
   if (role === 'knight') {
     fillRect(ctx, originX + 5, 3 + baseY, 6, 3, palette.metal);
     fillRect(ctx, originX + 11, 12 + baseY, 2, 5, palette.metal);
-  }
-  if (role === 'troll') {
-    fillRect(ctx, originX + 4, 3 + baseY + tall, 2, 2, cloth);
-    fillRect(ctx, originX + 10, 3 + baseY + tall, 2, 2, cloth);
   }
   fillRect(ctx, originX + 4, 4 + baseY + tall, 1, 6, palette.ink);
   fillRect(ctx, originX + 11, 4 + baseY + tall, 1, 6, palette.ink);
@@ -221,7 +247,7 @@ function drawUnitFrame(
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
   } else if (role === 'giant') {
     fillRect(ctx, originX + 4, 2 + baseY + tall, 8, 3, palette.woodDark);
-  } else {
+  } else if (role !== 'knight') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.wood);
   }
 
@@ -235,6 +261,187 @@ function drawUnitFrame(
     pixel(ctx, originX + 7, 6 + baseY + tall, palette.ink);
     pixel(ctx, originX + 9, 6 + baseY + tall, palette.ink);
   }
+}
+
+/** Bridge troll: moss-green, stooped, bat ears, bulbous nose, fangs, club. */
+function drawTrollFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob;
+  const skin = palette.clothTroll;
+  const skinDark = palette.forestDark;
+  const moss = 0x5a8f4a;
+
+  fillRect(ctx, originX + 3, 21, 10, 2, palette.ink);
+  // bowed legs
+  fillRect(ctx, originX + 3 - leg, 16 + y, 4, 5, skinDark);
+  fillRect(ctx, originX + 10 + leg, 16 + y, 4, 5, skinDark);
+  fillRect(ctx, originX + 3 - leg, 19 + y, 4, 2, moss);
+  fillRect(ctx, originX + 10 + leg, 19 + y, 4, 2, moss);
+
+  // hunched, long torso (stooped)
+  fillRect(ctx, originX + 3, 8 + y, 10, 9, skin);
+  fillRect(ctx, originX + 4, 10 + y, 8, 5, skinDark);
+  // mossy back hump
+  fillRect(ctx, originX + 5, 7 + y, 6, 3, moss);
+
+  // long dangling arms
+  if (facing === 'left') {
+    fillRect(ctx, originX + 0, 10 + y, 3, 8, skin);
+    fillRect(ctx, originX + 0, 17 + y, 3, 2, skinDark);
+    fillRect(ctx, originX + 13, 11 + y, 2, 6, skinDark);
+  } else if (facing === 'right') {
+    fillRect(ctx, originX + 13, 10 + y, 3, 8, skin);
+    fillRect(ctx, originX + 13, 17 + y, 3, 2, skinDark);
+    fillRect(ctx, originX + 1, 11 + y, 2, 6, skinDark);
+  } else {
+    fillRect(ctx, originX + 1, 11 + y, 2, 8, skin);
+    fillRect(ctx, originX + 13, 11 + y, 2, 8, skin);
+  }
+
+  // oversized head, low on shoulders
+  fillRect(ctx, originX + 4, 1 + y, 8, 8, skin);
+  // bat ears
+  fillRect(ctx, originX + 1, 2 + y, 3, 5, skin);
+  fillRect(ctx, originX + 12, 2 + y, 3, 5, skin);
+  pixel(ctx, originX + 1, 2 + y, skinDark);
+  pixel(ctx, originX + 14, 2 + y, skinDark);
+  // heavy brow + bulbous nose
+  fillRect(ctx, originX + 5, 3 + y, 6, 2, skinDark);
+  fillRect(ctx, originX + 6, 5 + y, 4, 3, 0x2d5a3d);
+  pixel(ctx, originX + 7, 6 + y, palette.ink);
+  if (facing !== 'up') {
+    pixel(ctx, originX + 5, 4 + y, palette.gold);
+    pixel(ctx, originX + 10, 4 + y, palette.gold);
+    // underbite fangs
+    pixel(ctx, originX + 6, 9 + y, palette.cream);
+    pixel(ctx, originX + 9, 9 + y, palette.cream);
+    fillRect(ctx, originX + 6, 8 + y, 4, 1, palette.ink);
+  }
+  // knobby club
+  if (facing === 'left') {
+    fillRect(ctx, originX + 0, 12 + y, 2, 6, palette.woodDark);
+    fillRect(ctx, originX + 0, 10 + y, 3, 3, palette.stoneDark);
+  } else {
+    fillRect(ctx, originX + 14, 12 + y, 2, 6, palette.woodDark);
+    fillRect(ctx, originX + 13, 10 + y, 3, 3, palette.stoneDark);
+  }
+}
+
+/** Fairy-tale ogre: tiny pinhead, huge belly, tusks, loincloth, bone club. */
+function drawOgreFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob;
+  const skin = palette.clothOgre;
+  const skinDark = 0x6a4a28;
+  const belly = 0xb89050;
+
+  fillRect(ctx, originX + 2, 21, 12, 2, palette.ink);
+  // thick tree-trunk legs
+  fillRect(ctx, originX + 2 - leg, 16 + y, 5, 5, skinDark);
+  fillRect(ctx, originX + 10 + leg, 16 + y, 5, 5, skinDark);
+  fillRect(ctx, originX + 2 - leg, 19 + y, 5, 2, palette.woodDark);
+  fillRect(ctx, originX + 10 + leg, 19 + y, 5, 2, palette.woodDark);
+
+  // massive pot belly
+  fillRect(ctx, originX + 1, 7 + y, 14, 10, skin);
+  fillRect(ctx, originX + 3, 10 + y, 10, 6, belly);
+  fillRect(ctx, originX + 5, 12 + y, 6, 3, skinDark);
+  // crude loincloth
+  fillRect(ctx, originX + 4, 14 + y, 8, 4, palette.clothBandit);
+  fillRect(ctx, originX + 6, 15 + y, 4, 3, 0x4a2818);
+
+  // broad shoulders / arms
+  fillRect(ctx, originX + 0, 8 + y, 3, 6, skin);
+  fillRect(ctx, originX + 13, 8 + y, 3, 6, skin);
+  fillRect(ctx, originX + 0, 13 + y, 3, 3, skinDark);
+  fillRect(ctx, originX + 13, 13 + y, 3, 3, skinDark);
+
+  // tiny pinhead on thick neck
+  fillRect(ctx, originX + 6, 5 + y, 4, 3, skinDark);
+  fillRect(ctx, originX + 5, 1 + y, 6, 5, skin);
+  fillRect(ctx, originX + 5, 1 + y, 6, 1, palette.ink);
+  if (facing !== 'up') {
+    pixel(ctx, originX + 6, 3 + y, palette.ink);
+    pixel(ctx, originX + 9, 3 + y, palette.ink);
+    fillRect(ctx, originX + 6, 5 + y, 4, 1, palette.ink);
+    // tusks
+    pixel(ctx, originX + 5, 5 + y, palette.cream);
+    pixel(ctx, originX + 10, 5 + y, palette.cream);
+    pixel(ctx, originX + 5, 6 + y, palette.cream);
+    pixel(ctx, originX + 10, 6 + y, palette.cream);
+  }
+  // bone club over shoulder
+  fillRect(ctx, originX + 14, 4 + y, 2, 10, 0xe8dcc8);
+  fillRect(ctx, originX + 13, 3 + y, 4, 3, 0xf4efe4);
+  pixel(ctx, originX + 14, 4 + y, palette.ink);
+}
+
+/** Dragon: snout, wings, tail, scaled body. */
+function drawDragonFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const flap = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const y = bob;
+  const scale = palette.clothDragon;
+  const scaleDark = 0x6b2818;
+  const belly = 0xd4a84b;
+
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+  fillRect(ctx, originX + 5, 18 + y, 3, 3, scaleDark);
+  fillRect(ctx, originX + 9, 18 + y, 3, 3, scaleDark);
+
+  // body
+  fillRect(ctx, originX + 4, 10 + y, 8, 9, scale);
+  fillRect(ctx, originX + 5, 12 + y, 6, 5, belly);
+
+  // head / snout
+  fillRect(ctx, originX + 5, 3 + y, 6, 7, scale);
+  if (facing === 'left') {
+    fillRect(ctx, originX + 1, 5 + y, 4, 3, scale);
+    pixel(ctx, originX + 2, 6 + y, palette.gold);
+    fillRect(ctx, originX + 1, 7 + y, 2, 1, palette.ink);
+  } else if (facing === 'right') {
+    fillRect(ctx, originX + 11, 5 + y, 4, 3, scale);
+    pixel(ctx, originX + 13, 6 + y, palette.gold);
+    fillRect(ctx, originX + 13, 7 + y, 2, 1, palette.ink);
+  } else if (facing === 'up') {
+    fillRect(ctx, originX + 5, 2 + y, 6, 3, scaleDark);
+  } else {
+    fillRect(ctx, originX + 6, 1 + y, 4, 3, scale);
+    pixel(ctx, originX + 7, 3 + y, palette.gold);
+    pixel(ctx, originX + 9, 3 + y, palette.gold);
+    fillRect(ctx, originX + 7, 5 + y, 2, 1, 0xff4422);
+  }
+
+  // horns
+  fillRect(ctx, originX + 5, 1 + y, 2, 2, scaleDark);
+  fillRect(ctx, originX + 9, 1 + y, 2, 2, scaleDark);
+
+  // wings
+  fillRect(ctx, originX + 0, 9 + y - flap, 4, 5 + flap, scaleDark);
+  fillRect(ctx, originX + 1, 10 + y - flap, 2, 3, scale);
+  fillRect(ctx, originX + 12, 9 + y - flap, 4, 5 + flap, scaleDark);
+  fillRect(ctx, originX + 13, 10 + y - flap, 2, 3, scale);
+
+  // tail
+  fillRect(ctx, originX + 7, 19 + y, 2, 2, scale);
+  fillRect(ctx, originX + (facing === 'left' ? 3 : 11), 20 + y, 3, 2, scaleDark);
 }
 
 function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
@@ -551,16 +758,31 @@ function drawManor(scene: Phaser.Scene) {
 }
 
 function drawCave(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 32;
+  const w = 48;
+  const h = 36;
   const tex = createCanvas(scene, PROP_KEYS.cave, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 8, 32, 22, palette.mountain);
-  fillRect(ctx, 4, 8, 32, 1, palette.ink);
-  fillRect(ctx, 12, 14, 16, 16, palette.ink);
-  fillRect(ctx, 14, 16, 12, 12, 0x1a1010);
-  fillRect(ctx, 6, 4, 8, 6, palette.mountainLight);
-  fillRect(ctx, 26, 4, 8, 6, palette.mountainLight);
+  // rocky mound + cliff
+  fillRect(ctx, 2, 12, 44, 22, palette.mountain);
+  fillRect(ctx, 6, 8, 36, 12, palette.mountainLight);
+  fillRect(ctx, 12, 3, 24, 10, palette.stone);
+  fillRect(ctx, 16, 1, 16, 4, 0xe8eef2);
+  fillRect(ctx, 10, 10, 4, 8, palette.stoneDark);
+  fillRect(ctx, 34, 10, 4, 8, palette.stoneDark);
+  // arched mouth
+  fillRect(ctx, 14, 12, 20, 20, palette.ink);
+  fillRect(ctx, 16, 14, 16, 16, 0x0a0608);
+  fillRect(ctx, 18, 12, 12, 4, 0x0a0608);
+  fillRect(ctx, 20, 18, 8, 10, 0x1a1018);
+  // stalactite teeth
+  fillRect(ctx, 18, 12, 2, 4, palette.stoneDark);
+  fillRect(ctx, 28, 12, 2, 5, palette.stoneDark);
+  fillRect(ctx, 23, 12, 2, 3, palette.stone);
+  // moss & ferns
+  fillRect(ctx, 4, 20, 5, 4, palette.forest);
+  fillRect(ctx, 39, 18, 5, 5, palette.grassDark);
+  pixel(ctx, 6, 19, palette.grassLight);
+  pixel(ctx, 41, 17, palette.grass);
   tex.refresh();
 }
 

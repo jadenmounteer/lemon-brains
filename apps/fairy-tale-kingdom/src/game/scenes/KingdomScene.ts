@@ -3,7 +3,6 @@ import {
   PROP_KEYS,
   TERRAIN_KEY,
   TILE_SIZE,
-  TerrainTile,
   isTerrainBlocked,
 } from '../art/assetManifest';
 import { BuildingSystem } from '../buildings/BuildingSystem';
@@ -30,7 +29,11 @@ import {
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 import { TaskSystem } from '../subjects/TaskSystem';
-import { setWorldBiomes, type CavePoint, type Point } from '../subjects/zones';
+import { setWorldBiomes } from '../subjects/zones';
+import {
+  freshMapSeed,
+  generateKingdomMap,
+} from '../world/generateMap';
 
 const MAP_COLS = 80;
 const MAP_ROWS = 50;
@@ -60,6 +63,7 @@ export class KingdomScene extends Phaser.Scene {
   private monsters!: MonsterSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private mapData: number[][] = [];
+  private mapSeed = 0;
   private caveSprites: Phaser.GameObjects.Image[] = [];
   private layoutRepo = new LayoutRepository();
   private captivesRepo = new CaptivesRepository();
@@ -72,7 +76,11 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   create() {
-    const built = buildMapData();
+    const saved = this.layoutRepo.loadSync();
+    const seed =
+      typeof saved?.mapSeed === 'number' ? saved.mapSeed : freshMapSeed();
+    this.mapSeed = seed;
+    const built = generateKingdomMap(MAP_COLS, MAP_ROWS, seed);
     this.mapData = built.data;
     const map = this.make.tilemap({
       data: this.mapData,
@@ -189,7 +197,6 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters.setBuildings(this.buildings);
     this.monsters.setSubjects(this.subjects);
 
-    const saved = this.layoutRepo.loadSync();
     if (saved && saved.buildings.length > 0) {
       this.buildings.restore(
         saved.buildings,
@@ -206,6 +213,10 @@ export class KingdomScene extends Phaser.Scene {
         this.monsters.restore(saved.monsters);
       } else {
         this.monsters.seedIfEmpty();
+      }
+      // Migrate older saves that lacked mapSeed
+      if (typeof saved.mapSeed !== 'number') {
+        this.persistLayout();
       }
     } else {
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
@@ -540,6 +551,7 @@ export class KingdomScene extends Phaser.Scene {
       subjects: this.subjects.serialize(),
       buildings: this.buildings.serialize(),
       monsters: this.monsters.serialize(),
+      mapSeed: this.mapSeed,
       keepHp: keep.keepHp,
       keepMaxHp: keep.keepMaxHp,
       princeSpawnMs: timers.princeSpawnMs,
@@ -609,112 +621,4 @@ export class KingdomScene extends Phaser.Scene {
     if (buildingId) return { type: 'building', id: buildingId };
     return null;
   }
-}
-
-function buildMapData(): {
-  data: number[][];
-  caves: CavePoint[];
-  forests: Point[];
-  mountains: Point[];
-} {
-  const data: number[][] = [];
-  const midCol = Math.floor(MAP_COLS / 2);
-  const midRow = Math.floor(MAP_ROWS / 2);
-  const forests: Point[] = [];
-  const mountains: Point[] = [];
-
-  for (let r = 0; r < MAP_ROWS; r++) {
-    const row: number[] = [];
-    for (let c = 0; c < MAP_COLS; c++) {
-      const onCross =
-        Math.abs(c - midCol) <= 2 || Math.abs(r - midRow) <= 1;
-      const nearKeep =
-        Math.abs(c - midCol) <= 5 && Math.abs(r - midRow) <= 4;
-
-      // Lake (NW)
-      if (c >= 4 && c <= 14 && r >= 4 && r <= 12) {
-        row.push(TerrainTile.water);
-        continue;
-      }
-      // River from lake eastward then south
-      if (
-        (r === 8 && c >= 14 && c <= 28) ||
-        (c === 28 && r >= 8 && r <= 22)
-      ) {
-        row.push(TerrainTile.water);
-        continue;
-      }
-      // Forest (SW)
-      if (c >= 6 && c <= 22 && r >= 34 && r <= 46) {
-        row.push(TerrainTile.forest);
-        continue;
-      }
-      // Mountains (NE ridge)
-      if (c >= 58 && c <= 76 && r >= 2 && r <= 16) {
-        row.push(TerrainTile.mountain);
-        continue;
-      }
-      // Mountain fringe SE
-      if (c >= 64 && c <= 78 && r >= 38 && r <= 48) {
-        row.push(TerrainTile.mountain);
-        continue;
-      }
-
-      if (onCross) {
-        row.push(
-          Math.abs(c - midCol) === 2 || Math.abs(r - midRow) === 1
-            ? TerrainTile.dirtEdge
-            : TerrainTile.dirt
-        );
-      } else if (nearKeep) {
-        row.push(TerrainTile.grassAlt);
-      } else {
-        row.push((r + c) % 7 === 0 ? TerrainTile.grassAlt : TerrainTile.grass);
-      }
-    }
-    data.push(row);
-  }
-
-  forests.push({
-    x: 14 * TILE_SIZE,
-    y: 40 * TILE_SIZE,
-  });
-  mountains.push({
-    x: 68 * TILE_SIZE,
-    y: 8 * TILE_SIZE,
-  });
-  mountains.push({
-    x: 70 * TILE_SIZE,
-    y: 42 * TILE_SIZE,
-  });
-
-  // Caves at mountain fringe (walkable grass/forest adjacent to mountains)
-  const caves: CavePoint[] = [
-    { id: 'cave-0', x: 56 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },
-    { id: 'cave-1', x: 62 * TILE_SIZE + 8, y: 36 * TILE_SIZE + 8 },
-  ];
-  // Ensure cave tiles are walkable forest-ish
-  for (const cave of caves) {
-    const col = Math.floor(cave.x / TILE_SIZE);
-    const row = Math.floor(cave.y / TILE_SIZE);
-    if (data[row] && data[row]![col] !== undefined) {
-      data[row]![col] = TerrainTile.forest;
-      // clear neighbors of mountain so pathing reaches cave
-      for (const [dc, dr] of [
-        [0, 0],
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ]) {
-        const rr = row + dr!;
-        const cc = col + dc!;
-        if (data[rr]?.[cc] === TerrainTile.mountain) {
-          data[rr]![cc] = TerrainTile.forest;
-        }
-      }
-    }
-  }
-
-  return { data, caves, forests, mountains };
 }

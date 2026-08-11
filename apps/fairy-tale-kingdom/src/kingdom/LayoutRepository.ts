@@ -37,6 +37,8 @@ export interface LayoutSave {
   subjects: SavedSubject[];
   buildings: SavedBuilding[];
   monsters?: SavedMonster[];
+  /** Seed for procedural terrain (lakes, forests, mountains, caves). */
+  mapSeed?: number;
   keepHp?: number;
   keepMaxHp?: number;
   princeSpawnMs?: number;
@@ -73,6 +75,8 @@ export class LayoutRepository {
         monsters: Array.isArray(parsed.monsters)
           ? parsed.monsters.filter((m) => VALID_MONSTER_KINDS.has(m.kind))
           : [],
+        mapSeed:
+          typeof parsed.mapSeed === 'number' ? parsed.mapSeed >>> 0 : undefined,
       };
     } catch {
       return null;

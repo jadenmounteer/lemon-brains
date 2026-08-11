@@ -82,8 +82,8 @@ export function KingdomMenu({
             >
               <h3>{forceTitle ?? 'Name your kingdom'}</h3>
               <p className="muted">
-                Starting fresh resets gold, days, and buildings. Raids begin
-                again.
+                Starting fresh resets gold, days, buildings, and generates a new
+                random map. Raids begin again.
               </p>
               <label className="sr-only" htmlFor="kingdom-name-input">
                 Kingdom name
