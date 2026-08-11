@@ -9,8 +9,10 @@
   "scripts": {
     "start:host": "npm run start --workspace=knowledge-quest",
     "start:lemon-brains": "npm run start --workspace=lemon-brains -- --port 4200",
+    "start:fairy-tale-kingdom": "npm run start --workspace=fairy-tale-kingdom",
     "build:host": "npm run build --workspace=knowledge-quest",
     "build:lemon-brains": "npm run build --workspace=lemon-brains",
+    "build:fairy-tale-kingdom": "npm run build --workspace=fairy-tale-kingdom",
     "build:pages": "node scripts/build-pages.mjs",
     "test:lemon-brains": "npm run test --workspace=lemon-brains -- --no-watch --browsers=ChromeHeadless"
   },

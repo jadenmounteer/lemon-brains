@@ -3,5 +3,6 @@ export const environment = {
   hostUrl: 'http://localhost:4300/',
   gameUrls: {
     lemonBrains: 'http://localhost:4200/',
+    fairyTaleKingdom: 'http://localhost:4400/',
   },
 };

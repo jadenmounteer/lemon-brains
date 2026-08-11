@@ -1,0 +1,26 @@
+{
+  "name": "fairy-tale-kingdom",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 4400",
+    "start": "vite --port 4400",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4400"
+  },
+  "dependencies": {
+    "@knowledge-quest/learning": "*",
+    "@knowledge-quest/storage": "*",
+    "phaser": "^3.87.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.4.2",
+    "vite": "^5.4.11"
+  }
+}

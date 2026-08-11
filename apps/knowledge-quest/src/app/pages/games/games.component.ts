@@ -36,10 +36,12 @@ export class GamesComponent {
       enabled: false,
     },
     {
-      id: 'fairy-tale',
+      id: 'fairy-tale-kingdom',
       title: 'Fairy Tale Kingdom',
-      description: 'Coming soon — quests through a storybook world.',
-      enabled: false,
+      description:
+        'Watch a living fairy-tale kingdom grow — answer questions for gold, hire subjects, and defend your keep.',
+      enabled: true,
+      url: environment.gameUrls.fairyTaleKingdom,
     },
   ];
 

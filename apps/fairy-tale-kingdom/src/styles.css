@@ -1,0 +1,150 @@
+:root {
+  --ink: #1c241c;
+  --forest: #2d5a3d;
+  --leaf: #3d7a4a;
+  --cream: #f4efe4;
+  --gold: #d4a84b;
+  --panel: rgba(28, 36, 28, 0.88);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--cream);
+  background: #1a2e22;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a {
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(180deg, #243828 0%, #1a2e22 100%);
+  border-bottom: 2px solid #3e684c;
+  z-index: 2;
+}
+
+.brand h1 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.hud-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.gold {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(212, 168, 75, 0.18);
+  border: 1px solid var(--gold);
+  color: #f6e2a8;
+}
+
+.hud-actions button,
+.back {
+  min-height: 36px;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid #6a9276;
+  background: #2f523c;
+  color: var(--cream);
+  font-weight: 650;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.back {
+  background: transparent;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.phaser-host {
+  position: absolute;
+  inset: 0;
+}
+
+.phaser-host canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.side-panels {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: min(320px, calc(100% - 1.5rem));
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 3;
+  max-height: calc(100% - 1.5rem);
+  overflow: auto;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid #5a8066;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  backdrop-filter: blur(6px);
+}
+
+.panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.panel p {
+  margin: 0.35rem 0;
+  line-height: 1.4;
+  font-size: 0.92rem;
+}
+
+.muted {
+  opacity: 0.8;
+}
