@@ -20,6 +20,7 @@ export function InspectorPanel({
         </button>
       </div>
       <p className="inspector-role">{subject.roleLabel}</p>
+      <p className="muted">{subject.genderLabel}</p>
       <p>
         <span className="muted">Health</span> {subject.hp} / {subject.maxHp}
         {subject.onWall ? (
@@ -29,6 +30,10 @@ export function InspectorPanel({
         {subject.inspired ? (
           <span className="muted"> · Inspired!</span>
         ) : null}
+        {subject.temporaryPrincess ? (
+          <span className="muted"> · Ball princess</span>
+        ) : null}
+        {subject.married ? <span className="muted"> · Married</span> : null}
       </p>
       <p>
         <span className="muted">Hunger</span> {Math.round(subject.hunger)} / 100
@@ -46,8 +51,11 @@ export function InspectorPanel({
           style={{ marginBottom: '0.75rem' }}
           onClick={onTransformPeasant}
         >
-          Transform nearby peasant
+          Transform nearby female peasant
         </button>
+      )}
+      {subject.canTransformPeasant && onTransformPeasant && (
+        <p className="muted">Only during a royal ball.</p>
       )}
       <h3 className="inspector-subhead">Today’s schedule</h3>
       <ul className="schedule-list">

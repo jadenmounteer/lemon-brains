@@ -589,6 +589,7 @@ export class MonsterSystem {
       onWall: false,
       hunger: 0,
       sick: false,
+      genderLabel: '—',
     };
   }
 

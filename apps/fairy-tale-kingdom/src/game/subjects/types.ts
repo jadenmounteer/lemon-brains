@@ -2,6 +2,7 @@ import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 
 export type SubjectRole = UnitRole;
+export type SubjectGender = 'male' | 'female';
 
 export type InspectableBuildKind = BuildKind | 'keep';
 
@@ -24,9 +25,21 @@ export interface BuildingSnapshot {
   bedsUsed?: number;
   bedsCapacity?: number;
   residents?: BuildingResident[];
+  royalUsed?: number;
+  royalCapacity?: number;
 }
 
-export type ZoneId = 'home' | 'path' | 'keep' | 'wall' | 'field' | 'cave' | 'forest' | 'mountain';
+export type ZoneId =
+  | 'home'
+  | 'path'
+  | 'keep'
+  | 'wall'
+  | 'field'
+  | 'cave'
+  | 'forest'
+  | 'mountain'
+  | 'cathedral'
+  | 'infirmary';
 
 export type ActivityId =
   | 'sleep'
@@ -45,11 +58,22 @@ export type ActivityId =
   | 'defend'
   | 'steal'
   | 'smash'
-  | 'hunt';
+  | 'hunt'
+  | 'heal'
+  | 'ball'
+  | 'festival'
+  | 'wedding';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
-export type InterruptKind = 'flee' | 'repair' | 'chat' | 'harvest' | 'defend';
+export type InterruptKind =
+  | 'flee'
+  | 'repair'
+  | 'chat'
+  | 'harvest'
+  | 'defend'
+  | 'heal'
+  | 'wedding';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -71,6 +95,7 @@ export interface Subject {
   id: string;
   name: string;
   role: SubjectRole;
+  gender: SubjectGender;
   houseId: string;
   activity: ActivityId;
   activityLabel: string;
@@ -80,6 +105,9 @@ export interface Subject {
   onWall: boolean;
   hunger: number;
   sick: boolean;
+  /** Ball-blessed princess; reverts at morning unless married */
+  temporaryPrincess: boolean;
+  married: boolean;
 }
 
 /** Snapshot sent across the Phaser → React bridge */
@@ -88,6 +116,7 @@ export interface SubjectSnapshot {
   name: string;
   role: SubjectRole;
   roleLabel: string;
+  genderLabel: string;
   activityLabel: string;
   homeLabel: string;
   scheduleSummary: string[];
@@ -100,6 +129,10 @@ export interface SubjectSnapshot {
   sick: boolean;
   inspired?: boolean;
   canTransformPeasant?: boolean;
+  temporaryPrincess?: boolean;
+  married?: boolean;
+  ballActive?: boolean;
+  festivalActive?: boolean;
 }
 
 export interface DaySnapshot {
@@ -115,13 +148,22 @@ export interface KingdomStats {
   wallCount: number;
   tavernCount: number;
   fieldCount: number;
+  granaryCount: number;
+  keepCount: number;
+  hasCathedral: boolean;
+  hasInfirmary: boolean;
+  hasDungeon: boolean;
   hasKing: boolean;
   hasQueen: boolean;
   hasPrince: boolean;
   hasPrincess: boolean;
   hasFairyGodmother: boolean;
+  hasBishop: boolean;
   royaltyUnlocked: boolean;
   inspired: boolean;
   food: number;
   captiveCount: number;
+  kingCount: number;
+  queenCount: number;
+  fieldSlots: number;
 }

@@ -2,17 +2,20 @@ import type { UnitRole, EnemyRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 
 export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
-  house: 30,
+  house: 40,
   wall: 40,
-  tavern: 35,
+  tavern: 45,
   drawbridge: 50,
   stairs: 25,
   field: 25,
   granary: 40,
   barracks: 45,
-  manor: 35,
+  manor: 45,
   ballista: 35,
   watchtower: 40,
+  cathedral: 80,
+  infirmary: 50,
+  dungeon: 55,
   keep: 200,
 };
 
@@ -23,6 +26,8 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   elite_guard: 55,
   elite_archer: 40,
   knight: 50,
+  physician: 28,
+  bishop: 30,
   king: 45,
   queen: 40,
   prince: 35,
@@ -70,6 +75,12 @@ export const CombatBalance = {
   dragonTwoHeadStealGold: 14,
   monsterAggro: 70,
   knightHuntRange: 200,
+  thiefStealGold: 6,
+  thiefCaptureRange: 32,
+  physicianHealRange: 40,
+  physicianHealHunger: 35,
+  marriageRange: 48,
+  weddingDurationMs: 4000,
 } as const;
 
 export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
@@ -88,7 +99,10 @@ export function isBurnable(kind: BuildKind): boolean {
     kind === 'barracks' ||
     kind === 'manor' ||
     kind === 'ballista' ||
-    kind === 'watchtower'
+    kind === 'watchtower' ||
+    kind === 'cathedral' ||
+    kind === 'infirmary' ||
+    kind === 'dungeon'
   );
 }
 
@@ -104,4 +118,16 @@ export function isDwelling(kind: BuildKind): boolean {
 
 export function isFortKind(kind: BuildKind): boolean {
   return kind === 'wall' || kind === 'drawbridge';
+}
+
+export function hasInterior(kind: BuildKind | 'keep'): boolean {
+  return (
+    kind === 'house' ||
+    kind === 'manor' ||
+    kind === 'tavern' ||
+    kind === 'keep' ||
+    kind === 'cathedral' ||
+    kind === 'infirmary' ||
+    kind === 'dungeon'
+  );
 }

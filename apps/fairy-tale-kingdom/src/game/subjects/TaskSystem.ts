@@ -15,6 +15,7 @@ export class TaskSystem {
   private chatRollAccumMs = 0;
   private hunger: HungerSystem | null = null;
   private inspired = false;
+  private festivalMult = 1;
 
   constructor(
     private readonly subjects: SubjectSystem,
@@ -27,6 +28,10 @@ export class TaskSystem {
 
   setInspired(active: boolean): void {
     this.inspired = active;
+  }
+
+  setFestivalMult(mult: number): void {
+    this.festivalMult = mult;
   }
 
   update(deltaMs: number, raidActive: boolean): void {
@@ -110,6 +115,7 @@ export class TaskSystem {
     let mult = 1;
     if (this.buildings.hasGranary()) mult *= EconomyBalance.granaryHarvestMult;
     if (this.inspired) mult *= EconomyBalance.waveHarvestMult;
+    mult *= this.festivalMult;
 
     for (const managed of this.subjects.withInterrupt('harvest')) {
       const fieldId = managed.interrupt?.targetId;

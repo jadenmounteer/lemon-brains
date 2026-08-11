@@ -19,6 +19,7 @@ import { RaidSystem } from '../raids/RaidSystem';
 import { RoyaltySystem } from '../royalty/RoyaltySystem';
 import { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
 import { SiegeVfx } from '../siege/SiegeVfx';
+import { ThiefSystem } from '../thieves/ThiefSystem';
 import {
   KingdomEvents,
   type BeginPlacePayload,
@@ -35,8 +36,8 @@ import {
   generateKingdomMap,
 } from '../world/generateMap';
 
-const MAP_COLS = 80;
-const MAP_ROWS = 50;
+const MAP_COLS = 100;
+const MAP_ROWS = 64;
 const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
@@ -61,6 +62,7 @@ export class KingdomScene extends Phaser.Scene {
   private siegeEngines!: SiegeEngineSystem;
   private siegeVfx!: SiegeVfx;
   private monsters!: MonsterSystem;
+  private thieves!: ThiefSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private mapData: number[][] = [];
   private mapSeed = 0;
@@ -192,7 +194,9 @@ export class KingdomScene extends Phaser.Scene {
     this.tasks = new TaskSystem(this.subjects, this.buildings);
     this.hunger = new HungerSystem(this, this.subjects);
     this.tasks.setHunger(this.hunger);
-    this.royalty = new RoyaltySystem(this, this.subjects);
+    this.royalty = new RoyaltySystem(this, this.subjects, this.buildings);
+
+    this.thieves = new ThiefSystem(this, this.subjects, this.buildings);
 
     this.monsters.setBuildings(this.buildings);
     this.monsters.setSubjects(this.subjects);
@@ -408,9 +412,20 @@ export class KingdomScene extends Phaser.Scene {
     this.subjects?.setFgmCanTransform(this.royalty?.fgmReady() ?? false);
     this.combat?.setInspired(inspired);
     this.tasks?.setInspired(inspired);
+    this.tasks?.setFestivalMult(this.royalty?.festivalHarvestMult() ?? 1);
     this.combat?.update(delta);
     this.tasks?.update(delta, this.raids?.hasActiveRaiders() ?? false);
     this.hunger?.update();
+    const isNight =
+      this.subjects?.clock.phase === 'Night' ||
+      (this.subjects?.clock.hour ?? 12) >= 21 ||
+      (this.subjects?.clock.hour ?? 12) < 5;
+    this.thieves?.update(
+      delta,
+      Boolean(isNight),
+      this.raids?.hasActiveRaiders() ?? false
+    );
+            this.buildings?.updateInteriors(this.subjects.unitBodies());
     this.applyNightOverlay();
   }
 
@@ -419,6 +434,7 @@ export class KingdomScene extends Phaser.Scene {
     this.siegeEngines?.clear();
     this.siegeVfx?.clear();
     this.monsters?.clear();
+    this.thieves?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
@@ -527,15 +543,24 @@ export class KingdomScene extends Phaser.Scene {
       wallCount: this.buildings.wallCount(),
       tavernCount: this.buildings.tavernCount(),
       fieldCount: this.buildings.fieldCount(),
+      granaryCount: this.buildings.granaryCount(),
+      keepCount: this.buildings.keepCount(),
+      hasCathedral: this.buildings.hasCathedral(),
+      hasInfirmary: this.buildings.hasInfirmary(),
+      hasDungeon: this.buildings.hasDungeon(),
       hasKing,
       hasQueen,
       hasPrince: this.subjects.hasRole('prince'),
       hasPrincess: this.subjects.hasRole('princess'),
       hasFairyGodmother: this.subjects.hasRole('fairy_godmother'),
+      hasBishop: this.subjects.hasRole('bishop'),
       royaltyUnlocked: hasKing && hasQueen,
       inspired: this.royalty?.isInspired() ?? false,
       food: this.hunger?.currentFood() ?? 0,
       captiveCount: this.captives.length,
+      kingCount: this.subjects.countRole('king'),
+      queenCount: this.subjects.countRole('queen'),
+      fieldSlots: this.buildings.fieldSlots(),
     });
   }
 

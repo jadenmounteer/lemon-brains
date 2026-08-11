@@ -3,19 +3,20 @@ import {
   UNIT_HEIGHT,
   UNIT_WIDTH,
   idleAnimKey,
+  isMilitaryRole,
+  livesAtKeep,
   walkAnimKey,
   type Direction,
   type UnitRole,
 } from '../art/assetManifest';
 import type { SavedSubject } from '../../kingdom/LayoutRepository';
 import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
-import { UNIT_MAX_HP } from '../combat/stats';
-import { CombatBalance } from '../combat/stats';
+import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
-import { isMilitaryRole } from '../art/assetManifest';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
+import { genderForNewSubject, genderLabel } from './gender';
 import { pickName } from './names';
 import { roleLabel, scheduleSummary, slotAtHour } from './schedules';
 import type {
@@ -51,6 +52,7 @@ export class SubjectSystem {
   private selectedId: string | null = null;
   private marker: Phaser.GameObjects.Arc | null = null;
   private dayEmitAccumMs = 0;
+  private healAccumMs = 0;
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
   private pathGrid: PathGrid | null = null;
@@ -250,15 +252,190 @@ export class SubjectSystem {
     return best;
   }
 
-  transformRole(id: string, role: UnitRole): boolean {
+  nearestFemalePeasant(
+    x: number,
+    y: number,
+    radius: number
+  ): ManagedSubject | null {
+    let best: ManagedSubject | null = null;
+    let bestD = radius;
+    for (const s of this.subjects) {
+      if (s.data.role !== 'peasant' || s.data.sick) continue;
+      if (s.data.gender !== 'female') continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  nearestMilitary(
+    x: number,
+    y: number,
+    radius: number
+  ): ManagedSubject | null {
+    let best: ManagedSubject | null = null;
+    let bestD = radius;
+    for (const s of this.subjects) {
+      if (!isMilitaryRole(s.data.role) || s.data.sick) continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  firstByRole(role: UnitRole): ManagedSubject | null {
+    return this.subjects.find((s) => s.data.role === role) ?? null;
+  }
+
+  unmarriedPrincess(): ManagedSubject | null {
+    return (
+      this.subjects.find(
+        (s) =>
+          s.data.role === 'princess' &&
+          (!s.data.married || s.data.temporaryPrincess)
+      ) ?? null
+    );
+  }
+
+  revertUnmarriedBallPrincesses(): void {
+    for (const s of this.subjects) {
+      if (s.data.role !== 'princess') continue;
+      if (!s.data.temporaryPrincess) continue;
+      if (s.data.married) continue;
+      this.transformRole(s.data.id, 'peasant', {
+        temporaryPrincess: false,
+        married: false,
+      });
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${s.data.name} turned back into a peasant at dawn`,
+      });
+    }
+  }
+
+  transformRole(
+    id: string,
+    role: UnitRole,
+    opts?: { temporaryPrincess?: boolean; married?: boolean }
+  ): boolean {
     const managed = this.getById(id);
     if (!managed) return false;
     managed.data.role = role;
     managed.data.maxHp = UNIT_MAX_HP[role];
     managed.data.hp = Math.min(managed.data.hp, managed.data.maxHp);
+    managed.data.temporaryPrincess = Boolean(opts?.temporaryPrincess);
+    if (opts?.married !== undefined) managed.data.married = opts.married;
+    if (role === 'princess' && opts?.temporaryPrincess) {
+      managed.data.gender = 'female';
+    }
+    if (role === 'peasant') {
+      managed.data.temporaryPrincess = false;
+      managed.data.married = false;
+    }
     managed.sprite.setTexture(role, 0);
     managed.sprite.play(idleAnimKey(role));
     managed.interrupt = null;
+    this.onChanged?.();
+    return true;
+  }
+
+  markBallGather(): void {
+    for (const s of this.subjects) {
+      if (!livesAtKeep(s.data.role) && s.data.role !== 'peasant') continue;
+      s.data.activity = 'ball';
+      s.data.activityLabel = 'Attending the royal ball';
+      s.data.zone = 'keep';
+      this.nudgeTowardSchedule(s);
+    }
+  }
+
+  markFestivalGather(): void {
+    for (const s of this.subjects) {
+      s.data.activity = 'festival';
+      s.data.activityLabel = 'Celebrating at the festival';
+      s.data.zone = 'keep';
+    }
+  }
+
+  beginWedding(
+    princeId: string,
+    princessId: string,
+    bishopId: string,
+    cathedral: { x: number; y: number },
+    durationMs: number
+  ): void {
+    const ids = [princeId, princessId, bishopId];
+    for (const id of ids) {
+      const m = this.getById(id);
+      if (!m) continue;
+      m.interrupt = {
+        kind: 'wedding',
+        partnerId: princessId,
+        remainingMs: durationMs,
+      };
+      m.data.activity = 'wedding';
+      m.data.activityLabel = 'At a royal wedding';
+      this.nudgeToward(id, cathedral.x, cathedral.y, 50);
+    }
+    this.scene.time.delayedCall(durationMs, () => {
+      const princess = this.getById(princessId);
+      if (princess && princess.data.role === 'princess') {
+        princess.data.temporaryPrincess = false;
+        princess.data.married = true;
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${princess.data.name} remains a Princess forever!`,
+        });
+      }
+      for (const id of ids) this.clearInterrupt(id);
+      this.onChanged?.();
+    });
+  }
+
+  healNearestSick(physicianId: string): boolean {
+    const doc = this.getById(physicianId);
+    if (!doc || doc.data.role !== 'physician' || doc.data.sick) return false;
+    let best: ManagedSubject | null = null;
+    let bestD: number = CombatBalance.physicianHealRange;
+    for (const s of this.subjects) {
+      if (!s.data.sick || s.data.id === physicianId) continue;
+      const d = Phaser.Math.Distance.Between(
+        doc.sprite.x,
+        doc.sprite.y,
+        s.sprite.x,
+        s.sprite.y
+      );
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    if (!best) {
+      // Seek a sick subject farther away
+      for (const s of this.subjects) {
+        if (!s.data.sick || s.data.id === physicianId) continue;
+        this.nudgeToward(physicianId, s.sprite.x, s.sprite.y, 45);
+        doc.data.activity = 'heal';
+        doc.data.activityLabel = `Seeking ${s.data.name}`;
+        return false;
+      }
+      return false;
+    }
+    best.data.sick = false;
+    best.data.hunger = Math.max(
+      0,
+      best.data.hunger - CombatBalance.physicianHealHunger
+    );
+    this.applyHpTint(best);
+    doc.data.activity = 'heal';
+    doc.data.activityLabel = `Healing ${best.data.name}`;
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${doc.data.name} healed ${best.data.name}`,
+    });
     this.onChanged?.();
     return true;
   }
@@ -379,6 +556,9 @@ export class SubjectSystem {
         onWall: s.onWall,
         hunger: s.hunger,
         sick: s.sick,
+        gender: s.gender,
+        temporaryPrincess: s.temporaryPrincess,
+        married: s.married,
       });
       const match = /^subject-(\d+)$/.exec(s.id);
       if (match) {
@@ -399,6 +579,9 @@ export class SubjectSystem {
       onWall: s.data.onWall,
       hunger: s.data.hunger,
       sick: s.data.sick,
+      gender: s.data.gender,
+      temporaryPrincess: s.data.temporaryPrincess,
+      married: s.data.married,
     }));
   }
 
@@ -406,9 +589,19 @@ export class SubjectSystem {
     return this.subjects.length;
   }
 
+  royalCounts(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const s of this.subjects) {
+      if (!livesAtKeep(s.data.role)) continue;
+      map.set(s.data.houseId, (map.get(s.data.houseId) ?? 0) + 1);
+    }
+    return map;
+  }
+
   occupantCounts(): Map<string, number> {
     const map = new Map<string, number>();
     for (const s of this.subjects) {
+      if (livesAtKeep(s.data.role)) continue;
       if (!this.buildings?.getHousePoint(s.data.houseId)) continue;
       map.set(s.data.houseId, (map.get(s.data.houseId) ?? 0) + 1);
     }
@@ -426,24 +619,45 @@ export class SubjectSystem {
 
   hire(role: UnitRole): boolean {
     if (!this.buildings) return false;
-    if (
-      (role === 'king' ||
-        role === 'queen' ||
-        role === 'prince' ||
-        role === 'fairy_godmother') &&
-      this.hasRole(role)
-    ) {
+    if (role === 'fairy_godmother' && this.hasRole(role)) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `You already have a ${roleLabel(role)}`,
       });
       return false;
     }
-    const houseId = this.buildings.pickHouseForHire(this.occupantCounts());
-    if (!houseId) {
+    if (role === 'bishop' && this.hasRole('bishop')) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'No free beds — build a house first',
+        message: 'You already have a Bishop',
       });
       return false;
+    }
+    if ((role === 'king' || role === 'queen') && this.buildings) {
+      const cap = this.buildings.keepCount();
+      if (this.countRole(role) >= cap) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `Need another keep for another ${roleLabel(role)}`,
+        });
+        return false;
+      }
+    }
+
+    let houseId: string | null = null;
+    if (livesAtKeep(role)) {
+      houseId = this.buildings.pickKeepForHire(this.royalCounts());
+      if (!houseId) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'No free royal chambers — build another keep',
+        });
+        return false;
+      }
+    } else {
+      houseId = this.buildings.pickHouseForHire(this.occupantCounts());
+      if (!houseId) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'No free beds — build a house first',
+        });
+        return false;
+      }
     }
     const id = `subject-${this.nextSubjectId++}`;
     const name =
@@ -580,6 +794,16 @@ export class SubjectSystem {
         if (!managed.moving && Math.random() < deltaMs * 0.0004) {
           this.nudgeTowardSchedule(managed);
         }
+      }
+    }
+
+    this.healAccumMs += deltaMs;
+    if (this.healAccumMs >= 2500) {
+      this.healAccumMs = 0;
+      for (const s of this.subjects) {
+        if (s.data.role !== 'physician' || s.data.sick) continue;
+        if (s.interrupt) continue;
+        this.healNearestSick(s.data.id);
       }
     }
 
@@ -820,6 +1044,9 @@ export class SubjectSystem {
       onWall?: boolean;
       hunger?: number;
       sick?: boolean;
+      gender?: 'male' | 'female';
+      temporaryPrincess?: boolean;
+      married?: boolean;
     }
   ): void {
     const slot = slotAtHour(role, this.clock.hour);
@@ -828,6 +1055,9 @@ export class SubjectSystem {
     const maxHp = opts?.maxHp ?? UNIT_MAX_HP[role];
     const hp = opts?.hp ?? maxHp;
     const hunger = opts?.hunger ?? 0;
+    const seed = Number(id.replace(/\D/g, '')) || 1;
+    const gender =
+      opts?.gender ?? genderForNewSubject(role, name, seed);
 
     const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
     sprite.setDepth(20);
@@ -844,6 +1074,7 @@ export class SubjectSystem {
       id,
       name,
       role,
+      gender,
       houseId,
       activity: slot.activity,
       activityLabel: slot.label,
@@ -853,6 +1084,8 @@ export class SubjectSystem {
       onWall: Boolean(opts?.onWall),
       hunger,
       sick: opts?.sick ?? hunger >= 60,
+      temporaryPrincess: Boolean(opts?.temporaryPrincess),
+      married: Boolean(opts?.married),
     };
 
     const managed: ManagedSubject = {
@@ -935,6 +1168,7 @@ export class SubjectSystem {
       name: managed.data.name,
       role: managed.data.role,
       roleLabel: roleLabel(managed.data.role),
+      genderLabel: genderLabel(managed.data.gender),
       activityLabel: managed.data.sick
         ? `${managed.data.activityLabel} (sick)`
         : managed.data.activityLabel,
@@ -952,6 +1186,8 @@ export class SubjectSystem {
       inspired: this.inspired,
       canTransformPeasant:
         managed.data.role === 'fairy_godmother' && this.fgmCanTransform,
+      temporaryPrincess: managed.data.temporaryPrincess,
+      married: managed.data.married,
     };
   }
 }

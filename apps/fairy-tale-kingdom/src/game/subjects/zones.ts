@@ -80,5 +80,9 @@ export function randomPointInZone(
       }
       return { x: world.width - 100 + jitter(40), y: 100 + jitter(40) };
     }
+    case 'cathedral':
+      return { x: cx + 80 + jitter(40), y: cy + 20 + jitter(30) };
+    case 'infirmary':
+      return { x: cx - 90 + jitter(40), y: cy + 40 + jitter(30) };
   }
 }

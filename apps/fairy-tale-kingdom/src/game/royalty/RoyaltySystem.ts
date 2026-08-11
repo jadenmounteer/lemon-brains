@@ -1,28 +1,52 @@
 import Phaser from 'phaser';
-import { isRoyalRole } from '../art/assetManifest';
 import { EconomyBalance } from '../economy/economy';
+import type { BuildingSystem } from '../buildings/BuildingSystem';
+import { CombatBalance } from '../combat/stats';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
 
-/** Prince spawn, FGM transform cooldown, prince+princess wave buffs. */
+/** Prince spawn, FGM ball bless, weddings, balls/festivals, prince+princess wave buffs. */
 export class RoyaltySystem {
   private princeSpawnMs = 0;
   private fgmCooldownMs = 0;
   private waveCooldownMs = EconomyBalance.waveIntervalMs;
   private waveRemainingMs = 0;
   private inspired = false;
+  private ballCooldownMs = EconomyBalance.ballMinIntervalMs * 0.4;
+  private ballRemainingMs = 0;
+  private festivalCooldownMs = EconomyBalance.festivalMinIntervalMs * 0.5;
+  private festivalRemainingMs = 0;
+  private lastMorningHour = -1;
+  private weddingCooldownMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    private readonly subjects: SubjectSystem
+    private readonly subjects: SubjectSystem,
+    private readonly buildings: BuildingSystem
   ) {}
 
   isInspired(): boolean {
     return this.inspired;
   }
 
+  isBallActive(): boolean {
+    return this.ballRemainingMs > 0;
+  }
+
+  isFestivalActive(): boolean {
+    return this.festivalRemainingMs > 0;
+  }
+
+  festivalHarvestMult(): number {
+    return this.isFestivalActive() ? EconomyBalance.festivalHarvestMult : 1;
+  }
+
   fgmReady(): boolean {
-    return this.fgmCooldownMs <= 0 && this.subjects.hasRole('fairy_godmother');
+    return (
+      this.fgmCooldownMs <= 0 &&
+      this.isBallActive() &&
+      this.subjects.hasRole('fairy_godmother')
+    );
   }
 
   serializeTimers(): { princeSpawnMs: number; fgmCooldownMs: number } {
@@ -39,6 +63,13 @@ export class RoyaltySystem {
 
   update(deltaMs: number): void {
     if (this.fgmCooldownMs > 0) this.fgmCooldownMs -= deltaMs;
+    if (this.weddingCooldownMs > 0) this.weddingCooldownMs -= deltaMs;
+
+    const hour = Math.floor(this.subjects.clock.hour);
+    if (hour === 6 && this.lastMorningHour !== 6) {
+      this.subjects.revertUnmarriedBallPrincesses();
+    }
+    this.lastMorningHour = hour;
 
     const hasKing = this.subjects.hasRole('king');
     const hasQueen = this.subjects.hasRole('queen');
@@ -58,6 +89,10 @@ export class RoyaltySystem {
     } else if (!hasKing || !hasQueen) {
       this.princeSpawnMs = 0;
     }
+
+    this.updateBall(deltaMs, hasKing, hasQueen, hasPrince);
+    this.updateFestival(deltaMs);
+    this.tryAutoWedding();
 
     const hasPrincess = this.subjects.hasRole('princess');
     if (hasPrince && hasPrincess) {
@@ -87,28 +122,37 @@ export class RoyaltySystem {
   }
 
   tryTransformPeasant(fgmId: string): boolean {
-    if (!this.fgmReady()) return false;
+    if (!this.fgmReady()) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: this.isBallActive()
+          ? 'Fairy Godmother needs a moment'
+          : 'Blessings only work during a royal ball',
+      });
+      return false;
+    }
     const fgm = this.subjects.getById(fgmId);
     if (!fgm || fgm.data.role !== 'fairy_godmother') return false;
     if (fgm.data.sick) return false;
 
-    const peasant = this.subjects.nearestPeasant(
+    const peasant = this.subjects.nearestFemalePeasant(
       fgm.sprite.x,
       fgm.sprite.y,
       EconomyBalance.fgmTransformRange
     );
     if (!peasant) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'No peasant nearby to bless',
+        message: 'No female peasant nearby to bless',
       });
       return false;
     }
 
-    const ok = this.subjects.transformRole(peasant.data.id, 'princess');
+    const ok = this.subjects.transformRole(peasant.data.id, 'princess', {
+      temporaryPrincess: true,
+    });
     if (!ok) return false;
     this.fgmCooldownMs = EconomyBalance.fgmTransformCooldownMs;
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${peasant.data.name} is now a Princess!`,
+      message: `${peasant.data.name} is a Princess for the ball!`,
     });
     return true;
   }
@@ -117,17 +161,111 @@ export class RoyaltySystem {
     return this.subjects.hasRole('king') && this.subjects.hasRole('queen');
   }
 
+  private updateBall(
+    deltaMs: number,
+    hasKing: boolean,
+    hasQueen: boolean,
+    hasPrince: boolean
+  ): void {
+    if (this.ballRemainingMs > 0) {
+      this.ballRemainingMs -= deltaMs;
+      if (this.ballRemainingMs <= 0) {
+        this.ballRemainingMs = 0;
+        this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'The royal ball has ended',
+        });
+      }
+      return;
+    }
+    if (!(hasKing && hasQueen && hasPrince)) return;
+    this.ballCooldownMs -= deltaMs;
+    if (this.ballCooldownMs <= 0) {
+      this.ballRemainingMs = EconomyBalance.ballDurationMs;
+      this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'A royal ball begins at the keep!',
+      });
+      this.subjects.markBallGather();
+    }
+  }
+
+  private updateFestival(deltaMs: number): void {
+    if (this.festivalRemainingMs > 0) {
+      this.festivalRemainingMs -= deltaMs;
+      if (this.festivalRemainingMs <= 0) {
+        this.festivalRemainingMs = 0;
+        this.festivalCooldownMs = EconomyBalance.festivalMinIntervalMs;
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'The festival winds down',
+        });
+      }
+      return;
+    }
+    this.festivalCooldownMs -= deltaMs;
+    if (this.festivalCooldownMs <= 0) {
+      this.festivalRemainingMs = EconomyBalance.festivalDurationMs;
+      this.festivalCooldownMs = EconomyBalance.festivalMinIntervalMs;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'A festival fills the streets with cheer!',
+      });
+      this.subjects.markFestivalGather();
+    }
+  }
+
+  private tryAutoWedding(): void {
+    if (this.weddingCooldownMs > 0) return;
+    if (!this.buildings.hasCathedral()) return;
+    if (!this.subjects.hasRole('bishop')) return;
+    const prince = this.subjects.firstByRole('prince');
+    const princess = this.subjects.unmarriedPrincess();
+    const bishop = this.subjects.firstByRole('bishop');
+    if (!prince || !princess || !bishop) return;
+
+    const cat = this.buildings.getCathedralPoint();
+    if (!cat) return;
+
+    const near =
+      Phaser.Math.Distance.Between(
+        prince.sprite.x,
+        prince.sprite.y,
+        princess.sprite.x,
+        princess.sprite.y
+      ) < CombatBalance.marriageRange ||
+      (Phaser.Math.Distance.Between(
+        prince.sprite.x,
+        prince.sprite.y,
+        cat.x,
+        cat.y
+      ) < 80 &&
+        Phaser.Math.Distance.Between(
+          princess.sprite.x,
+          princess.sprite.y,
+          cat.x,
+          cat.y
+        ) < 80);
+
+    if (!near) return;
+
+    this.weddingCooldownMs = 12_000;
+    this.subjects.beginWedding(
+      prince.data.id,
+      princess.data.id,
+      bishop.data.id,
+      cat,
+      CombatBalance.weddingDurationMs
+    );
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${prince.data.name} and ${princess.data.name} wed at the cathedral!`,
+    });
+  }
+
   private markRoyalsWaving(): void {
     for (const s of this.subjects.listManaged()) {
       if (s.data.role === 'prince' || s.data.role === 'princess') {
-        if (s.interrupt) continue;
         s.data.activity = 'wave';
         s.data.activityLabel = 'Waving to the people';
       }
     }
   }
-}
-
-export function isCapturableRole(role: string): boolean {
-  return isRoyalRole(role as Parameters<typeof isRoyalRole>[0]);
 }

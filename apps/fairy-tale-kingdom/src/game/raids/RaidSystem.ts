@@ -174,6 +174,13 @@ export class RaidSystem {
   update(deltaMs: number): void {
     if (this.gameOver) return;
 
+    const active = this.buildings?.getActiveKeepPoint();
+    if (active) {
+      this.keep.x = active.x;
+      this.keep.y = active.y;
+      this.engines?.setKeep(active);
+    }
+
     this.elapsedMs += deltaMs;
     if (this.elapsedMs >= this.nextRaidAt) {
       this.nextRaidAt = this.elapsedMs + RAID_INTERVAL_MS;
@@ -836,7 +843,7 @@ export class RaidSystem {
     }
     this.scene.game.events.emit(KingdomEvents.GAME_OVER, {
       reason:
-        'A rival kingdom’s army destroyed your keep. Your kingdom has fallen.',
+        'A rival kingdom’s army destroyed every keep. Your kingdom has fallen.',
     });
   }
 

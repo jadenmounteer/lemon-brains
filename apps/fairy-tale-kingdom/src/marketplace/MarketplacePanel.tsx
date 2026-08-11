@@ -1,5 +1,6 @@
 import {
   BUILD_CATALOG,
+  FIELDS_PER_GRANARY,
   HIRE_CATALOG,
   type BuildKind,
 } from './catalog';
@@ -34,7 +35,8 @@ export function MarketplacePanel({
         </span>
       </p>
       <p className="muted market-note">
-        Houses have 3 beds; manors have 2. Royalty unlocks elite goods.
+        Houses have 3 beds; royals live at keeps. Fields need granaries (
+        {FIELDS_PER_GRANARY} per granary).
       </p>
       {stats.royaltyUnlocked ? (
         <p className="muted">Royal court active — tier-2 goods unlocked.</p>
@@ -64,13 +66,24 @@ export function MarketplacePanel({
             item.unique &&
             ((item.role === 'king' && stats.hasKing) ||
               (item.role === 'queen' && stats.hasQueen) ||
-              (item.role === 'fairy_godmother' && stats.hasFairyGodmother));
+              (item.role === 'fairy_godmother' && stats.hasFairyGodmother) ||
+              (item.role === 'bishop' && stats.hasBishop));
+          const perKeepTaken =
+            Boolean(item.perKeep) &&
+            ((item.role === 'king' && stats.kingCount >= stats.keepCount) ||
+              (item.role === 'queen' && stats.queenCount >= stats.keepCount));
+          const buildingMissing =
+            (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) ||
+            (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary);
+          const needsBed = !item.livesAtKeep && stats.freeBeds <= 0;
           const disabled =
             placeMode.active ||
             gold < item.cost ||
-            stats.freeBeds <= 0 ||
+            needsBed ||
             locked ||
-            uniqueTaken;
+            uniqueTaken ||
+            perKeepTaken ||
+            buildingMissing;
           return (
             <li key={item.role} className="market-row">
               <div>
@@ -80,8 +93,17 @@ export function MarketplacePanel({
                 {locked && (
                   <p className="muted">Requires King &amp; Queen</p>
                 )}
+                {buildingMissing && item.requiresBuilding === 'cathedral' && (
+                  <p className="muted">Requires a Cathedral</p>
+                )}
+                {buildingMissing && item.requiresBuilding === 'infirmary' && (
+                  <p className="muted">Requires an Infirmary</p>
+                )}
                 {uniqueTaken && (
                   <p className="muted">Already in your kingdom</p>
+                )}
+                {perKeepTaken && (
+                  <p className="muted">Need another keep</p>
                 )}
               </div>
               <button
@@ -104,7 +126,11 @@ export function MarketplacePanel({
       <ul className="market-list">
         {BUILD_CATALOG.map((item) => {
           const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
-          const disabled = placeMode.active || gold < item.cost || locked;
+          const fieldBlocked =
+            item.kind === 'field' &&
+            (stats.granaryCount <= 0 || stats.fieldCount >= stats.fieldSlots);
+          const disabled =
+            placeMode.active || gold < item.cost || locked || fieldBlocked;
           return (
             <li key={item.kind} className="market-row">
               <div>
@@ -114,6 +140,16 @@ export function MarketplacePanel({
                 {locked && (
                   <p className="muted">Requires King &amp; Queen</p>
                 )}
+                {fieldBlocked && stats.granaryCount <= 0 && (
+                  <p className="muted">Build a granary first</p>
+                )}
+                {fieldBlocked &&
+                  stats.granaryCount > 0 &&
+                  stats.fieldCount >= stats.fieldSlots && (
+                    <p className="muted">
+                      Field slots full ({stats.fieldCount}/{stats.fieldSlots})
+                    </p>
+                  )}
               </div>
               <button
                 type="button"

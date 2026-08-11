@@ -169,6 +169,10 @@ function clothFor(role: AnimRole): number {
       return palette.clothEnemyArmy;
     case 'knight':
       return palette.clothKnight;
+    case 'bishop':
+      return palette.clothBishop;
+    case 'physician':
+      return palette.clothPhysician;
     case 'troll':
       return palette.clothTroll;
     case 'ogre':
@@ -196,6 +200,14 @@ function drawUnitFrame(
   }
   if (role === 'dragon') {
     drawDragonFrame(ctx, originX, facing, walkStep);
+    return;
+  }
+  if (role === 'physician') {
+    drawPhysicianFrame(ctx, originX, facing, walkStep);
+    return;
+  }
+  if (role === 'bishop') {
+    drawBishopFrame(ctx, originX, facing, walkStep);
     return;
   }
 
@@ -444,6 +456,89 @@ function drawDragonFrame(
   fillRect(ctx, originX + (facing === 'left' ? 3 : 11), 20 + y, 3, 2, scaleDark);
 }
 
+/** Plague doctor: beaked mask, wide hat, dark robes. */
+function drawPhysicianFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob;
+  const robe = palette.clothPhysician;
+  const robeLight = 0x3a3a48;
+
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+  fillRect(ctx, originX + 5 - leg, 18 + y, 3, 3, palette.ink);
+  fillRect(ctx, originX + 9 + leg, 18 + y, 3, 3, palette.ink);
+
+  // long robes
+  fillRect(ctx, originX + 4, 9 + y, 8, 10, robe);
+  fillRect(ctx, originX + 5, 11 + y, 6, 6, robeLight);
+
+  // wide brim hat
+  fillRect(ctx, originX + 2, 3 + y, 12, 2, palette.ink);
+  fillRect(ctx, originX + 5, 1 + y, 6, 3, robe);
+
+  // beaked mask
+  fillRect(ctx, originX + 5, 5 + y, 6, 4, 0xc4a35a);
+  if (facing === 'left') {
+    fillRect(ctx, originX + 1, 6 + y, 4, 2, 0xc4a35a);
+    pixel(ctx, originX + 1, 7 + y, palette.ink);
+  } else if (facing === 'right') {
+    fillRect(ctx, originX + 11, 6 + y, 4, 2, 0xc4a35a);
+    pixel(ctx, originX + 14, 7 + y, palette.ink);
+  } else if (facing !== 'up') {
+    fillRect(ctx, originX + 6, 8 + y, 4, 2, 0xc4a35a);
+    pixel(ctx, originX + 7, 9 + y, palette.ink);
+    pixel(ctx, originX + 6, 6 + y, palette.ink);
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+  }
+
+  // cane / satchel
+  fillRect(ctx, originX + 13, 10 + y, 1, 8, palette.woodDark);
+  fillRect(ctx, originX + 3, 14 + y, 2, 3, palette.wood);
+}
+
+/** Bishop: mitre, crimson vestments, crosier. */
+function drawBishopFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob;
+  const robe = palette.clothBishop;
+
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+  fillRect(ctx, originX + 5 - leg, 18 + y, 3, 3, palette.ink);
+  fillRect(ctx, originX + 9 + leg, 18 + y, 3, 3, palette.ink);
+
+  fillRect(ctx, originX + 4, 10 + y, 8, 9, robe);
+  fillRect(ctx, originX + 6, 12 + y, 4, 6, palette.cream);
+  fillRect(ctx, originX + 7, 11 + y, 2, 8, palette.gold);
+
+  // mitre
+  fillRect(ctx, originX + 5, 1 + y, 6, 5, robe);
+  fillRect(ctx, originX + 6, 0 + y, 4, 2, palette.gold);
+  pixel(ctx, originX + 7, 2 + y, palette.gold);
+  pixel(ctx, originX + 8, 2 + y, palette.gold);
+
+  fillRect(ctx, originX + 5, 5 + y, 6, 5, palette.skin);
+  if (facing !== 'up') {
+    pixel(ctx, originX + 6, 7 + y, palette.ink);
+    pixel(ctx, originX + 9, 7 + y, palette.ink);
+  }
+
+  // crosier
+  fillRect(ctx, originX + 13, 4 + y, 1, 14, palette.gold);
+  fillRect(ctx, originX + 12, 3 + y, 3, 2, palette.gold);
+  fillRect(ctx, originX + 14, 4 + y, 1, 2, palette.gold);
+}
+
 function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
   const width = UNIT_WIDTH * UNIT_FRAME_COUNT;
   const height = UNIT_HEIGHT;
@@ -480,37 +575,56 @@ function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
 }
 
 function drawKeep(scene: Phaser.Scene) {
-  const w = 48;
-  const h = 48;
+  const w = 64;
+  const h = 56;
   const tex = createCanvas(scene, PROP_KEYS.keep, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 16, 40, 28, palette.stone);
-  fillRect(ctx, 4, 16, 40, 2, palette.ink);
-  fillRect(ctx, 4, 16, 2, 28, palette.ink);
-  fillRect(ctx, 42, 16, 2, 28, palette.ink);
-  for (let i = 0; i < 5; i++) {
-    fillRect(ctx, 6 + i * 8, 8, 6, 10, palette.stone);
-    fillRect(ctx, 6 + i * 8, 8, 6, 1, palette.ink);
+  fillRect(ctx, 6, 18, 52, 36, palette.stone);
+  fillRect(ctx, 6, 18, 52, 2, palette.ink);
+  fillRect(ctx, 6, 18, 2, 36, palette.ink);
+  fillRect(ctx, 56, 18, 2, 36, palette.ink);
+  for (let i = 0; i < 6; i++) {
+    fillRect(ctx, 8 + i * 9, 6, 7, 14, palette.stone);
+    fillRect(ctx, 8 + i * 9, 6, 7, 1, palette.ink);
   }
-  fillRect(ctx, 20, 32, 8, 12, palette.woodDark);
-  fillRect(ctx, 12, 24, 4, 4, palette.cream);
-  fillRect(ctx, 32, 24, 4, 4, palette.cream);
+  fillRect(ctx, 26, 38, 12, 16, palette.woodDark);
+  fillRect(ctx, 14, 28, 6, 5, palette.cream);
+  fillRect(ctx, 44, 28, 6, 5, palette.cream);
+  fillRect(ctx, 28, 26, 8, 6, palette.gold);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.keepInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 6, 18, 52, 36, palette.wood);
+  fillRect(ic, 10, 24, 16, 12, palette.roof);
+  fillRect(ic, 36, 22, 14, 20, palette.stoneDark);
+  fillRect(ic, 40, 28, 6, 8, palette.gold);
+  fillRect(ic, 28, 40, 8, 10, palette.woodDark);
+  int.refresh();
 }
 
 function drawHouse(scene: Phaser.Scene) {
-  const w = 32;
-  const h = 32;
+  const w = 48;
+  const h = 44;
   const tex = createCanvas(scene, PROP_KEYS.house, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 14, 24, 16, palette.wood);
-  fillRect(ctx, 4, 14, 24, 1, palette.ink);
-  for (let row = 0; row < 8; row++) {
-    fillRect(ctx, 4 + row, 6 + row, 24 - row * 2, 1, palette.roof);
+  fillRect(ctx, 6, 18, 36, 24, palette.wood);
+  fillRect(ctx, 6, 18, 36, 1, palette.ink);
+  for (let row = 0; row < 10; row++) {
+    fillRect(ctx, 6 + row, 8 + row, 36 - row * 2, 1, palette.roof);
   }
-  fillRect(ctx, 13, 22, 6, 8, palette.woodDark);
-  pixel(ctx, 8, 18, palette.cream);
+  fillRect(ctx, 20, 30, 8, 12, palette.woodDark);
+  fillRect(ctx, 12, 24, 5, 5, palette.cream);
+  fillRect(ctx, 31, 24, 5, 5, palette.cream);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.houseInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 6, 18, 36, 24, palette.dirt);
+  fillRect(ic, 10, 22, 10, 8, palette.woodDark);
+  fillRect(ic, 28, 28, 8, 6, palette.cream);
+  fillRect(ic, 20, 34, 8, 8, palette.wood);
+  int.refresh();
 }
 
 /** Neighbor bits: N=1 E=2 S=4 W=8 */
@@ -786,6 +900,85 @@ function drawCave(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawCathedral(scene: Phaser.Scene) {
+  const w = 56;
+  const h = 52;
+  const tex = createCanvas(scene, PROP_KEYS.cathedral, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 8, 20, 40, 28, palette.stone);
+  fillRect(ctx, 8, 20, 40, 2, palette.ink);
+  for (let row = 0; row < 10; row++) {
+    fillRect(ctx, 10 + row, 10 + row, 36 - row * 2, 1, palette.clothBishop);
+  }
+  fillRect(ctx, 24, 4, 8, 16, palette.stone);
+  fillRect(ctx, 26, 2, 4, 4, palette.gold);
+  fillRect(ctx, 24, 36, 8, 12, palette.woodDark);
+  fillRect(ctx, 14, 28, 5, 7, palette.cream);
+  fillRect(ctx, 37, 28, 5, 7, palette.cream);
+  tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.cathedralInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 8, 20, 40, 28, palette.stoneDark);
+  fillRect(ic, 18, 24, 20, 6, palette.wood);
+  fillRect(ic, 24, 22, 8, 4, palette.gold);
+  fillRect(ic, 12, 34, 6, 10, palette.woodDark);
+  fillRect(ic, 38, 34, 6, 10, palette.woodDark);
+  int.refresh();
+}
+
+function drawInfirmary(scene: Phaser.Scene) {
+  const w = 48;
+  const h = 40;
+  const tex = createCanvas(scene, PROP_KEYS.infirmary, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 14, 36, 24, palette.stone);
+  fillRect(ctx, 6, 14, 36, 1, palette.ink);
+  for (let row = 0; row < 8; row++) {
+    fillRect(ctx, 6 + row, 6 + row, 36 - row * 2, 1, palette.clothPhysician);
+  }
+  fillRect(ctx, 20, 26, 8, 12, palette.woodDark);
+  fillRect(ctx, 12, 20, 5, 5, palette.cream);
+  fillRect(ctx, 31, 20, 5, 5, palette.cream);
+  fillRect(ctx, 22, 8, 4, 10, 0xa04545);
+  fillRect(ctx, 19, 11, 10, 4, 0xa04545);
+  tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.infirmaryInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 6, 14, 36, 24, palette.cream);
+  fillRect(ic, 10, 20, 12, 8, palette.clothPeasant);
+  fillRect(ic, 28, 20, 10, 8, palette.clothPeasant);
+  fillRect(ic, 20, 30, 8, 6, palette.woodDark);
+  int.refresh();
+}
+
+function drawDungeon(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 36;
+  const tex = createCanvas(scene, PROP_KEYS.dungeon, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 10, 32, 24, palette.stoneDark);
+  fillRect(ctx, 4, 10, 32, 2, palette.ink);
+  fillRect(ctx, 14, 18, 12, 16, palette.ink);
+  fillRect(ctx, 16, 20, 8, 12, 0x1a1018);
+  fillRect(ctx, 8, 14, 4, 4, palette.metal);
+  fillRect(ctx, 28, 14, 4, 4, palette.metal);
+  tex.refresh();
+}
+
+function drawTavernInterior(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 36;
+  const int = createCanvas(scene, PROP_KEYS.tavernInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 4, 14, 32, 20, palette.wood);
+  fillRect(ic, 8, 20, 10, 6, palette.woodDark);
+  fillRect(ic, 24, 18, 8, 8, palette.cream);
+  fillRect(ic, 16, 26, 8, 6, palette.dirt);
+  int.refresh();
+}
+
 /**
  * Generate all textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
@@ -815,6 +1008,14 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.bolt,
     PROP_KEYS.dust,
     PROP_KEYS.cave,
+    PROP_KEYS.cathedral,
+    PROP_KEYS.infirmary,
+    PROP_KEYS.dungeon,
+    PROP_KEYS.houseInterior,
+    PROP_KEYS.keepInterior,
+    PROP_KEYS.tavernInterior,
+    PROP_KEYS.cathedralInterior,
+    PROP_KEYS.infirmaryInterior,
     ...Array.from({ length: 16 }, (_, i) => wallTextureKey(i)),
   ];
   for (const key of [
@@ -856,6 +1057,10 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawTrebuchet(scene);
   drawVfx(scene);
   drawCave(scene);
+  drawCathedral(scene);
+  drawInfirmary(scene);
+  drawDungeon(scene);
+  drawTavernInterior(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
   for (let i = 0; i < 7; i++) {

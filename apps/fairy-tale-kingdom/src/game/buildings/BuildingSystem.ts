@@ -4,11 +4,14 @@ import type { SavedBuilding } from '../../kingdom/LayoutRepository';
 import {
   BEDS_PER_HOUSE,
   BUILD_CATALOG,
+  FIELDS_PER_GRANARY,
+  ROYAL_SLOTS_PER_KEEP,
   type BuildKind,
 } from '../../marketplace/catalog';
 import { BEDS_PER_MANOR } from '../economy/economy';
 import {
   BUILDING_MAX_HP,
+  hasInterior,
   isBlockingKind,
   isBurnable,
   isDwelling,
@@ -27,7 +30,7 @@ export const KEEP_ID = 'keep';
 export const FORT_TILE = TILE_SIZE;
 
 const KEEP_BLURB =
-  'Your seat of power. A rival army must destroy it (0 HP) to take the kingdom.';
+  'A seat of power. Rival armies must destroy every keep to conquer the kingdom.';
 
 export interface BuildingRecord {
   id: string;
@@ -37,6 +40,8 @@ export interface BuildingRecord {
   hp: number;
   maxHp: number;
   sprite: Phaser.GameObjects.Image;
+  /** Shown under the roof when occupied */
+  interiorSprite?: Phaser.GameObjects.Image;
   labelIndex: number;
   attachedWallId?: string;
   closed?: boolean;
@@ -50,18 +55,21 @@ export interface Aabb {
 }
 
 const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
-  house: { w: 32, h: 28 },
+  house: { w: 48, h: 40 },
   wall: { w: 16, h: 16 },
-  tavern: { w: 36, h: 30 },
+  tavern: { w: 40, h: 34 },
   drawbridge: { w: 16, h: 16 },
   stairs: { w: 20, h: 26 },
   field: { w: 40, h: 26 },
   granary: { w: 36, h: 34 },
   barracks: { w: 40, h: 30 },
-  manor: { w: 40, h: 34 },
+  manor: { w: 48, h: 40 },
   ballista: { w: 24, h: 18 },
   watchtower: { w: 24, h: 36 },
-  keep: { w: 48, h: 44 },
+  cathedral: { w: 56, h: 48 },
+  infirmary: { w: 48, h: 36 },
+  dungeon: { w: 40, h: 32 },
+  keep: { w: 64, h: 52 },
 };
 
 const STAIR_SNAP_DIST = 28;
@@ -152,9 +160,12 @@ export class BuildingSystem {
   seedStarters(worldW: number, worldH: number): void {
     const cx = worldW / 2;
     const cy = worldH / 2;
-    this.addBuilding('house', snapCoord(cx - 64), snapCoord(cy + 8), 'house-0');
-    this.addBuilding('house', snapCoord(cx + 72), snapCoord(cy + 16), 'house-1');
-    const row = fortSnap(cy - 48);
+    this.addBuilding('house', snapCoord(cx - 80), snapCoord(cy + 16), 'house-0');
+    this.addBuilding('house', snapCoord(cx + 88), snapCoord(cy + 24), 'house-1');
+    this.addBuilding('granary', snapCoord(cx - 40), snapCoord(cy + 72), 'granary-0');
+    this.addBuilding('field', snapCoord(cx + 20), snapCoord(cy + 88), 'field-0');
+    this.addBuilding('field', snapCoord(cx + 64), snapCoord(cy + 88), 'field-1');
+    const row = fortSnap(cy - 56);
     const baseCol = Math.round(cx / FORT_TILE);
     for (let i = -3; i <= 3; i++) {
       const x = baseCol * FORT_TILE + i * FORT_TILE + FORT_TILE / 2;
@@ -232,6 +243,56 @@ export class BuildingSystem {
     return this.buildings.filter((b) => b.kind === 'field').length;
   }
 
+  granaryCount(): number {
+    return this.buildings.filter((b) => b.kind === 'granary').length;
+  }
+
+  fieldSlots(): number {
+    return this.granaryCount() * FIELDS_PER_GRANARY;
+  }
+
+  canPlaceField(): boolean {
+    return this.granaryCount() > 0 && this.fieldCount() < this.fieldSlots();
+  }
+
+  /** Primary keep + placeable keeps that still stand. */
+  keepCount(): number {
+    let n = this.keepHp > 0 ? 1 : 0;
+    n += this.buildings.filter((b) => b.kind === 'keep' && b.hp > 0).length;
+    return n;
+  }
+
+  hasCathedral(): boolean {
+    return this.buildings.some((b) => b.kind === 'cathedral');
+  }
+
+  hasInfirmary(): boolean {
+    return this.buildings.some((b) => b.kind === 'infirmary');
+  }
+
+  hasDungeon(): boolean {
+    return this.buildings.some((b) => b.kind === 'dungeon');
+  }
+
+  getCathedralPoint(): Point | null {
+    const c = this.buildings.find((b) => b.kind === 'cathedral');
+    return c ? { x: c.x, y: c.y } : null;
+  }
+
+  getDungeonPoint(): Point | null {
+    const d = this.buildings.find((b) => b.kind === 'dungeon');
+    return d ? { x: d.x, y: d.y } : null;
+  }
+
+  getInfirmaryPoint(): Point | null {
+    const i = this.buildings.find((b) => b.kind === 'infirmary');
+    return i ? { x: i.x, y: i.y } : null;
+  }
+
+  allKeepsDestroyed(): boolean {
+    return this.keepCount() === 0;
+  }
+
   bedCapacity(): number {
     let caps = 0;
     for (const b of this.buildings) {
@@ -260,18 +321,27 @@ export class BuildingSystem {
   }
 
   getHousePoint(houseId: string): Point | null {
+    if (houseId === KEEP_ID) {
+      return this.keepHp > 0
+        ? { x: this.keep.x, y: this.keep.y }
+        : this.getActiveKeepPoint();
+    }
     const house = this.buildings.find(
-      (b) => isDwelling(b.kind) && b.id === houseId
+      (b) =>
+        (isDwelling(b.kind) || b.kind === 'keep') && b.id === houseId
     );
     return house ? { x: house.x, y: house.y } : null;
   }
 
   houseLabel(houseId: string): string {
+    if (houseId === KEEP_ID) return 'The Keep';
     const house = this.buildings.find(
-      (b) => isDwelling(b.kind) && b.id === houseId
+      (b) =>
+        (isDwelling(b.kind) || b.kind === 'keep') && b.id === houseId
     );
     if (!house) return 'Unknown home';
     if (house.kind === 'manor') return `Manor ${house.labelIndex}`;
+    if (house.kind === 'keep') return `Keep ${house.labelIndex}`;
     return `House ${house.labelIndex}`;
   }
 
@@ -290,6 +360,30 @@ export class BuildingSystem {
       }
     }
     return best && bestFree > 0 ? best.id : null;
+  }
+
+  /** Assign royalty to a keep with free royal slots. */
+  pickKeepForHire(royalCounts: Map<string, number>): string | null {
+    const options: { id: string; free: number }[] = [];
+    if (this.keepHp > 0) {
+      const used = royalCounts.get(KEEP_ID) ?? 0;
+      options.push({ id: KEEP_ID, free: ROYAL_SLOTS_PER_KEEP - used });
+    }
+    for (const b of this.buildings) {
+      if (b.kind !== 'keep' || b.hp <= 0) continue;
+      const used = royalCounts.get(b.id) ?? 0;
+      options.push({ id: b.id, free: ROYAL_SLOTS_PER_KEEP - used });
+    }
+    options.sort((a, b) => b.free - a.free || a.id.localeCompare(b.id));
+    const best = options[0];
+    return best && best.free > 0 ? best.id : null;
+  }
+
+  getActiveKeepPoint(): Point {
+    if (this.keepHp > 0) return { x: this.keep.x, y: this.keep.y };
+    const extra = this.buildings.find((b) => b.kind === 'keep' && b.hp > 0);
+    if (extra) return { x: extra.x, y: extra.y };
+    return { x: this.keep.x, y: this.keep.y };
   }
 
   nearestField(x: number, y: number, radius = Infinity): BuildingRecord | null {
@@ -610,11 +704,27 @@ export class BuildingSystem {
   }
 
   damageKeep(amount: number): boolean {
-    this.keepHp = Math.max(0, this.keepHp - amount);
-    this.applyKeepTint();
-    this.vfx?.hitFlash(this.keepSprite);
-    this.onLayoutChanged?.();
-    return this.keepHp <= 0;
+    if (this.keepHp > 0) {
+      this.keepHp = Math.max(0, this.keepHp - amount);
+      this.applyKeepTint();
+      this.vfx?.hitFlash(this.keepSprite);
+      if (this.keepHp <= 0) {
+        this.keepSprite?.setVisible(false);
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: this.allKeepsDestroyed()
+            ? 'The keep has fallen!'
+            : 'A keep has fallen — defend the others!',
+        });
+      }
+      this.onLayoutChanged?.();
+      return this.allKeepsDestroyed();
+    }
+    const extra = this.buildings.find((b) => b.kind === 'keep' && b.hp > 0);
+    if (extra) {
+      this.damageBuilding(extra.id, amount);
+      return this.allKeepsDestroyed();
+    }
+    return true;
   }
 
   getKeepHp(): number {
@@ -626,7 +736,7 @@ export class BuildingSystem {
   }
 
   getKeepPoint(): Point {
-    return this.keep;
+    return this.getActiveKeepPoint();
   }
 
   /** Repair building or keep; returns true if now at full HP. */
@@ -739,8 +849,10 @@ export class BuildingSystem {
         field: 'A field burned!',
         granary: 'The granary burned!',
         barracks: 'The barracks burned!',
-        ballista: 'A ballista was destroyed!',
-        watchtower: 'A watchtower collapsed!',
+        cathedral: 'The cathedral burned!',
+        infirmary: 'The infirmary burned!',
+        dungeon: 'The dungeon collapsed!',
+        keep: 'A keep was destroyed!',
       };
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: messages[b.kind] ?? 'A building was destroyed!',
@@ -753,6 +865,7 @@ export class BuildingSystem {
     if (this.selectedId === b.id) {
       this.selectedId = null;
     }
+    b.interiorSprite?.destroy();
     b.sprite.destroy();
     this.buildings = this.buildings.filter((x) => x.id !== b.id);
     this.recomputeHouseLabels();
@@ -853,6 +966,15 @@ export class BuildingSystem {
       .setDepth(kind === 'wall' || kind === 'stairs' || kind === 'watchtower' ? 9 : 8)
       .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85);
     this.makeInteractive(sprite, id);
+    let interiorSprite: Phaser.GameObjects.Image | undefined;
+    const intKey = interiorTextureFor(kind);
+    if (intKey && hasInterior(kind)) {
+      interiorSprite = this.scene.add
+        .image(px, py, intKey)
+        .setDepth(7)
+        .setOrigin(0.5, 0.85)
+        .setVisible(false);
+    }
     const record: BuildingRecord = {
       id,
       kind,
@@ -861,6 +983,7 @@ export class BuildingSystem {
       hp,
       maxHp,
       sprite,
+      interiorSprite,
       labelIndex: 0,
       attachedWallId: opts?.attachedWallId,
       closed,
@@ -896,6 +1019,29 @@ export class BuildingSystem {
     manors.forEach((h, i) => {
       h.labelIndex = i + 1;
     });
+    const keeps = this.buildings
+      .filter((b) => b.kind === 'keep')
+      .sort((a, b) => a.id.localeCompare(b.id));
+    keeps.forEach((h, i) => {
+      h.labelIndex = i + 1;
+    });
+  }
+
+  /** Hide roofs when any unit stands inside the building. */
+  updateInteriors(unitBodies: Aabb[]): void {
+    for (const b of this.buildings) {
+      if (!b.interiorSprite) continue;
+      const box = footprintAabb(b.kind, b.x, b.y);
+      const occupied = unitBodies.some((u) => intersects(box, u));
+      b.sprite.setVisible(!occupied);
+      b.interiorSprite.setVisible(occupied);
+    }
+    if (this.keepSprite && this.keepHp > 0) {
+      const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
+      const occupied = unitBodies.some((u) => intersects(keepBox, u));
+      // Primary keep has no separate interior texture swap — dim roof via alpha
+      this.keepSprite.setAlpha(occupied ? 0.25 : 1);
+    }
   }
 
   private wallAt(x: number, y: number): BuildingRecord | null {
@@ -1022,12 +1168,15 @@ export class BuildingSystem {
     y: number,
     wallId?: string | null
   ): boolean {
+    if (kind === 'field' && !this.canPlaceField()) return false;
     if (kind === 'stairs' && !wallId) return false;
     if (kind === 'drawbridge' && !this.hasOrthogonalWall(x, y)) return false;
     if (isFortKind(kind) && this.fortOccupied(x, y)) return false;
     const candidate = footprintAabb(kind, x, y);
-    const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
-    if (intersects(candidate, keepBox)) return false;
+    if (this.keepHp > 0) {
+      const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
+      if (intersects(candidate, keepBox)) return false;
+    }
     for (const b of this.buildings) {
       if (intersects(candidate, footprintAabb(b.kind, b.x, b.y))) return false;
     }
@@ -1039,6 +1188,7 @@ export class BuildingSystem {
 
   private clearSpritesOnly(): void {
     for (const b of this.buildings) {
+      b.interiorSprite?.destroy();
       b.sprite.destroy();
     }
     this.cancelPlace();
@@ -1069,6 +1219,32 @@ function textureFor(kind: BuildKind, closed: boolean, wallMask: number): string 
       return PROP_KEYS.ballista;
     case 'watchtower':
       return PROP_KEYS.watchtower;
+    case 'cathedral':
+      return PROP_KEYS.cathedral;
+    case 'infirmary':
+      return PROP_KEYS.infirmary;
+    case 'dungeon':
+      return PROP_KEYS.dungeon;
+    case 'keep':
+      return PROP_KEYS.keep;
+  }
+}
+
+function interiorTextureFor(kind: BuildKind): string | null {
+  switch (kind) {
+    case 'house':
+    case 'manor':
+      return PROP_KEYS.houseInterior;
+    case 'tavern':
+      return PROP_KEYS.tavernInterior;
+    case 'cathedral':
+      return PROP_KEYS.cathedralInterior;
+    case 'infirmary':
+      return PROP_KEYS.infirmaryInterior;
+    case 'keep':
+      return PROP_KEYS.keepInterior;
+    default:
+      return null;
   }
 }
 

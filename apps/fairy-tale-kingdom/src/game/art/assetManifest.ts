@@ -18,6 +18,8 @@ export const UNIT_ROLES = [
   'elite_guard',
   'elite_archer',
   'knight',
+  'physician',
+  'bishop',
   'king',
   'queen',
   'prince',
@@ -76,6 +78,15 @@ export const PROP_KEYS = {
   bolt: 'vfx-bolt',
   dust: 'vfx-dust',
   cave: 'prop-cave',
+  cathedral: 'prop-cathedral',
+  infirmary: 'prop-infirmary',
+  dungeon: 'prop-dungeon',
+  /** Interior underlays (shown when roof hidden) */
+  houseInterior: 'prop-house-interior',
+  keepInterior: 'prop-keep-interior',
+  tavernInterior: 'prop-tavern-interior',
+  cathedralInterior: 'prop-cathedral-interior',
+  infirmaryInterior: 'prop-infirmary-interior',
 } as const;
 
 /** N=1 E=2 S=4 W=8 neighbor bitmask → `prop-wall-{mask}` */
@@ -139,7 +150,19 @@ export function isRoyalRole(role: UnitRole): boolean {
     role === 'queen' ||
     role === 'prince' ||
     role === 'princess' ||
-    role === 'fairy_godmother'
+    role === 'fairy_godmother' ||
+    role === 'bishop'
+  );
+}
+
+export function livesAtKeep(role: UnitRole): boolean {
+  return (
+    role === 'king' ||
+    role === 'queen' ||
+    role === 'prince' ||
+    role === 'princess' ||
+    role === 'fairy_godmother' ||
+    role === 'bishop'
   );
 }
 

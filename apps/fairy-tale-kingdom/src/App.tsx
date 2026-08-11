@@ -49,15 +49,24 @@ const DEFAULT_STATS: KingdomStats = {
   wallCount: 0,
   tavernCount: 0,
   fieldCount: 0,
+  granaryCount: 0,
+  keepCount: 1,
+  hasCathedral: false,
+  hasInfirmary: false,
+  hasDungeon: false,
   hasKing: false,
   hasQueen: false,
   hasPrince: false,
   hasPrincess: false,
   hasFairyGodmother: false,
+  hasBishop: false,
   royaltyUnlocked: false,
   inspired: false,
   food: 0,
   captiveCount: 0,
+  kingCount: 0,
+  queenCount: 0,
+  fieldSlots: 0,
 };
 
 export default function App() {
@@ -150,12 +159,28 @@ export default function App() {
     async (role: UnitRole) => {
       const item = HIRE_CATALOG.find((h) => h.role === role);
       if (!item) return;
-      if (stats.freeBeds <= 0) {
+      if (!item.livesAtKeep && stats.freeBeds <= 0) {
         flash('No free beds — build a house first');
         return;
       }
       if (item.requiresRoyalty && !stats.royaltyUnlocked) {
         flash('Requires King & Queen');
+        return;
+      }
+      if (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) {
+        flash('Build a Cathedral first');
+        return;
+      }
+      if (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) {
+        flash('Build an Infirmary first');
+        return;
+      }
+      if (
+        item.perKeep &&
+        ((role === 'king' && stats.kingCount >= stats.keepCount) ||
+          (role === 'queen' && stats.queenCount >= stats.keepCount))
+      ) {
+        flash('Need another keep for more royalty');
         return;
       }
       const ok = await spend(item.cost);
@@ -165,7 +190,17 @@ export default function App() {
       }
       setHireRequest({ seq: Date.now(), role });
     },
-    [flash, spend, stats.freeBeds, stats.royaltyUnlocked]
+    [
+      flash,
+      spend,
+      stats.freeBeds,
+      stats.hasCathedral,
+      stats.hasInfirmary,
+      stats.keepCount,
+      stats.kingCount,
+      stats.queenCount,
+      stats.royaltyUnlocked,
+    ]
   );
 
   const handleBuyBuilding = useCallback(
@@ -176,6 +211,16 @@ export default function App() {
         flash('Requires King & Queen');
         return;
       }
+      if (kind === 'field') {
+        if (stats.granaryCount <= 0) {
+          flash('Build a granary before buying fields');
+          return;
+        }
+        if (stats.fieldCount >= stats.fieldSlots) {
+          flash('Need another granary for more fields');
+          return;
+        }
+      }
       const ok = await spend(item.cost);
       if (!ok) {
         flash('Not enough gold');
@@ -185,7 +230,14 @@ export default function App() {
       setPlaceRequest({ seq: Date.now(), kind });
       flash(`Place your ${item.name.toLowerCase()} on empty ground`);
     },
-    [flash, spend, stats.royaltyUnlocked]
+    [
+      flash,
+      spend,
+      stats.fieldCount,
+      stats.fieldSlots,
+      stats.granaryCount,
+      stats.royaltyUnlocked,
+    ]
   );
 
   const refundPendingPlace = useCallback(

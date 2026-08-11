@@ -21,6 +21,13 @@ export const EconomyBalance = {
   princeSpawnMs: 150_000,
   fgmTransformCooldownMs: 75_000,
   fgmTransformRange: 56,
+  ballMinIntervalMs: 180_000,
+  ballDurationMs: 45_000,
+  festivalMinIntervalMs: 210_000,
+  festivalDurationMs: 40_000,
+  festivalHarvestMult: 1.2,
+  thiefCheckMs: 90_000,
+  thiefNightOnly: true,
 } as const;
 
 export const RANSOM_COST: Record<string, number> = {
@@ -29,6 +36,8 @@ export const RANSOM_COST: Record<string, number> = {
   prince: 35,
   princess: 35,
   fairy_godmother: 40,
+  bishop: 30,
+  physician: 25,
 };
 
 export const BEDS_PER_MANOR = 2;

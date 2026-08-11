@@ -31,6 +31,9 @@ export interface SavedSubject {
   onWall?: boolean;
   hunger?: number;
   sick?: boolean;
+  gender?: 'male' | 'female';
+  temporaryPrincess?: boolean;
+  married?: boolean;
 }
 
 export interface LayoutSave {
@@ -116,5 +119,8 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
     onWall: Boolean(s.onWall),
     hunger: typeof s.hunger === 'number' ? s.hunger : 0,
     sick: Boolean(s.sick),
+    gender: s.gender === 'male' || s.gender === 'female' ? s.gender : undefined,
+    temporaryPrincess: Boolean(s.temporaryPrincess),
+    married: Boolean(s.married),
   };
 }

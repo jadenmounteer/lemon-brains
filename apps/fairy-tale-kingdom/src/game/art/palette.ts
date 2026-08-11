@@ -29,6 +29,8 @@ export const palette = {
   clothTroll: 0x3d6b38,
   clothOgre: 0x9a7840,
   clothDragon: 0xa04528,
+  clothBishop: 0x6b2040,
+  clothPhysician: 0x2a2a32,
   water: 0x3a6f9a,
   waterLight: 0x5a8fba,
   forest: 0x2d5a3d,

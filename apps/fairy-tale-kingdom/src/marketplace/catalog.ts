@@ -11,9 +11,17 @@ export type BuildKind =
   | 'barracks'
   | 'manor'
   | 'ballista'
-  | 'watchtower';
+  | 'watchtower'
+  | 'cathedral'
+  | 'infirmary'
+  | 'dungeon'
+  | 'keep';
 
 export const BEDS_PER_HOUSE = 3;
+export const FIELDS_PER_GRANARY = 2;
+export const ROYAL_SLOTS_PER_KEEP = 4;
+
+export type HireGate = 'cathedral' | 'infirmary';
 
 export interface HireCatalogItem {
   role: UnitRole;
@@ -22,8 +30,14 @@ export interface HireCatalogItem {
   cost: number;
   /** Requires king & queen present */
   requiresRoyalty?: boolean;
-  /** At most one of this role */
+  /** At most one of this role (fairy godmother) */
   unique?: boolean;
+  /** Cap by keep count (king/queen) */
+  perKeep?: boolean;
+  /** Building prerequisite to hire */
+  requiresBuilding?: HireGate;
+  /** Royals live at keeps, not house beds */
+  livesAtKeep?: boolean;
 }
 
 export interface BuildCatalogItem {
@@ -60,6 +74,22 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
     cost: 45,
   },
   {
+    role: 'physician',
+    name: 'Physician',
+    blurb: 'Plague-masked healer. Tends the sick. Requires an Infirmary.',
+    cost: 40,
+    requiresBuilding: 'infirmary',
+  },
+  {
+    role: 'bishop',
+    name: 'Bishop',
+    blurb: 'Marries princes and princesses at the cathedral. Requires a Cathedral.',
+    cost: 55,
+    requiresBuilding: 'cathedral',
+    unique: true,
+    livesAtKeep: true,
+  },
+  {
     role: 'elite_guard',
     name: 'Elite Guard',
     blurb: 'Hardened melee fighter. Requires King & Queen.',
@@ -76,23 +106,26 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
   {
     role: 'king',
     name: 'King',
-    blurb: 'With a Queen, unlocks royal buildings and elite troops. Unique.',
+    blurb: 'With a Queen, unlocks royal buildings. One royal family per keep.',
     cost: 80,
-    unique: true,
+    perKeep: true,
+    livesAtKeep: true,
   },
   {
     role: 'queen',
     name: 'Queen',
-    blurb: 'With a King, a Prince will be born. Unique.',
+    blurb: 'With a King, a Prince will be born. One royal family per keep.',
     cost: 80,
-    unique: true,
+    perKeep: true,
+    livesAtKeep: true,
   },
   {
     role: 'fairy_godmother',
     name: 'Fairy Godmother',
-    blurb: 'Can turn peasants into Princesses. Unique.',
+    blurb: 'At royal balls, turns female peasants into Princesses. Unique.',
     cost: 60,
     unique: true,
+    livesAtKeep: true,
   },
 ];
 
@@ -104,9 +137,15 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     cost: 30,
   },
   {
+    kind: 'granary',
+    name: 'Granary',
+    blurb: '+50% harvest while standing. Unlocks 2 field slots. Burnable.',
+    cost: 45,
+  },
+  {
     kind: 'field',
     name: 'Field',
-    blurb: 'Peasants harvest food here. Burnable.',
+    blurb: 'Peasants harvest food here. Needs a granary; max 2 fields per granary. Burnable.',
     cost: 25,
   },
   {
@@ -134,10 +173,28 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     cost: 40,
   },
   {
-    kind: 'granary',
-    name: 'Granary',
-    blurb: '+50% food harvest while standing. Requires King & Queen. Burnable.',
-    cost: 45,
+    kind: 'infirmary',
+    name: 'Infirmary',
+    blurb: 'Sick-house. Required to hire Physicians. Burnable.',
+    cost: 50,
+  },
+  {
+    kind: 'cathedral',
+    name: 'Cathedral',
+    blurb: 'Holy hall for weddings. Required to hire a Bishop. Burnable.',
+    cost: 90,
+  },
+  {
+    kind: 'dungeon',
+    name: 'Dungeon',
+    blurb: 'Holds captured thieves. Guards can lock night prowlers here.',
+    cost: 55,
+  },
+  {
+    kind: 'keep',
+    name: 'Keep',
+    blurb: 'Another seat of power. +1 royal family. All keeps must fall to lose.',
+    cost: 120,
     requiresRoyalty: true,
   },
   {

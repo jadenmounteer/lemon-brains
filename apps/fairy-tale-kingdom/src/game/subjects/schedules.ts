@@ -52,6 +52,22 @@ const knightSchedule: ScheduleSlot[] = [
   { startHour: 21, endHour: 24, activity: 'hunt', zone: 'cave', label: 'Hunting sleeping dragons' },
 ];
 
+const bishopSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Resting in the sacristy' },
+  { startHour: 6, endHour: 12, activity: 'idle_keep', zone: 'cathedral', label: 'Saying morning prayers' },
+  { startHour: 12, endHour: 17, activity: 'gather', zone: 'path', label: 'Blessing the roads' },
+  { startHour: 17, endHour: 21, activity: 'idle_keep', zone: 'cathedral', label: 'Tending the cathedral' },
+  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Retiring for the night' },
+];
+
+const physicianSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 5, activity: 'sleep', zone: 'home', label: 'Resting' },
+  { startHour: 5, endHour: 12, activity: 'heal', zone: 'infirmary', label: 'Tending the infirmary' },
+  { startHour: 12, endHour: 18, activity: 'heal', zone: 'path', label: 'Visiting the sick' },
+  { startHour: 18, endHour: 21, activity: 'idle_keep', zone: 'keep', label: 'Reporting at the keep' },
+  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
+];
+
 export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
   switch (role) {
     case 'peasant':
@@ -64,6 +80,10 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
       return archerSchedule;
     case 'knight':
       return knightSchedule;
+    case 'physician':
+      return physicianSchedule;
+    case 'bishop':
+      return bishopSchedule;
     case 'king':
     case 'queen':
     case 'prince':
@@ -112,6 +132,10 @@ export function roleLabel(role: SubjectRole): string {
       return 'Elite Archer';
     case 'knight':
       return 'Knight';
+    case 'physician':
+      return 'Physician';
+    case 'bishop':
+      return 'Bishop';
     case 'king':
       return 'King';
     case 'queen':
