@@ -24,12 +24,15 @@ export const KingdomEvents = {
   KINGDOM_STATS: 'kingdom:stats',
   MARKET_TOAST: 'kingdom:market-toast',
   FOOD_CHANGED: 'kingdom:food-changed',
+  GOLD_RECOVERED: 'kingdom:gold-recovered',
   ROYAL_CAPTURED: 'kingdom:royal-captured',
   PAY_RANSOM: 'kingdom:pay-ransom',
   TRANSFORM_PEASANT: 'kingdom:transform-peasant',
   CAPTIVES_CHANGED: 'kingdom:captives-changed',
   COMMAND_DETACHMENT: 'kingdom:command-detachment',
   SET_DAYS_PLAYED: 'kingdom:set-days-played',
+  CAREER_HIRE: 'kingdom:career-hire',
+  EXECUTE_CAPTIVE: 'kingdom:execute-captive',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -40,6 +43,11 @@ export interface GoldStolenPayload {
   amount: number;
   kind: string;
   label: string;
+}
+
+export interface GoldRecoveredPayload {
+  amount: number;
+  kind: string;
 }
 
 export interface GameOverPayload {
@@ -103,4 +111,9 @@ export interface CommandDetachmentPayload {
 
 export interface SetDaysPlayedPayload {
   daysPlayed: number;
+}
+
+export interface CareerHirePayload {
+  subjectId: string;
+  targetRole: UnitRole;
 }

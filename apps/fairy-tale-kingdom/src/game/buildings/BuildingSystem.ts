@@ -25,6 +25,8 @@ import type {
 } from '../subjects/types';
 import type { Point } from '../subjects/zones';
 import { KingdomEvents } from '../subjects/events';
+import { Phase12Balance } from '../economy/phase12Balance';
+import { BUILDING_ROLE_CAPACITY } from '../jobs/capacities';
 
 export const KEEP_ID = 'keep';
 export const FORT_TILE = TILE_SIZE;
@@ -70,6 +72,10 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   cathedral: { w: 64, h: 56 },
   infirmary: { w: 56, h: 44 },
   dungeon: { w: 40, h: 32 },
+  bakery: { w: 40, h: 34 },
+  market: { w: 44, h: 30 },
+  cemetery: { w: 48, h: 34 },
+  gallows: { w: 28, h: 38 },
   keep: { w: 80, h: 64 },
 };
 
@@ -284,6 +290,38 @@ export class BuildingSystem {
     return this.buildings.some((b) => b.kind === 'dungeon');
   }
 
+  hasGallows(): boolean {
+    return this.buildings.some((b) => b.kind === 'gallows');
+  }
+
+  hasCemetery(): boolean {
+    return this.buildings.some((b) => b.kind === 'cemetery');
+  }
+
+  getInfluenceRadius(): number {
+    return Phase12Balance.keepInfluenceRadius;
+  }
+
+  influenceContains(keepId: string, x: number, y: number): boolean {
+    const pt = this.getKeepTargetPoint(keepId) ??
+      (keepId === KEEP_ID && this.keepHp > 0
+        ? { x: this.keep.x, y: this.keep.y }
+        : null);
+    if (!pt) return false;
+    return (
+      Phaser.Math.Distance.Between(pt.x, pt.y, x, y) <=
+      this.getInfluenceRadius()
+    );
+  }
+
+  listKeepPoints(): { id: string; x: number; y: number }[] {
+    return this.listKeepTargets().map((k) => ({
+      id: k.id,
+      x: k.x,
+      y: k.y,
+    }));
+  }
+
   getCathedralPoint(): Point | null {
     const c = this.buildings.find((b) => b.kind === 'cathedral');
     return c ? { x: c.x, y: c.y } : null;
@@ -292,6 +330,16 @@ export class BuildingSystem {
   getDungeonPoint(): Point | null {
     const d = this.buildings.find((b) => b.kind === 'dungeon');
     return d ? { x: d.x, y: d.y } : null;
+  }
+
+  getGallowsPoint(): Point | null {
+    const g = this.buildings.find((b) => b.kind === 'gallows');
+    return g ? { x: g.x, y: g.y } : null;
+  }
+
+  getCemeteryPoint(): Point | null {
+    const c = this.buildings.find((b) => b.kind === 'cemetery');
+    return c ? { x: c.x, y: c.y } : null;
   }
 
   getInfirmaryPoint(): Point | null {
@@ -980,6 +1028,10 @@ export class BuildingSystem {
         cathedral: 'The cathedral burned!',
         infirmary: 'The infirmary burned!',
         dungeon: 'The dungeon collapsed!',
+        bakery: 'The bakery burned!',
+        market: 'The market burned!',
+        cemetery: 'The cemetery was ruined!',
+        gallows: 'The gallows collapsed!',
         keep: 'A keep was destroyed!',
       };
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -1012,6 +1064,11 @@ export class BuildingSystem {
         blurb: KEEP_BLURB,
         hp: this.keepHp,
         maxHp: this.keepMaxHp,
+        influenceRadius: this.getInfluenceRadius(),
+        royalCapacity: ROYAL_SLOTS_PER_KEEP,
+        royalUsed: residents.length,
+        residents,
+        capacityLines: capacityLinesFor('keep'),
       };
     }
     const b = this.getById(id);
@@ -1037,6 +1094,14 @@ export class BuildingSystem {
       snap.bedsUsed = residents.length;
       snap.residents = residents;
     }
+    if (b.kind === 'keep') {
+      snap.influenceRadius = this.getInfluenceRadius();
+      snap.royalCapacity = ROYAL_SLOTS_PER_KEEP;
+      snap.royalUsed = residents.length;
+      snap.residents = residents;
+    }
+    const lines = capacityLinesFor(b.kind);
+    if (lines) snap.capacityLines = lines;
     return snap;
   }
 
@@ -1394,9 +1459,26 @@ function textureFor(kind: BuildKind, closed: boolean, wallMask: number): string 
       return PROP_KEYS.infirmary;
     case 'dungeon':
       return PROP_KEYS.dungeon;
+    case 'bakery':
+      return PROP_KEYS.bakery;
+    case 'market':
+      return PROP_KEYS.market;
+    case 'cemetery':
+      return PROP_KEYS.cemetery;
+    case 'gallows':
+      return PROP_KEYS.gallows;
     case 'keep':
       return PROP_KEYS.keep;
   }
+}
+
+function capacityLinesFor(kind: BuildKind | 'keep'): string[] | undefined {
+  const key = kind === 'keep' ? 'keep' : kind;
+  const caps = BUILDING_ROLE_CAPACITY[key];
+  if (!caps) return undefined;
+  return Object.entries(caps).map(
+    ([role, n]) => `${role.replace(/_/g, ' ')}: up to ${n}`
+  );
 }
 
 function kindHasHearth(kind: BuildKind | 'keep'): boolean {

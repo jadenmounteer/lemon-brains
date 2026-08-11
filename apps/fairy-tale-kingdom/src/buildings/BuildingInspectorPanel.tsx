@@ -25,13 +25,40 @@ export function BuildingInspectorPanel({
         ) : null}
       </p>
       <p>{building.blurb}</p>
-      {(building.kind === 'house' || building.kind === 'manor') && (
+      {typeof building.influenceRadius === 'number' && (
+        <p>
+          <span className="muted">Influence</span> {building.influenceRadius}px
+        </p>
+      )}
+      {typeof building.royalCapacity === 'number' && (
+        <p>
+          <span className="muted">Royal slots</span>{' '}
+          {building.royalUsed ?? 0} / {building.royalCapacity}
+        </p>
+      )}
+      {building.capacityLines && building.capacityLines.length > 0 && (
         <>
-          <p>
-            <span className="muted">Beds</span>{' '}
-            {building.bedsUsed ?? 0} / {building.bedsCapacity ?? 0}
-          </p>
-          <h3 className="inspector-subhead">Who lives here</h3>
+          <h3 className="inspector-subhead">Capacity</h3>
+          <ul className="schedule-list">
+            {building.capacityLines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </>
+      )}
+      {(building.kind === 'house' ||
+        building.kind === 'manor' ||
+        building.kind === 'keep') && (
+        <>
+          {building.kind !== 'keep' && (
+            <p>
+              <span className="muted">Beds</span>{' '}
+              {building.bedsUsed ?? 0} / {building.bedsCapacity ?? 0}
+            </p>
+          )}
+          <h3 className="inspector-subhead">
+            {building.kind === 'keep' ? 'Royal household' : 'Who lives here'}
+          </h3>
           {building.residents && building.residents.length > 0 ? (
             <ul className="schedule-list">
               {building.residents.map((r) => (
@@ -42,7 +69,11 @@ export function BuildingInspectorPanel({
               ))}
             </ul>
           ) : (
-            <p className="muted">No one lives here yet.</p>
+            <p className="muted">
+              {building.kind === 'keep'
+                ? 'No royalty assigned yet.'
+                : 'No one lives here yet.'}
+            </p>
           )}
         </>
       )}
@@ -78,6 +109,14 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
       return 'Sick-house';
     case 'dungeon':
       return 'Prison';
+    case 'bakery':
+      return 'Bakery';
+    case 'market':
+      return 'Market';
+    case 'cemetery':
+      return 'Burial ground';
+    case 'gallows':
+      return 'Justice';
     case 'keep':
       return 'Seat of power';
   }

@@ -2,11 +2,12 @@ import Phaser from 'phaser';
 import { KEEP_ID, type BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance } from '../combat/stats';
 import { EconomyBalance } from '../economy/economy';
+import { Phase12Balance } from '../economy/phase12Balance';
 import type { HungerSystem } from '../economy/HungerSystem';
 import type { SubjectSystem } from './SubjectSystem';
 
 /**
- * Peacetime interrupts: harvest, peasant repair + street chat.
+ * Peacetime interrupts: harvest, peasant repair + street chat + meals.
  * Flee / combat stay in SubjectSystem + CombatSystem (higher priority).
  */
 export class TaskSystem {
@@ -36,7 +37,7 @@ export class TaskSystem {
 
   update(deltaMs: number, raidActive: boolean): void {
     if (raidActive) {
-      this.subjects.cancelInterrupts(['repair', 'chat', 'harvest']);
+      this.subjects.cancelInterrupts(['repair', 'chat', 'harvest', 'eat']);
       this.repairAccumMs = 0;
       this.harvestAccumMs = 0;
       this.chatRollAccumMs = 0;
@@ -44,12 +45,66 @@ export class TaskSystem {
     }
 
     this.subjects.clearFleeInterrupts();
+    this.assignHungryEaters();
+    this.tickEats(deltaMs);
     this.assignHarvest();
     this.assignRepairs();
     this.tickHarvest(deltaMs);
     this.tickRepairs(deltaMs);
     this.tickChats(deltaMs);
     this.maybeStartChat(deltaMs);
+  }
+
+  private assignHungryEaters(): void {
+    if (!this.hunger) return;
+    for (const managed of this.subjects.listManaged()) {
+      if (managed.interrupt) continue;
+      if (managed.data.onWall || managed.data.sick) continue;
+      if (managed.data.hunger < Phase12Balance.hungerInterruptAt) continue;
+      this.subjects.beginEat(managed.data.id);
+    }
+  }
+
+  private tickEats(deltaMs: number): void {
+    for (const managed of this.subjects.withInterrupt('eat')) {
+      if (managed.interrupt?.remainingMs == null) continue;
+      managed.interrupt.remainingMs -= deltaMs;
+      const arrived = !managed.moving;
+      if (managed.interrupt.remainingMs > 0 && !arrived) continue;
+      this.settleEat(managed.data.id);
+    }
+  }
+
+  private settleEat(subjectId: string): void {
+    const managed = this.subjects.getById(subjectId);
+    if (!managed) return;
+
+    const ate = this.hunger?.tryConsumeMeal(Phase12Balance.mealCost) ?? false;
+    if (ate) {
+      this.subjects.recoverHungerFor(
+        subjectId,
+        Phase12Balance.mealHungerRecover
+      );
+      if (this.nearTavern(managed.sprite.x, managed.sprite.y)) {
+        this.subjects.adjustHappiness(
+          subjectId,
+          Phase12Balance.tavernMealHappiness
+        );
+      }
+      managed.data.activityLabel = 'Finished a meal';
+    } else {
+      managed.data.activityLabel = 'Found no food';
+    }
+    this.subjects.clearInterrupt(subjectId);
+  }
+
+  private nearTavern(x: number, y: number): boolean {
+    for (const b of this.buildings.list()) {
+      if (b.kind !== 'tavern' || b.hp <= 0) continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d < 56) return true;
+    }
+    return false;
   }
 
   private foodLow(): boolean {

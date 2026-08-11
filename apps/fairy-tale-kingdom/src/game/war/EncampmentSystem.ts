@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { PROP_KEYS } from '../art/assetManifest';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
+import { Phase12Balance } from '../economy/phase12Balance';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
@@ -47,6 +48,8 @@ const CAMP_LABEL: Record<CampKind, string> = {
   goblin: 'goblin camp',
   thief: 'thief den',
   siege: 'siege encampment',
+  gypsy: 'gypsy camp',
+  coven: 'witch coven',
 };
 
 const ENEMY_GENERAL_NAMES = [
@@ -293,6 +296,16 @@ export class EncampmentSystem {
       return;
     }
 
+    if (camp.kind === 'gypsy') {
+      this.tickGypsyCamp(camp, deltaMs);
+      return;
+    }
+
+    if (camp.kind === 'coven') {
+      this.tickCovenCamp(camp, deltaMs);
+      return;
+    }
+
     // Produce garrison
     if (camp.garrison + camp.away < cap) {
       camp.spawnMs -= deltaMs;
@@ -343,6 +356,56 @@ export class EncampmentSystem {
       this.launchParty(camp, size, false);
       camp.raidCooldownMs = 40_000 + Math.random() * 20_000;
     }
+  }
+
+  /** Gypsies entertain nearby subjects instead of raiding. */
+  private tickGypsyCamp(camp: CampRecord, deltaMs: number): void {
+    const cap = WarBalance.garrisonCap(camp.kind, this.daysPlayed);
+    if (camp.garrison + camp.away < cap) {
+      camp.spawnMs -= deltaMs;
+      if (camp.spawnMs <= 0) {
+        camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
+        camp.garrison += 1;
+        this.onChanged?.();
+      }
+    }
+
+    camp.raidCooldownMs = Math.max(0, camp.raidCooldownMs - deltaMs);
+    if (camp.raidCooldownMs > 0 || !this.subjects) return;
+    camp.raidCooldownMs = 6_000;
+
+    const range = Phase12Balance.gypsyEntertainRange;
+    const bump = Phase12Balance.gypsyEntertainHappiness;
+    for (const s of this.subjects.listManaged()) {
+      if (s.data.role === 'witch') continue;
+      const d = Phaser.Math.Distance.Between(
+        camp.x,
+        camp.y,
+        s.sprite.x,
+        s.sprite.y
+      );
+      if (d > range) continue;
+      const adjust = (
+        this.subjects as { adjustHappiness?: (id: string, n: number) => void }
+      ).adjustHappiness;
+      if (typeof adjust === 'function') {
+        adjust.call(this.subjects, s.data.id, bump);
+      } else if (typeof s.data.happiness === 'number') {
+        s.data.happiness = Math.min(100, s.data.happiness + bump);
+      }
+    }
+  }
+
+  /** Covens grow witches; spawn into the world later. */
+  private tickCovenCamp(camp: CampRecord, deltaMs: number): void {
+    const cap = WarBalance.garrisonCap(camp.kind, this.daysPlayed);
+    if (camp.garrison + camp.away >= cap) return;
+    camp.spawnMs -= deltaMs;
+    if (camp.spawnMs > 0) return;
+    camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
+    camp.garrison += 1;
+    // Stub: witches spawn into SubjectSystem when that API lands
+    this.onChanged?.();
   }
 
   private tickSiegeCamp(camp: CampRecord, deltaMs: number): void {
@@ -554,7 +617,11 @@ export class EncampmentSystem {
         ? PROP_KEYS.siegeCamp
         : kind === 'thief'
           ? PROP_KEYS.thiefDen
-          : PROP_KEYS.banditCamp;
+          : kind === 'gypsy'
+            ? PROP_KEYS.gypsyCamp
+            : kind === 'coven'
+              ? PROP_KEYS.covenCamp
+              : PROP_KEYS.banditCamp;
 
     const sprite = this.scene.add.image(x, y, tex);
     sprite.setDepth(8);

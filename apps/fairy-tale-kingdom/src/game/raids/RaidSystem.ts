@@ -18,6 +18,7 @@ import type { EncampmentSystem } from '../war/EncampmentSystem';
 import { planSiege, type SiegePlan } from '../war/GeneralStrategy';
 import { WarBalance } from '../war/WarBalance';
 import { KEEP_ID } from '../buildings/BuildingSystem';
+import { Phase12Balance } from '../economy/phase12Balance';
 
 export interface KeepPoint {
   x: number;
@@ -39,7 +40,7 @@ type RaiderState =
 
 export type SiegePhase = 'none' | 'muster' | 'reduce' | 'storm' | 'routing';
 
-export type StealKind = 'bandit' | 'giant' | 'goblin' | 'thief';
+export type StealKind = 'bandit' | 'giant' | 'goblin' | 'thief' | 'gypsy';
 
 export interface ActiveRaider {
   kind: RaidKind;
@@ -59,6 +60,8 @@ export interface ActiveRaider {
   homeX: number;
   homeY: number;
   /** Override steal bookkeeping for thief dens / goblins */
+  /** Gold this raider is carrying / last stole (recoverable on arrest) */
+  carriedGold: number;
   stealKind: StealKind | null;
   looted: boolean;
   isGeneral: boolean;
@@ -72,6 +75,7 @@ const LABELS: Record<RaidKind, string> = {
   giant: 'Giants',
   goblin: 'Goblins',
   enemy_army: 'a rival kingdom’s army',
+  gypsy: 'Gypsies',
 };
 
 const KEEP_REACH_PX = 28;
@@ -80,6 +84,7 @@ const MOVE_SPEED: Record<RaidKind, number> = {
   giant: 28,
   goblin: 52,
   enemy_army: 36,
+  gypsy: 40,
 };
 
 export interface LaunchCampRaidersOpts {
@@ -612,6 +617,7 @@ export class RaidSystem {
       homeX: home?.homeX ?? x,
       homeY: home?.homeY ?? y,
       stealKind: home?.stealKind ?? null,
+      carriedGold: 0,
       looted: false,
       isGeneral: Boolean(home?.isGeneral),
       siegeRole: home?.siegeRole ?? 'main',
@@ -669,11 +675,15 @@ export class RaidSystem {
       return;
     }
 
-    // Thief dens: guards + dungeon can capture while pathing / fighting
+    // Arrest: thieves, bandits, gypsies when dungeon exists + military nearby
     if (
-      raider.stealKind === 'thief' &&
       think &&
-      this.buildings?.hasDungeon()
+      this.buildings?.hasDungeon() &&
+      (raider.stealKind === 'thief' ||
+        raider.stealKind === 'bandit' ||
+        raider.stealKind === 'gypsy' ||
+        raider.kind === 'bandit' ||
+        raider.kind === 'gypsy')
     ) {
       const guard = this.subjects?.nearestMilitary(
         raider.sprite.x,
@@ -681,7 +691,7 @@ export class RaidSystem {
         CombatBalance.thiefCaptureRange
       );
       if (guard) {
-        this.captureThiefRaider(raider);
+        this.arrestRaider(raider, guard.data.id);
         return;
       }
     }
@@ -1078,20 +1088,56 @@ export class RaidSystem {
     this.onChanged?.();
   }
 
-  private captureThiefRaider(raider: ActiveRaider): void {
+  private arrestRaider(raider: ActiveRaider, guardId: string): void {
     if (raider.state === 'done') return;
     raider.state = 'done';
     const campId = raider.homeCampId;
+    const kindLabel =
+      raider.stealKind === 'gypsy' || raider.kind === 'gypsy'
+        ? 'gypsy'
+        : raider.stealKind === 'thief'
+          ? 'thief'
+          : 'bandit';
+    const recovered = Math.max(
+      Phase12Balance.arrestBountyGold,
+      raider.carriedGold > 0
+        ? raider.carriedGold
+        : WarBalance.stealAmount(
+            raider.stealKind === 'thief'
+              ? 'thief'
+              : raider.stealKind === 'gypsy' || raider.kind === 'gypsy'
+                ? 'gypsy'
+                : 'bandit'
+          )
+    );
     raider.sprite.destroy();
     this.raiders = this.raiders.filter((r) => r !== raider);
     if (campId) this.encampments?.onRaiderLost(campId);
+    this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
+      amount: recovered,
+      kind: kindLabel,
+    });
+    this.subjects?.appendLifeLog(
+      guardId,
+      `Arrested a ${kindLabel} and recovered ${recovered} gold`,
+      'arrest'
+    );
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: this.buildings?.hasDungeon()
-        ? 'Guards locked a thief in the dungeon!'
-        : 'Guards drove off a thief!',
+        ? `Guards arrested a ${kindLabel} — recovered ${recovered} gold!`
+        : `Guards drove off a ${kindLabel}!`,
     });
     if (!this.hasActiveRaiders()) this.endWave();
     this.onChanged?.();
+  }
+
+  private captureThiefRaider(raider: ActiveRaider): void {
+    const guard = this.subjects?.nearestMilitary(
+      raider.sprite.x,
+      raider.sprite.y,
+      CombatBalance.thiefCaptureRange * 2
+    );
+    this.arrestRaider(raider, guard?.data.id ?? '');
   }
 
   private beginRoutRaider(raider: ActiveRaider): void {
@@ -1326,6 +1372,7 @@ export class RaidSystem {
       label,
     });
 
+    raider.carriedGold = amount;
     raider.looted = true;
     raider.state = 'retreating';
     raider.targetSubjectId = null;

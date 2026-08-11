@@ -13,7 +13,9 @@ export type Direction = (typeof DIRECTIONS)[number];
 
 export const UNIT_ROLES = [
   'peasant',
+  'child',
   'guard',
+  'soldier',
   'archer',
   'elite_guard',
   'elite_archer',
@@ -25,12 +27,25 @@ export const UNIT_ROLES = [
   'queen',
   'prince',
   'princess',
+  'duke',
+  'duchess',
   'fairy_godmother',
+  'jester',
+  'dungeon_keeper',
+  'executioner',
+  'witch_hunter',
+  'witch',
 ] as const;
 export type UnitRole = (typeof UNIT_ROLES)[number];
 
 /** Hostile units (procedural sheets, same frame layout as friendly cast) */
-export const ENEMY_ROLES = ['bandit', 'giant', 'goblin', 'enemy_army'] as const;
+export const ENEMY_ROLES = [
+  'bandit',
+  'giant',
+  'goblin',
+  'enemy_army',
+  'gypsy',
+] as const;
 export type EnemyRole = (typeof ENEMY_ROLES)[number];
 
 /** World monsters (scheduled NPCs, not raid waves) */
@@ -85,6 +100,17 @@ export const PROP_KEYS = {
   banditCamp: 'prop-bandit-camp',
   thiefDen: 'prop-thief-den',
   siegeCamp: 'prop-siege-camp',
+  gypsyCamp: 'prop-gypsy-camp',
+  covenCamp: 'prop-coven-camp',
+  bakery: 'prop-bakery',
+  market: 'prop-market',
+  cemetery: 'prop-cemetery',
+  gallows: 'prop-gallows',
+  carriage: 'prop-carriage',
+  venueFestival: 'prop-venue-festival',
+  venueWedding: 'prop-venue-wedding',
+  venueJoust: 'prop-venue-joust',
+  venueFuneral: 'prop-venue-funeral',
   /** Interior underlays (shown when roof hidden) */
   houseInterior: 'prop-house-interior',
   keepInterior: 'prop-keep-interior',
@@ -158,6 +184,8 @@ export function isRoyalRole(role: UnitRole): boolean {
     role === 'queen' ||
     role === 'prince' ||
     role === 'princess' ||
+    role === 'duke' ||
+    role === 'duchess' ||
     role === 'fairy_godmother' ||
     role === 'bishop'
   );
@@ -169,6 +197,8 @@ export function livesAtKeep(role: UnitRole): boolean {
     role === 'queen' ||
     role === 'prince' ||
     role === 'princess' ||
+    role === 'duke' ||
+    role === 'duchess' ||
     role === 'fairy_godmother' ||
     role === 'bishop'
   );
@@ -177,12 +207,18 @@ export function livesAtKeep(role: UnitRole): boolean {
 export function isMilitaryRole(role: UnitRole): boolean {
   return (
     role === 'guard' ||
+    role === 'soldier' ||
     role === 'archer' ||
     role === 'elite_guard' ||
     role === 'elite_archer' ||
     role === 'knight' ||
-    role === 'general'
+    role === 'general' ||
+    role === 'witch_hunter'
   );
+}
+
+export function isMonarchRole(role: UnitRole): boolean {
+  return role === 'king' || role === 'queen';
 }
 
 export function isKnightRole(role: UnitRole): boolean {

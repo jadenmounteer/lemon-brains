@@ -1,16 +1,34 @@
 import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
+import type { LifeLogEntry } from '../thoughts/lifeLog';
+import type { CivilianJob } from '../jobs/capacities';
 
 export type SubjectRole = UnitRole;
 export type SubjectGender = 'male' | 'female';
+export type BodyCondition = 'gaunt' | 'average' | 'plump' | 'obese';
+export type CurseKind =
+  | 'frog'
+  | 'poison'
+  | 'aged'
+  | 'pig'
+  | 'sickness'
+  | null;
 
-export type InspectableBuildKind = BuildKind | 'keep';
+export interface SubjectGoal {
+  kind: string;
+  targetId?: string;
+  targetRole?: UnitRole;
+  expiresAtDay?: number;
+  text?: string;
+}
 
 export interface BuildingResident {
   id: string;
   name: string;
   roleLabel: string;
 }
+
+export type InspectableBuildKind = BuildKind | 'keep';
 
 /** Snapshot sent across the Phaser → React bridge for buildings / keep */
 export interface BuildingSnapshot {
@@ -20,13 +38,14 @@ export interface BuildingSnapshot {
   blurb: string;
   hp: number;
   maxHp: number;
-  /** Drawbridge open/closed; omitted otherwise */
   statusLabel?: string;
   bedsUsed?: number;
   bedsCapacity?: number;
   residents?: BuildingResident[];
   royalUsed?: number;
   royalCapacity?: number;
+  influenceRadius?: number;
+  capacityLines?: string[];
 }
 
 export type ZoneId =
@@ -39,7 +58,12 @@ export type ZoneId =
   | 'forest'
   | 'mountain'
   | 'cathedral'
-  | 'infirmary';
+  | 'infirmary'
+  | 'dungeon'
+  | 'tavern'
+  | 'barracks'
+  | 'gallows'
+  | 'cemetery';
 
 export type ActivityId =
   | 'sleep'
@@ -62,7 +86,18 @@ export type ActivityId =
   | 'heal'
   | 'ball'
   | 'festival'
-  | 'wedding';
+  | 'wedding'
+  | 'eat'
+  | 'parade'
+  | 'line_street'
+  | 'escort_parade'
+  | 'play'
+  | 'juggle'
+  | 'guard_event'
+  | 'curse'
+  | 'execute'
+  | 'funeral'
+  | 'joust';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
@@ -74,11 +109,18 @@ export type InterruptKind =
   | 'defend'
   | 'heal'
   | 'wedding'
-  | 'assault';
+  | 'assault'
+  | 'eat'
+  | 'parade'
+  | 'line_street'
+  | 'escort_parade'
+  | 'play'
+  | 'guard_event'
+  | 'curse'
+  | 'execute';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
-  /** Building id or keep */
   targetId?: string;
   partnerId?: string;
   remainingMs?: number;
@@ -106,9 +148,25 @@ export interface Subject {
   onWall: boolean;
   hunger: number;
   sick: boolean;
-  /** Ball-blessed princess; reverts at morning unless married */
   temporaryPrincess: boolean;
   married: boolean;
+  happiness: number;
+  ageYears: number;
+  body: BodyCondition;
+  job?: CivilianJob;
+  workplaceId?: string;
+  spouseId?: string;
+  motherId?: string;
+  fatherId?: string;
+  pregnant?: boolean;
+  pregnantDaysLeft?: number;
+  thought?: string;
+  backstory?: string;
+  goal?: SubjectGoal | null;
+  lifeLog?: LifeLogEntry[];
+  curse?: CurseKind;
+  cursedAsRole?: SubjectRole;
+  lowHappyHours?: number;
 }
 
 /** Snapshot sent across the Phaser → React bridge */
@@ -135,11 +193,31 @@ export interface SubjectSnapshot {
   ballActive?: boolean;
   festivalActive?: boolean;
   canCommandTroops?: boolean;
+  happiness?: number;
+  ageYears?: number;
+  body?: BodyCondition;
+  jobLabel?: string;
+  thought?: string;
+  goalLabel?: string;
+  backstory?: string;
+  lifeLog?: LifeLogEntry[];
+  lineageLabel?: string;
+  pregnantLabel?: string;
+  spouseLabel?: string;
+  titleLabel?: string;
 }
 
 export interface DaySnapshot {
   dayPhase: DayPhase;
   hour: number;
+}
+
+export interface CareerTodoItem {
+  subjectId: string;
+  name: string;
+  targetRole: UnitRole;
+  targetLabel: string;
+  cost: number;
 }
 
 export interface KingdomStats {
@@ -156,6 +234,8 @@ export interface KingdomStats {
   hasInfirmary: boolean;
   hasDungeon: boolean;
   hasBarracks: boolean;
+  hasGallows: boolean;
+  hasCemetery: boolean;
   hasKing: boolean;
   hasQueen: boolean;
   hasPrince: boolean;
@@ -163,6 +243,8 @@ export interface KingdomStats {
   hasFairyGodmother: boolean;
   hasBishop: boolean;
   hasGeneral: boolean;
+  hasExecutioner: boolean;
+  canExecuteCaptive?: boolean;
   royaltyUnlocked: boolean;
   inspired: boolean;
   food: number;
@@ -171,4 +253,5 @@ export interface KingdomStats {
   queenCount: number;
   fieldSlots: number;
   militaryAvailable: number;
+  careerTodos?: CareerTodoItem[];
 }

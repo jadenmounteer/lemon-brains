@@ -1,10 +1,10 @@
 import { FoodRepository } from '../../learning/FoodRepository';
-import { EconomyBalance } from './economy';
+import { Phase12Balance } from './phase12Balance';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
 import type Phaser from 'phaser';
 
-/** Consumes food each in-game hour; drives hunger → sick → death. */
+/** Hourly hunger rise; meals consumed via eat interrupts. */
 export class HungerSystem {
   private lastHourFloor = -1;
   private readonly foodRepo = new FoodRepository();
@@ -24,6 +24,14 @@ export class HungerSystem {
     return next;
   }
 
+  /** Consume `amount` food for a meal; returns true if fully paid. */
+  tryConsumeMeal(amount: number): boolean {
+    const need = Math.max(1, Math.floor(amount));
+    const { eaten, left } = this.foodRepo.consumeSync(need);
+    this.emitFood(left);
+    return eaten >= need;
+  }
+
   update(): void {
     const hourFloor = Math.floor(this.subjects.clock.hour);
     if (hourFloor === this.lastHourFloor) return;
@@ -40,14 +48,10 @@ export class HungerSystem {
       return;
     }
 
-    const { left } = this.foodRepo.consumeSync(pop);
-    this.emitFood(left);
-
-    if (left > 0) {
-      this.subjects.recoverHunger(EconomyBalance.hungerRecoverPerHour);
-    } else {
-      this.subjects.applyStarvation(EconomyBalance.hungerStarvePerHour);
-    }
+    this.subjects.raiseHungerAll(Phase12Balance.hungerRisePerHour);
+    this.subjects.tickHappiness();
+    this.subjects.tryDefectMiserable();
+    this.emitFood(this.foodRepo.loadSync());
   }
 
   private emitFood(food: number): void {

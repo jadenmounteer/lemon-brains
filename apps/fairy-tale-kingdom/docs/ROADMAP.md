@@ -25,7 +25,7 @@ Long-term phased vision.
 
 | |
 
-12.5 playing manual accessible via the hamburger menu. Shows the npc images and building images, explains what everything does. Shows you the gameplay mechanics (how to slay monsters, get a princess, restore a prince who has been turned into a frog, etc.) Manual details what kingdom life is like and how to bring joy to your peasants such as food, events (like royal weddings festivals etc.)
+12.5 playing manual accessible via the hamburger menu. Shows the npc images and building images, explains what everything does. Shows you the gameplay mechanics (how to slay monsters, get a princess, restore a prince who has been turned into a frog, etc.) Manual details what kingdom life is like and how to bring joy to your peasants such as food, events (like royal weddings festivals etc.) The details about sieges, etc. Everything you can think of.
 
 - spooky elements. Add cemetaries along with the cathedrals. Necromancers can spawn zombis in cemetaries. If a zombie bites a unit, they also turn into a zombie triggering a zombie outbreak. SOldiers attack zombies. Necromancers can be arrested (not attacked by gaurds). Guards arrest thieves and necromancers if they are near them during the guard's patrol. Need to have the dungeon to perform an arrest. dead npcs can sometimes turn into gohsts and haunt their old homes. This makes the rest of the tenants run away and move into other houses. If not enough houses, you lose those tenants. Bishops and witch hunters can exercise ghosts. They make that part of their daily schedule to exercise ghosts. Vampires spawn in vampire castles in the map occasionally (the building appears and disappears with the vampire.) They come out at night as bats and transfrom into vampires to bite female units. Those units turn into vampires and turn into vampire wives. Knights and witch hunters make it part of their schedule to fight vampires at their castles. Soldiers can be commanded to attack vampire castles.
 
@@ -50,7 +50,7 @@ Checklist:
 - [x] Random festivals; night thieves + dungeon capture
 - [x] Marketplace gates, inspector, ROADMAP
 
-## Phase 11 — Escalating war (current)
+## Phase 11 — Escalating war (done)
 
 Checklist:
 
@@ -59,11 +59,42 @@ Checklist:
 - [x] Raids launch from camps; stealers retreat home and rejoin garrison (no free edge pops)
 - [x] Siege waves plant supply-backed camps with world-space supply bar; stop reinforcing at 0
 - [x] Barracks gates elites + general; general commands N guards/archers to destroy camps
-- [x] Married prince + princess succession when king & queen die at that keep
+- [x] Married prince + princess succession when king & queen die
 - [x] Marketplace / inspector / toasts; non-goals allow general commands only
 
-## Non-goals (for now)
+## Phase 12 — Evolving world (current)
 
+**Design notes:** one king/queen kingdom-wide; extra keeps seat dukes/duchesses; keep influence circles; refresh-safe clock/events; cemetery is civic (funerals)—undead deferred to 12.5+.
+
+### Wave 12A — Living kingdom
+
+- [x] Refresh-safe layout snapshot (clock hour, subject x/y + interrupts, royalty timers)
+- [x] Follow-cam on subject select
+- [x] Age / body / happiness; meal-driven food consumption + eat interrupts
+- [x] Single monarchy + dukes; keep influence overlay
+- [x] Royal parades (carriage)
+- [x] Jobs / building capacities; career To-Do hire menu
+- [x] soldier / dungeon_keeper / executioner / jester / child
+- [x] Guard arrests recover gold (thieves/bandits/gypsies)
+- [x] Life logs; family pregnancy/children; gypsy camps
+
+### Wave 12B — Witches
+
+- [x] Coven encampments; witches with life-log backstories
+- [x] Curse goals (frog/poison/aged/pig/sickness); restorations; witch hunters
+- [x] Low-happiness defections preserve identity + life log
+
+### Wave 12C — Justice & spectacle
+
+- [x] Event venues (festival/wedding/joust/funeral) with burn/flee
+- [x] Cemetery funerals; gallows + executioner
+- [x] Joust when ≥2 knights; per-role schedules
+
+## Non-goals (for now) / Phase 12.5+
+
+- Playing manual (12.5)
+- Necromancers, zombies, ghosts, vampires (spooky cemetery content)
+- Oceans / docks / pirates
 - Manual combat orders (except generals commanding detachments)
 - Enemies climbing stairs
 - Manual repair / demolish tools

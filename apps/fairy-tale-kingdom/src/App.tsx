@@ -24,6 +24,7 @@ import { GameOverModal } from './kingdom/GameOverModal';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
 import { RansomPanel } from './kingdom/RansomPanel';
+import { TodoPanel } from './kingdom/TodoPanel';
 import { useKingdom } from './kingdom/useKingdom';
 import { QuestionPanel } from './learning/QuestionPanel';
 import { useFood } from './learning/useFood';
@@ -35,6 +36,8 @@ import {
   type BuildKind,
 } from './marketplace/catalog';
 import { MarketplacePanel } from './marketplace/MarketplacePanel';
+import { Phase12Balance } from './game/economy/phase12Balance';
+import type { CareerTodoItem } from './game/subjects/types';
 import { InspectorPanel } from './subjects/InspectorPanel';
 import { formatClock } from './utils/formatClock';
 
@@ -55,6 +58,8 @@ const DEFAULT_STATS: KingdomStats = {
   hasInfirmary: false,
   hasDungeon: false,
   hasBarracks: false,
+  hasGallows: false,
+  hasCemetery: false,
   hasKing: false,
   hasQueen: false,
   hasPrince: false,
@@ -62,6 +67,7 @@ const DEFAULT_STATS: KingdomStats = {
   hasFairyGodmother: false,
   hasBishop: false,
   hasGeneral: false,
+  hasExecutioner: false,
   royaltyUnlocked: false,
   inspired: false,
   food: 0,
@@ -70,6 +76,7 @@ const DEFAULT_STATS: KingdomStats = {
   queenCount: 0,
   fieldSlots: 0,
   militaryAvailable: 0,
+  careerTodos: [],
 };
 
 export default function App() {
@@ -123,6 +130,15 @@ export default function App() {
     generalId: string;
     troopCount: number;
   } | null>(null);
+  const [careerHireRequest, setCareerHireRequest] = useState<{
+    seq: number;
+    subjectId: string;
+    targetRole: UnitRole;
+  } | null>(null);
+  const [executeRequest, setExecuteRequest] = useState<{
+    seq: number;
+    id: string;
+  } | null>(null);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
@@ -131,7 +147,8 @@ export default function App() {
     showMarket ||
     showRansom ||
     selected !== null ||
-    selectedBuilding !== null;
+    selectedBuilding !== null ||
+    (stats.careerTodos?.length ?? 0) > 0;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -187,12 +204,28 @@ export default function App() {
         flash('Build a Barracks first');
         return;
       }
+      if (item.requiresBuilding === 'dungeon' && !stats.hasDungeon) {
+        flash('Build a Dungeon first');
+        return;
+      }
+      if (item.requiresBuilding === 'tavern' && stats.tavernCount <= 0) {
+        flash('Build a Tavern first');
+        return;
+      }
+      if (item.requiresBuilding === 'gallows' && !stats.hasGallows) {
+        flash('Build Gallows first');
+        return;
+      }
+      if (item.requiresExtraKeep && stats.keepCount < 2) {
+        flash('Need another keep first');
+        return;
+      }
       if (
-        item.perKeep &&
-        ((role === 'king' && stats.kingCount >= stats.keepCount) ||
-          (role === 'queen' && stats.queenCount >= stats.keepCount))
+        item.uniqueThrone &&
+        ((role === 'king' && stats.hasKing) ||
+          (role === 'queen' && stats.hasQueen))
       ) {
-        flash('Need another keep for more royalty');
+        flash('The realm already has that monarch');
         return;
       }
       const ok = await spend(item.cost);
@@ -207,12 +240,36 @@ export default function App() {
       spend,
       stats.freeBeds,
       stats.hasCathedral,
+      stats.hasDungeon,
+      stats.hasGallows,
       stats.hasInfirmary,
+      stats.hasBarracks,
+      stats.hasKing,
+      stats.hasQueen,
       stats.keepCount,
-      stats.kingCount,
-      stats.queenCount,
       stats.royaltyUnlocked,
+      stats.tavernCount,
     ]
+  );
+
+  const handleCareerHire = useCallback(
+    async (todo: CareerTodoItem) => {
+      const cost =
+        todo.cost ||
+        Phase12Balance.careerCosts[todo.targetRole] ||
+        20;
+      const ok = await spend(cost);
+      if (!ok) {
+        flash('Not enough gold');
+        return;
+      }
+      setCareerHireRequest({
+        seq: Date.now(),
+        subjectId: todo.subjectId,
+        targetRole: todo.targetRole,
+      });
+    },
+    [flash, spend]
   );
 
   const handleBuyBuilding = useCallback(
@@ -233,6 +290,14 @@ export default function App() {
           return;
         }
       }
+      if (kind === 'cemetery' && !stats.hasCathedral) {
+        flash('Build a Cathedral first');
+        return;
+      }
+      if (kind === 'gallows' && !stats.hasDungeon) {
+        flash('Build a Dungeon first');
+        return;
+      }
       const ok = await spend(item.cost);
       if (!ok) {
         flash('Not enough gold');
@@ -248,6 +313,8 @@ export default function App() {
       stats.fieldCount,
       stats.fieldSlots,
       stats.granaryCount,
+      stats.hasCathedral,
+      stats.hasDungeon,
       stats.royaltyUnlocked,
     ]
   );
@@ -357,6 +424,8 @@ export default function App() {
             ransomRequest={ransomRequest}
             transformRequest={transformRequest}
             commandRequest={commandRequest}
+            careerHireRequest={careerHireRequest}
+            executeRequest={executeRequest}
             onSubjectSelected={setSelected}
             onBuildingSelected={setSelectedBuilding}
             onDayTick={setDay}
@@ -367,6 +436,13 @@ export default function App() {
               void stealGold(payload.amount).then((left) => {
                 flash(
                   `${payload.label} reached the keep and stole ${payload.amount} gold (${left} left)`
+                );
+              });
+            }}
+            onGoldRecovered={(payload) => {
+              void addGold(payload.amount).then((total) => {
+                flash(
+                  `Recovered ${payload.amount} gold from a ${payload.kind} (${total} total)`
                 );
               });
             }}
@@ -420,6 +496,15 @@ export default function App() {
 
         {showSidePanels && showSide && (
           <aside className="side-panels">
+            {(stats.careerTodos?.length ?? 0) > 0 && (
+              <TodoPanel
+                todos={stats.careerTodos ?? []}
+                gold={gold}
+                onHire={(todo) => {
+                  void handleCareerHire(todo);
+                }}
+              />
+            )}
             {selected && (
               <InspectorPanel
                 subject={selected}
@@ -456,8 +541,12 @@ export default function App() {
               <RansomPanel
                 captives={captives}
                 gold={gold}
+                canExecute={stats.canExecuteCaptive}
                 onRansom={(id, cost) => {
                   void handleRansom(id, cost);
+                }}
+                onExecute={(id) => {
+                  setExecuteRequest({ seq: Date.now(), id });
                 }}
                 onClose={() => setShowRansom(false)}
               />

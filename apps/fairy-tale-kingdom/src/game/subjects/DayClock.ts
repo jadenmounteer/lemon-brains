@@ -20,6 +20,11 @@ export class DayClock {
     return (this.elapsedMs / DAY_LENGTH_MS) * 24;
   }
 
+  setHour(hour: number): void {
+    const h = ((hour % 24) + 24) % 24;
+    this.elapsedMs = (h / 24) * DAY_LENGTH_MS;
+  }
+
   get phase(): DayPhase {
     const h = this.hour;
     if (h >= 5 && h < 11) return 'Morning';

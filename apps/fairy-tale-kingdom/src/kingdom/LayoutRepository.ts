@@ -3,6 +3,16 @@ import { UNIT_ROLES, type UnitRole } from '../game/art/assetManifest';
 import { BUILDING_MAX_HP, UNIT_MAX_HP } from '../game/combat/stats';
 import type { SavedMonster } from '../game/monsters/MonsterSystem';
 import type { SavedEncampment } from '../game/war/EncampmentSystem';
+import type { CivilianJob } from '../game/jobs/capacities';
+import type { LifeLogEntry } from '../game/thoughts/lifeLog';
+import type {
+  ActivityId,
+  BodyCondition,
+  CurseKind,
+  SubjectGoal,
+  SubjectInterrupt,
+  ZoneId,
+} from '../game/subjects/types';
 import { BUILD_CATALOG, type BuildKind } from '../marketplace/catalog';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
@@ -16,7 +26,10 @@ const VALID_CAMP_KINDS = new Set([
   'goblin',
   'thief',
   'siege',
+  'gypsy',
+  'coven',
 ]);
+const VALID_BODIES = new Set(['gaunt', 'average', 'plump', 'obese']);
 
 export interface SavedBuilding {
   id: string;
@@ -42,6 +55,38 @@ export interface SavedSubject {
   gender?: 'male' | 'female';
   temporaryPrincess?: boolean;
   married?: boolean;
+  happiness?: number;
+  ageYears?: number;
+  body?: BodyCondition;
+  job?: CivilianJob;
+  workplaceId?: string;
+  spouseId?: string;
+  motherId?: string;
+  fatherId?: string;
+  pregnant?: boolean;
+  pregnantDaysLeft?: number;
+  thought?: string;
+  backstory?: string;
+  goal?: SubjectGoal | null;
+  lifeLog?: LifeLogEntry[];
+  curse?: CurseKind;
+  cursedAsRole?: UnitRole;
+  lowHappyHours?: number;
+  x?: number;
+  y?: number;
+  activity?: ActivityId;
+  activityLabel?: string;
+  zone?: ZoneId;
+  interrupt?: SubjectInterrupt | null;
+}
+
+export interface LayoutRoyaltyState {
+  ballRemainingMs?: number;
+  ballCooldownMs?: number;
+  festivalRemainingMs?: number;
+  festivalCooldownMs?: number;
+  paradeCooldownMs?: number;
+  paradeRemainingMs?: number;
 }
 
 export interface LayoutSave {
@@ -55,6 +100,11 @@ export interface LayoutSave {
   keepMaxHp?: number;
   princeSpawnMs?: number;
   fgmCooldownMs?: number;
+  clockHour?: number;
+  royaltyState?: LayoutRoyaltyState;
+  /** Serializable raid stubs for future persist. */
+  raids?: Array<Record<string, unknown>>;
+  daysPlayedSnapshot?: number;
 }
 
 export class LayoutRepository {
@@ -99,6 +149,17 @@ export class LayoutRepository {
           : [],
         mapSeed:
           typeof parsed.mapSeed === 'number' ? parsed.mapSeed >>> 0 : undefined,
+        clockHour:
+          typeof parsed.clockHour === 'number' ? parsed.clockHour : undefined,
+        royaltyState:
+          parsed.royaltyState && typeof parsed.royaltyState === 'object'
+            ? parsed.royaltyState
+            : undefined,
+        raids: Array.isArray(parsed.raids) ? parsed.raids : undefined,
+        daysPlayedSnapshot:
+          typeof parsed.daysPlayedSnapshot === 'number'
+            ? Math.max(0, Math.floor(parsed.daysPlayedSnapshot))
+            : undefined,
       };
     } catch {
       return null;
@@ -131,6 +192,8 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
   const maxHp =
     typeof s.maxHp === 'number' ? s.maxHp : (UNIT_MAX_HP[s.role] ?? 20);
   const hp = typeof s.hp === 'number' ? s.hp : maxHp;
+  const body =
+    s.body && VALID_BODIES.has(s.body) ? s.body : undefined;
   return {
     ...s,
     hp,
@@ -141,5 +204,34 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
     gender: s.gender === 'male' || s.gender === 'female' ? s.gender : undefined,
     temporaryPrincess: Boolean(s.temporaryPrincess),
     married: Boolean(s.married),
+    happiness: typeof s.happiness === 'number' ? s.happiness : undefined,
+    ageYears: typeof s.ageYears === 'number' ? s.ageYears : undefined,
+    body,
+    job: s.job,
+    workplaceId: typeof s.workplaceId === 'string' ? s.workplaceId : undefined,
+    spouseId: typeof s.spouseId === 'string' ? s.spouseId : undefined,
+    motherId: typeof s.motherId === 'string' ? s.motherId : undefined,
+    fatherId: typeof s.fatherId === 'string' ? s.fatherId : undefined,
+    pregnant: s.pregnant === true ? true : undefined,
+    pregnantDaysLeft:
+      typeof s.pregnantDaysLeft === 'number' ? s.pregnantDaysLeft : undefined,
+    thought: typeof s.thought === 'string' ? s.thought : undefined,
+    backstory: typeof s.backstory === 'string' ? s.backstory : undefined,
+    goal: s.goal ?? undefined,
+    lifeLog: Array.isArray(s.lifeLog) ? s.lifeLog : undefined,
+    curse: s.curse ?? undefined,
+    cursedAsRole:
+      s.cursedAsRole && VALID_UNIT_ROLES.has(s.cursedAsRole)
+        ? s.cursedAsRole
+        : undefined,
+    lowHappyHours:
+      typeof s.lowHappyHours === 'number' ? s.lowHappyHours : undefined,
+    x: typeof s.x === 'number' ? s.x : undefined,
+    y: typeof s.y === 'number' ? s.y : undefined,
+    activity: s.activity,
+    activityLabel:
+      typeof s.activityLabel === 'string' ? s.activityLabel : undefined,
+    zone: s.zone,
+    interrupt: s.interrupt ?? undefined,
   };
 }

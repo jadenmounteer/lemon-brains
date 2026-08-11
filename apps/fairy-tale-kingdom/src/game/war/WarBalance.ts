@@ -2,7 +2,14 @@
  * Day-scaled war difficulty. daysPlayed 0 = early game; grows over weeks.
  */
 
-export type CampKind = 'bandit' | 'giant' | 'goblin' | 'thief' | 'siege';
+export type CampKind =
+  | 'bandit'
+  | 'giant'
+  | 'goblin'
+  | 'thief'
+  | 'siege'
+  | 'gypsy'
+  | 'coven';
 
 function dayScale(days: number): number {
   return Math.max(0, days);
@@ -24,14 +31,32 @@ export const WarBalance = {
   raidThreshold(kind: CampKind, days: number): number {
     const d = dayScale(days);
     const base =
-      kind === 'giant' ? 2 : kind === 'goblin' ? 3 : kind === 'thief' ? 2 : 2;
+      kind === 'giant'
+        ? 2
+        : kind === 'goblin'
+          ? 3
+          : kind === 'thief'
+            ? 2
+            : kind === 'gypsy' || kind === 'coven'
+              ? 99
+              : 2;
     return base + Math.floor(d / 8);
   },
 
   garrisonCap(kind: CampKind, days: number): number {
     const d = dayScale(days);
     const base =
-      kind === 'giant' ? 4 : kind === 'goblin' ? 8 : kind === 'thief' ? 5 : 6;
+      kind === 'giant'
+        ? 4
+        : kind === 'goblin'
+          ? 8
+          : kind === 'thief'
+            ? 5
+            : kind === 'gypsy'
+              ? 4
+              : kind === 'coven'
+                ? 5
+                : 6;
     return Math.min(14, base + Math.floor(d / 5));
   },
 
@@ -39,7 +64,15 @@ export const WarBalance = {
   garrisonSpawnMs(kind: CampKind, days: number): number {
     const d = dayScale(days);
     const base =
-      kind === 'goblin' ? 18_000 : kind === 'giant' ? 35_000 : 28_000;
+      kind === 'goblin'
+        ? 18_000
+        : kind === 'giant'
+          ? 35_000
+          : kind === 'coven'
+            ? 40_000
+            : kind === 'gypsy'
+              ? 32_000
+              : 28_000;
     return Math.max(10_000, base - d * 400);
   },
 
@@ -56,7 +89,9 @@ export const WarBalance = {
   },
 
   /** Gold stolen per kind (goblin between bandit and giant) */
-  stealAmount(kind: 'bandit' | 'giant' | 'goblin' | 'thief'): number {
+  stealAmount(
+    kind: 'bandit' | 'giant' | 'goblin' | 'thief' | 'gypsy'
+  ): number {
     switch (kind) {
       case 'bandit':
         return 8;
@@ -66,6 +101,8 @@ export const WarBalance = {
         return 18;
       case 'thief':
         return 12;
+      case 'gypsy':
+        return 4;
     }
   },
 
@@ -100,8 +137,10 @@ export const WarBalance = {
     const d = dayScale(days);
     const kinds: CampKind[] = ['bandit', 'bandit', 'thief', 'goblin'];
     if (d >= 2) kinds.push('giant');
+    if (d >= 3) kinds.push('gypsy');
     if (d >= 4) kinds.push('goblin', 'bandit');
-    if (d >= 8) kinds.push('giant', 'thief');
+    if (d >= 6) kinds.push('coven');
+    if (d >= 8) kinds.push('giant', 'thief', 'gypsy');
     return kinds;
   },
 } as const;

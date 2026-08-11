@@ -143,8 +143,12 @@ function clothFor(role: AnimRole): number {
   switch (role) {
     case 'peasant':
       return palette.clothPeasant;
+    case 'child':
+      return palette.clothChild;
     case 'guard':
       return palette.clothGuard;
+    case 'soldier':
+      return palette.clothSoldier;
     case 'archer':
       return palette.clothArcher;
     case 'elite_guard':
@@ -159,10 +163,26 @@ function clothFor(role: AnimRole): number {
       return palette.clothPrince;
     case 'princess':
       return palette.clothPrincess;
+    case 'duke':
+      return palette.clothDuke;
+    case 'duchess':
+      return palette.clothDuchess;
     case 'fairy_godmother':
       return palette.clothFairy;
+    case 'jester':
+      return palette.clothJester;
+    case 'dungeon_keeper':
+      return palette.clothDungeonKeeper;
+    case 'executioner':
+      return palette.clothExecutioner;
+    case 'witch_hunter':
+      return palette.clothWitchHunter;
+    case 'witch':
+      return palette.clothWitch;
     case 'bandit':
       return palette.clothBandit;
+    case 'gypsy':
+      return palette.clothGypsy;
     case 'giant':
       return palette.clothGiant;
     case 'goblin':
@@ -241,7 +261,7 @@ function drawUnitFrame(
   fillRect(ctx, originX + 11, 4 + baseY + tall, 1, 6, palette.ink);
   fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 1, palette.ink);
 
-  if (role === 'guard' || role === 'elite_guard' || role === 'enemy_army') {
+  if (role === 'guard' || role === 'elite_guard' || role === 'enemy_army' || role === 'soldier') {
     fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 2, palette.metal);
     fillRect(ctx, originX + 12, 11 + baseY + tall, 2, 6, palette.metal);
     if (role === 'elite_guard') {
@@ -253,12 +273,38 @@ function drawUnitFrame(
     if (role === 'elite_archer') {
       fillRect(ctx, originX + 5, 3 + baseY, 6, 1, palette.gold);
     }
-  } else if (role === 'king' || role === 'queen' || role === 'prince' || role === 'princess') {
+  } else if (
+    role === 'king' ||
+    role === 'queen' ||
+    role === 'prince' ||
+    role === 'princess' ||
+    role === 'duke' ||
+    role === 'duchess'
+  ) {
     fillRect(ctx, originX + 5, 2 + baseY + tall, 6, 2, palette.gold);
   } else if (role === 'fairy_godmother') {
     fillRect(ctx, originX + 12, 8 + baseY, 2, 8, palette.wood);
     pixel(ctx, originX + 13, 7 + baseY, palette.gold);
-  } else if (role === 'bandit') {
+  } else if (role === 'jester') {
+    fillRect(ctx, originX + 4, 2 + baseY, 8, 2, palette.gold);
+    pixel(ctx, originX + 4, 2 + baseY, palette.clothJester);
+    pixel(ctx, originX + 11, 2 + baseY, palette.clothEliteArcher);
+  } else if (role === 'executioner') {
+    fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
+    fillRect(ctx, originX + 12, 10 + baseY, 2, 7, palette.metal);
+  } else if (role === 'witch_hunter') {
+    fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.woodDark);
+    fillRect(ctx, originX + 12, 11 + baseY, 2, 6, palette.metal);
+  } else if (role === 'witch') {
+    fillRect(ctx, originX + 4, 2 + baseY, 8, 3, palette.ink);
+    fillRect(ctx, originX + 12, 10 + baseY, 2, 6, palette.wood);
+  } else if (role === 'dungeon_keeper') {
+    fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.metal);
+    fillRect(ctx, originX + 11, 12 + baseY, 3, 4, palette.gold);
+  } else if (role === 'child') {
+    // smaller already via same frame; soft hat
+    fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.clothChild);
+  } else if (role === 'bandit' || role === 'gypsy') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
   } else if (role === 'goblin') {
@@ -637,15 +683,50 @@ function drawHouse(scene: Phaser.Scene) {
   const h = 52;
   const tex = createCanvas(scene, PROP_KEYS.house, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 20, 44, 28, palette.wood);
-  fillRect(ctx, 6, 20, 44, 1, palette.ink);
-  for (let row = 0; row < 12; row++) {
-    fillRect(ctx, 6 + row, 8 + row, 44 - row * 2, 1, palette.roof);
+  // low daub walls with timber posts (poor hut)
+  fillRect(ctx, 8, 24, 40, 24, 0xc9b896);
+  fillRect(ctx, 8, 24, 40, 1, palette.ink);
+  fillRect(ctx, 8, 24, 3, 24, palette.woodDark);
+  fillRect(ctx, 45, 24, 3, 24, palette.woodDark);
+  fillRect(ctx, 26, 24, 2, 24, palette.wood);
+  // rough plaster flecks
+  pixel(ctx, 14, 30, palette.dirt);
+  pixel(ctx, 20, 36, palette.cream);
+  pixel(ctx, 34, 32, palette.dirt);
+  pixel(ctx, 40, 38, palette.cream);
+  // thatched straw roof — thick shallow thatch, not a pointed funnel
+  const straw = [palette.wheatDark, palette.wheat, 0xe0c878, 0xc8a848] as const;
+  fillRect(ctx, 4, 12, 48, 14, palette.wheat);
+  // soft ridge (only a couple px of pitch)
+  fillRect(ctx, 10, 10, 36, 2, palette.wheatDark);
+  fillRect(ctx, 16, 8, 24, 2, palette.wheat);
+  fillRect(ctx, 20, 7, 16, 1, palette.wheatDark);
+  // overhang eaves past the walls
+  fillRect(ctx, 3, 24, 50, 2, palette.wheatDark);
+  // layered courses + vertical strand flecks so it reads as straw
+  for (let y = 12; y <= 24; y++) {
+    const tone = straw[y % straw.length]!;
+    fillRect(ctx, 4, y, 48, 1, tone);
+    for (let x = 5 + ((y * 3) % 4); x < 51; x += 3) {
+      pixel(ctx, x, y, straw[(y + x) % straw.length]!);
+    }
   }
-  fillRect(ctx, 22, 34, 12, 14, palette.woodDark);
-  fillRect(ctx, 12, 26, 6, 6, palette.cream);
-  fillRect(ctx, 38, 26, 6, 6, palette.cream);
-  fillRect(ctx, 40, 12, 4, 6, palette.stoneDark); // chimney
+  // ragged fringe under the eaves
+  for (let x = 4; x < 52; x += 2) {
+    pixel(ctx, x, 26, straw[x % straw.length]!);
+    if (x % 4 === 0) pixel(ctx, x + 1, 27, palette.wheatDark);
+  }
+  // crooked door
+  fillRect(ctx, 23, 34, 10, 14, palette.woodDark);
+  fillRect(ctx, 24, 35, 8, 12, palette.wood);
+  pixel(ctx, 30, 41, palette.ink);
+  // single small shuttered window
+  fillRect(ctx, 12, 30, 7, 6, palette.ink);
+  fillRect(ctx, 13, 31, 2, 4, palette.wood);
+  fillRect(ctx, 16, 31, 2, 4, palette.wood);
+  // stubby stone chimney through the thatch
+  fillRect(ctx, 38, 6, 5, 10, palette.stoneDark);
+  fillRect(ctx, 39, 5, 3, 2, palette.stone);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.houseInterior, w, h);
@@ -666,8 +747,9 @@ function drawHouse(scene: Phaser.Scene) {
   fillRect(ic, 24, 40, 12, 8, palette.stoneDark);
   fillRect(ic, 26, 42, 8, 5, palette.ink);
   fillRect(ic, 28, 44, 4, 2, 0xff8844);
-  // rug
-  fillRect(ic, 18, 34, 10, 6, palette.roof);
+  // straw mat
+  fillRect(ic, 18, 34, 10, 6, palette.wheatDark);
+  fillRect(ic, 19, 35, 8, 1, palette.wheat);
   int.refresh();
 }
 
@@ -1096,6 +1178,152 @@ function drawDungeon(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawBakery(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 36;
+  const tex = createCanvas(scene, PROP_KEYS.bakery, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 14, 32, 20, palette.wood);
+  fillRect(ctx, 4, 14, 32, 1, palette.ink);
+  for (let row = 0; row < 8; row++) {
+    fillRect(ctx, 6 + row, 6 + row, 28 - row * 2, 1, palette.roof);
+  }
+  fillRect(ctx, 16, 24, 8, 10, palette.woodDark);
+  fillRect(ctx, 10, 18, 5, 5, palette.cream);
+  fillRect(ctx, 26, 18, 5, 5, palette.cream);
+  fillRect(ctx, 28, 8, 4, 8, palette.stoneDark);
+  fillRect(ctx, 18, 12, 6, 3, 0xe8c070);
+  tex.refresh();
+}
+
+function drawMarket(scene: Phaser.Scene) {
+  const w = 44;
+  const h = 32;
+  const tex = createCanvas(scene, PROP_KEYS.market, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 16, 36, 14, palette.dirt);
+  fillRect(ctx, 8, 6, 28, 14, palette.clothPeasant);
+  fillRect(ctx, 8, 6, 28, 1, palette.ink);
+  fillRect(ctx, 20, 2, 2, 10, palette.wood);
+  fillRect(ctx, 10, 18, 10, 6, palette.wood);
+  fillRect(ctx, 24, 18, 10, 6, palette.woodDark);
+  pixel(ctx, 14, 16, palette.gold);
+  pixel(ctx, 28, 16, palette.wheat);
+  tex.refresh();
+}
+
+function drawCemetery(scene: Phaser.Scene) {
+  const w = 48;
+  const h = 36;
+  const tex = createCanvas(scene, PROP_KEYS.cemetery, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 18, 44, 16, palette.grassDark);
+  fillRect(ctx, 8, 10, 6, 14, palette.stone);
+  fillRect(ctx, 10, 8, 2, 4, palette.stoneDark);
+  fillRect(ctx, 22, 12, 6, 12, palette.stone);
+  fillRect(ctx, 24, 10, 2, 4, palette.stoneDark);
+  fillRect(ctx, 34, 10, 6, 14, palette.stone);
+  fillRect(ctx, 36, 8, 2, 4, palette.stoneDark);
+  fillRect(ctx, 4, 20, 40, 2, palette.ink);
+  fillRect(ctx, 18, 4, 4, 8, palette.woodDark);
+  tex.refresh();
+}
+
+function drawGallows(scene: Phaser.Scene) {
+  const w = 28;
+  const h = 40;
+  const tex = createCanvas(scene, PROP_KEYS.gallows, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 34, 20, 4, palette.woodDark);
+  fillRect(ctx, 6, 6, 3, 28, palette.wood);
+  fillRect(ctx, 6, 6, 16, 3, palette.wood);
+  fillRect(ctx, 18, 9, 2, 10, palette.ink);
+  fillRect(ctx, 16, 18, 6, 6, palette.clothExecutioner);
+  tex.refresh();
+}
+
+function drawCarriage(scene: Phaser.Scene) {
+  const w = 32;
+  const h = 24;
+  const tex = createCanvas(scene, PROP_KEYS.carriage, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 8, 22, 10, palette.wood);
+  fillRect(ctx, 4, 8, 22, 1, palette.ink);
+  fillRect(ctx, 8, 10, 6, 5, palette.cream);
+  fillRect(ctx, 16, 10, 6, 5, palette.gold);
+  fillRect(ctx, 6, 16, 5, 5, palette.ink);
+  fillRect(ctx, 20, 16, 5, 5, palette.ink);
+  fillRect(ctx, 24, 10, 6, 4, palette.woodDark);
+  tex.refresh();
+}
+
+function drawCampVariant(
+  scene: Phaser.Scene,
+  key: string,
+  tentColor: number,
+  accent: number
+) {
+  const w = 40;
+  const h = 28;
+  const tex = createCanvas(scene, key, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 14, 28, 12, palette.dirt);
+  fillRect(ctx, 10, 6, 20, 14, tentColor);
+  fillRect(ctx, 10, 6, 20, 1, palette.ink);
+  fillRect(ctx, 18, 2, 2, 8, palette.wood);
+  fillRect(ctx, 8, 18, 6, 6, palette.woodDark);
+  fillRect(ctx, 26, 18, 6, 6, accent);
+  tex.refresh();
+}
+
+function drawGypsyCamp(scene: Phaser.Scene) {
+  drawCampVariant(
+    scene,
+    PROP_KEYS.gypsyCamp,
+    palette.clothGypsy,
+    palette.gold
+  );
+}
+
+function drawCovenCamp(scene: Phaser.Scene) {
+  drawCampVariant(
+    scene,
+    PROP_KEYS.covenCamp,
+    palette.clothWitch,
+    palette.ink
+  );
+}
+
+function drawVenueBanner(
+  scene: Phaser.Scene,
+  key: string,
+  cloth: number,
+  archGold: boolean
+) {
+  const w = 28;
+  const h = 24;
+  const tex = createCanvas(scene, key, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 4, 3, 18, palette.wood);
+  fillRect(ctx, 21, 4, 3, 18, palette.wood);
+  if (archGold) {
+    fillRect(ctx, 4, 2, 20, 3, palette.gold);
+  } else {
+    fillRect(ctx, 4, 2, 20, 3, palette.woodDark);
+  }
+  fillRect(ctx, 8, 6, 12, 10, cloth);
+  fillRect(ctx, 8, 6, 12, 1, palette.ink);
+  pixel(ctx, 13, 10, palette.cream);
+  tex.refresh();
+}
+
+function drawVenueProps(scene: Phaser.Scene) {
+  drawVenueBanner(scene, PROP_KEYS.venueFestival, palette.clothPeasant, true);
+  drawVenueBanner(scene, PROP_KEYS.venueWedding, palette.clothPrincess, true);
+  drawVenueBanner(scene, PROP_KEYS.venueJoust, palette.clothKnight, false);
+  drawVenueBanner(scene, PROP_KEYS.venueFuneral, palette.stoneDark, false);
+}
+
 function drawBanditCamp(scene: Phaser.Scene) {
   const w = 40;
   const h = 28;
@@ -1170,9 +1398,20 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.cathedral,
     PROP_KEYS.infirmary,
     PROP_KEYS.dungeon,
+    PROP_KEYS.bakery,
+    PROP_KEYS.market,
+    PROP_KEYS.cemetery,
+    PROP_KEYS.gallows,
+    PROP_KEYS.carriage,
     PROP_KEYS.banditCamp,
     PROP_KEYS.thiefDen,
     PROP_KEYS.siegeCamp,
+    PROP_KEYS.gypsyCamp,
+    PROP_KEYS.covenCamp,
+    PROP_KEYS.venueFestival,
+    PROP_KEYS.venueWedding,
+    PROP_KEYS.venueJoust,
+    PROP_KEYS.venueFuneral,
     PROP_KEYS.houseInterior,
     PROP_KEYS.keepInterior,
     PROP_KEYS.tavernInterior,
@@ -1222,9 +1461,17 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawCathedral(scene);
   drawInfirmary(scene);
   drawDungeon(scene);
+  drawBakery(scene);
+  drawMarket(scene);
+  drawCemetery(scene);
+  drawGallows(scene);
+  drawCarriage(scene);
   drawBanditCamp(scene);
   drawThiefDen(scene);
   drawSiegeCamp(scene);
+  drawGypsyCamp(scene);
+  drawCovenCamp(scene);
+  drawVenueProps(scene);
   drawTavernInterior(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);

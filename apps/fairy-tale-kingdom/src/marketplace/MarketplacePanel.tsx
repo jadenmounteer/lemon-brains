@@ -64,18 +64,21 @@ export function MarketplacePanel({
           const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
           const uniqueTaken =
             item.unique &&
-            ((item.role === 'king' && stats.hasKing) ||
-              (item.role === 'queen' && stats.hasQueen) ||
-              (item.role === 'fairy_godmother' && stats.hasFairyGodmother) ||
+            ((item.role === 'fairy_godmother' && stats.hasFairyGodmother) ||
               (item.role === 'bishop' && stats.hasBishop));
-          const perKeepTaken =
-            Boolean(item.perKeep) &&
-            ((item.role === 'king' && stats.kingCount >= stats.keepCount) ||
-              (item.role === 'queen' && stats.queenCount >= stats.keepCount));
+          const throneTaken =
+            Boolean(item.uniqueThrone) &&
+            ((item.role === 'king' && stats.hasKing) ||
+              (item.role === 'queen' && stats.hasQueen));
+          const needsExtraKeep =
+            Boolean(item.requiresExtraKeep) && stats.keepCount < 2;
           const buildingMissing =
             (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) ||
             (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) ||
-            (item.requiresBuilding === 'barracks' && !stats.hasBarracks);
+            (item.requiresBuilding === 'barracks' && !stats.hasBarracks) ||
+            (item.requiresBuilding === 'dungeon' && !stats.hasDungeon) ||
+            (item.requiresBuilding === 'tavern' && stats.tavernCount <= 0) ||
+            (item.requiresBuilding === 'gallows' && !stats.hasGallows);
           const needsBed = !item.livesAtKeep && stats.freeBeds <= 0;
           const disabled =
             placeMode.active ||
@@ -83,7 +86,8 @@ export function MarketplacePanel({
             needsBed ||
             locked ||
             uniqueTaken ||
-            perKeepTaken ||
+            throneTaken ||
+            needsExtraKeep ||
             buildingMissing;
           return (
             <li key={item.role} className="market-row">
@@ -103,11 +107,23 @@ export function MarketplacePanel({
                 {buildingMissing && item.requiresBuilding === 'barracks' && (
                   <p className="muted">Requires a Barracks</p>
                 )}
+                {buildingMissing && item.requiresBuilding === 'dungeon' && (
+                  <p className="muted">Requires a Dungeon</p>
+                )}
+                {buildingMissing && item.requiresBuilding === 'tavern' && (
+                  <p className="muted">Requires a Tavern</p>
+                )}
+                {buildingMissing && item.requiresBuilding === 'gallows' && (
+                  <p className="muted">Requires Gallows</p>
+                )}
                 {uniqueTaken && (
                   <p className="muted">Already in your kingdom</p>
                 )}
-                {perKeepTaken && (
-                  <p className="muted">Need another keep</p>
+                {throneTaken && (
+                  <p className="muted">Throne already filled</p>
+                )}
+                {needsExtraKeep && (
+                  <p className="muted">Requires a second keep</p>
                 )}
               </div>
               <button
@@ -133,8 +149,17 @@ export function MarketplacePanel({
           const fieldBlocked =
             item.kind === 'field' &&
             (stats.granaryCount <= 0 || stats.fieldCount >= stats.fieldSlots);
+          const cemeteryNeedsCat =
+            item.kind === 'cemetery' && !stats.hasCathedral;
+          const gallowsNeedsDungeon =
+            item.kind === 'gallows' && !stats.hasDungeon;
           const disabled =
-            placeMode.active || gold < item.cost || locked || fieldBlocked;
+            placeMode.active ||
+            gold < item.cost ||
+            locked ||
+            fieldBlocked ||
+            cemeteryNeedsCat ||
+            gallowsNeedsDungeon;
           return (
             <li key={item.kind} className="market-row">
               <div>
@@ -154,6 +179,12 @@ export function MarketplacePanel({
                       Field slots full ({stats.fieldCount}/{stats.fieldSlots})
                     </p>
                   )}
+                {cemeteryNeedsCat && (
+                  <p className="muted">Requires a Cathedral</p>
+                )}
+                {gallowsNeedsDungeon && (
+                  <p className="muted">Requires a Dungeon</p>
+                )}
               </div>
               <button
                 type="button"

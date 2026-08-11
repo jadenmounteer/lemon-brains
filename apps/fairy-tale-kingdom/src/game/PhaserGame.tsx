@@ -34,11 +34,18 @@ interface PhaserGameProps {
     generalId: string;
     troopCount: number;
   } | null;
+  careerHireRequest: {
+    seq: number;
+    subjectId: string;
+    targetRole: UnitRole;
+  } | null;
+  executeRequest?: { seq: number; id: string } | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onDayTick: (day: DaySnapshot) => void;
   onDayRolled: () => void;
   onGoldStolen: (payload: GoldStolenPayload) => void;
+  onGoldRecovered?: (payload: { amount: number; kind: string }) => void;
   onGameOver: (payload: GameOverPayload) => void;
   onRaidWarning: (payload: RaidWarningPayload) => void;
   onKingdomStats: (stats: KingdomStats) => void;
@@ -59,11 +66,14 @@ export function PhaserGame({
   ransomRequest,
   transformRequest,
   commandRequest,
+  careerHireRequest,
+  executeRequest,
   onSubjectSelected,
   onBuildingSelected,
   onDayTick,
   onDayRolled,
   onGoldStolen,
+  onGoldRecovered,
   onGameOver,
   onRaidWarning,
   onKingdomStats,
@@ -81,6 +91,7 @@ export function PhaserGame({
   const onDayRef = useRef(onDayTick);
   const onRolledRef = useRef(onDayRolled);
   const onStolenRef = useRef(onGoldStolen);
+  const onRecoveredRef = useRef(onGoldRecovered);
   const onOverRef = useRef(onGameOver);
   const onWarnRef = useRef(onRaidWarning);
   const onStatsRef = useRef(onKingdomStats);
@@ -95,6 +106,7 @@ export function PhaserGame({
   onDayRef.current = onDayTick;
   onRolledRef.current = onDayRolled;
   onStolenRef.current = onGoldStolen;
+  onRecoveredRef.current = onGoldRecovered;
   onOverRef.current = onGameOver;
   onWarnRef.current = onRaidWarning;
   onStatsRef.current = onKingdomStats;
@@ -132,6 +144,9 @@ export function PhaserGame({
     const handleStolen = (payload: GoldStolenPayload) => {
       onStolenRef.current(payload);
     };
+    const handleRecovered = (payload: { amount: number; kind: string }) => {
+      onRecoveredRef.current?.(payload);
+    };
     const handleOver = (payload: GameOverPayload) => {
       onOverRef.current(payload);
     };
@@ -162,6 +177,7 @@ export function PhaserGame({
     game.events.on(KingdomEvents.DAY_TICK, handleDay);
     game.events.on(KingdomEvents.DAY_ROLLED, handleRolled);
     game.events.on(KingdomEvents.GOLD_STOLEN, handleStolen);
+    game.events.on(KingdomEvents.GOLD_RECOVERED, handleRecovered);
     game.events.on(KingdomEvents.GAME_OVER, handleOver);
     game.events.on(KingdomEvents.RAID_WARNING, handleWarn);
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
@@ -177,6 +193,7 @@ export function PhaserGame({
       game.events.off(KingdomEvents.DAY_TICK, handleDay);
       game.events.off(KingdomEvents.DAY_ROLLED, handleRolled);
       game.events.off(KingdomEvents.GOLD_STOLEN, handleStolen);
+      game.events.off(KingdomEvents.GOLD_RECOVERED, handleRecovered);
       game.events.off(KingdomEvents.GAME_OVER, handleOver);
       game.events.off(KingdomEvents.RAID_WARNING, handleWarn);
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
@@ -242,6 +259,21 @@ export function PhaserGame({
       troopCount: commandRequest.troopCount,
     });
   }, [commandRequest]);
+
+  useEffect(() => {
+    if (!careerHireRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.CAREER_HIRE, {
+      subjectId: careerHireRequest.subjectId,
+      targetRole: careerHireRequest.targetRole,
+    });
+  }, [careerHireRequest]);
+
+  useEffect(() => {
+    if (!executeRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.EXECUTE_CAPTIVE, {
+      id: executeRequest.id,
+    });
+  }, [executeRequest]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

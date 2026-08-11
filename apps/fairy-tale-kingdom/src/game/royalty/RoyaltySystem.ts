@@ -4,6 +4,7 @@ import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance } from '../combat/stats';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
+import { ParadeSystem } from './ParadeSystem';
 
 /** Prince spawn, FGM ball bless, weddings, balls/festivals, prince+princess wave buffs. */
 export class RoyaltySystem {
@@ -18,12 +19,15 @@ export class RoyaltySystem {
   private festivalRemainingMs = 0;
   private lastMorningHour = -1;
   private weddingCooldownMs = 0;
+  private readonly parade: ParadeSystem;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly subjects: SubjectSystem,
     private readonly buildings: BuildingSystem
-  ) {}
+  ) {
+    this.parade = new ParadeSystem(scene, subjects, buildings);
+  }
 
   isInspired(): boolean {
     return this.inspired;
@@ -49,19 +53,61 @@ export class RoyaltySystem {
     );
   }
 
-  serializeTimers(): { princeSpawnMs: number; fgmCooldownMs: number } {
+  serializeTimers(): {
+    princeSpawnMs: number;
+    fgmCooldownMs: number;
+    ballRemainingMs: number;
+    ballCooldownMs: number;
+    festivalRemainingMs: number;
+    festivalCooldownMs: number;
+    paradeCooldownMs: number;
+    paradeRemainingMs: number;
+  } {
+    const parade = this.parade.serialize();
     return {
       princeSpawnMs: this.princeSpawnMs,
       fgmCooldownMs: this.fgmCooldownMs,
+      ballRemainingMs: this.ballRemainingMs,
+      ballCooldownMs: this.ballCooldownMs,
+      festivalRemainingMs: this.festivalRemainingMs,
+      festivalCooldownMs: this.festivalCooldownMs,
+      paradeCooldownMs: parade.paradeCooldownMs,
+      paradeRemainingMs: parade.paradeRemainingMs,
     };
   }
 
-  restoreTimers(princeSpawnMs?: number, fgmCooldownMs?: number): void {
-    if (typeof princeSpawnMs === 'number') this.princeSpawnMs = princeSpawnMs;
-    if (typeof fgmCooldownMs === 'number') this.fgmCooldownMs = fgmCooldownMs;
+  restoreTimers(timers: {
+    princeSpawnMs?: number;
+    fgmCooldownMs?: number;
+    ballRemainingMs?: number;
+    ballCooldownMs?: number;
+    festivalRemainingMs?: number;
+    festivalCooldownMs?: number;
+    paradeCooldownMs?: number;
+    paradeRemainingMs?: number;
+  }): void {
+    if (typeof timers.princeSpawnMs === 'number') {
+      this.princeSpawnMs = timers.princeSpawnMs;
+    }
+    if (typeof timers.fgmCooldownMs === 'number') {
+      this.fgmCooldownMs = timers.fgmCooldownMs;
+    }
+    if (typeof timers.ballRemainingMs === 'number') {
+      this.ballRemainingMs = timers.ballRemainingMs;
+    }
+    if (typeof timers.ballCooldownMs === 'number') {
+      this.ballCooldownMs = timers.ballCooldownMs;
+    }
+    if (typeof timers.festivalRemainingMs === 'number') {
+      this.festivalRemainingMs = timers.festivalRemainingMs;
+    }
+    if (typeof timers.festivalCooldownMs === 'number') {
+      this.festivalCooldownMs = timers.festivalCooldownMs;
+    }
+    this.parade.restore(timers.paradeCooldownMs, timers.paradeRemainingMs);
   }
 
-  update(deltaMs: number): void {
+  update(deltaMs: number, peacetime = true): void {
     if (this.fgmCooldownMs > 0) this.fgmCooldownMs -= deltaMs;
     if (this.weddingCooldownMs > 0) this.weddingCooldownMs -= deltaMs;
 
@@ -93,6 +139,7 @@ export class RoyaltySystem {
     this.updateBall(deltaMs, hasKing, hasQueen, hasPrince);
     this.updateFestival(deltaMs);
     this.tryAutoWedding();
+    this.parade.update(deltaMs, peacetime);
 
     const hasPrincess = this.subjects.hasRole('princess');
     if (hasPrince && hasPrincess) {

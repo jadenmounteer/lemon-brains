@@ -4,6 +4,7 @@ import {
   UNIT_WIDTH,
   idleAnimKey,
   isMilitaryRole,
+  isRoyalRole,
   livesAtKeep,
   walkAnimKey,
   type Direction,
@@ -12,17 +13,30 @@ import {
 import type { SavedSubject } from '../../kingdom/LayoutRepository';
 import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
+import { Phase12Balance } from '../economy/phase12Balance';
+import {
+  BUILDING_ROLE_CAPACITY,
+  civilianJobForBuilding,
+  roleFromCareerGoal,
+  type CivilianJob,
+} from '../jobs/capacities';
+import type { BuildKind } from '../../marketplace/catalog';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
+import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { genderForNewSubject, genderLabel } from './gender';
 import { pickName } from './names';
 import { roleLabel, scheduleSummary, slotAtHour } from './schedules';
 import type {
+  BodyCondition,
   BuildingResident,
+  CareerTodoItem,
+  CurseKind,
   InterruptKind,
   Subject,
+  SubjectGoal,
   SubjectInterrupt,
   SubjectSnapshot,
 } from './types';
@@ -60,6 +74,7 @@ export class SubjectSystem {
   private inspired = false;
   private fgmCanTransform = false;
   private onChanged: (() => void) | null = null;
+  private daysPlayed = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -76,6 +91,22 @@ export class SubjectSystem {
 
   setOnChanged(cb: () => void): void {
     this.onChanged = cb;
+  }
+
+  setDaysPlayed(n: number): void {
+    this.daysPlayed = Math.max(0, Math.floor(n));
+  }
+
+  getDaysPlayed(): number {
+    return this.daysPlayed;
+  }
+
+  getClockHour(): number {
+    return this.clock.hour;
+  }
+
+  setClockHour(hour: number): void {
+    this.clock.setHour(hour);
   }
 
   setInspired(active: boolean): void {
@@ -259,6 +290,101 @@ export class SubjectSystem {
     return this.subjects;
   }
 
+  notifyChanged(): void {
+    this.onChanged?.();
+  }
+
+  spawnChild(opts: {
+    name: string;
+    houseId: string;
+    gender: 'male' | 'female';
+    motherId?: string;
+    fatherId?: string;
+  }): string | null {
+    if (!this.buildings) return null;
+    const id = `subject-${this.nextSubjectId++}`;
+    this.createSubject('child', opts.houseId, id, opts.name, {
+      gender: opts.gender,
+      ageYears: 1,
+      motherId: opts.motherId,
+      fatherId: opts.fatherId,
+      lifeLog: appendLifeLogEntry(
+        [],
+        this.daysPlayed,
+        opts.fatherId || opts.motherId
+          ? `Born to family in the kingdom`
+          : 'Born in the kingdom',
+        'birth'
+      ),
+    });
+    const child = this.getById(id);
+    if (child) {
+      child.data.motherId = opts.motherId;
+      child.data.fatherId = opts.fatherId;
+    }
+    this.onChanged?.();
+    return id;
+  }
+
+  tryDefectMiserable(): void {
+    for (const s of [...this.subjects]) {
+      if (s.data.role === 'witch' || isMilitaryRole(s.data.role)) continue;
+      if ((s.data.lowHappyHours ?? 0) < Phase12Balance.defectHoursNeeded) {
+        continue;
+      }
+      if (s.data.role !== 'peasant' && s.data.role !== 'child') continue;
+      if (Math.random() < 0.55) {
+        this.transformRole(s.data.id, 'witch', {
+          temporaryPrincess: false,
+        });
+        s.data.houseId = 'coven';
+        s.data.backstory = backstoryFromLifeLog(s.data.lifeLog ?? []);
+        s.data.goal = {
+          kind: 'curse_target',
+          text: 'I will make them pay.',
+        };
+        this.appendLifeLog(
+          s.data.id,
+          'Took up the dark arts and fled the kingdom',
+          'defect'
+        );
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${s.data.name} defected and joined a coven!`,
+        });
+      } else {
+        this.appendLifeLog(s.data.id, 'Fled the kingdom in misery', 'defect');
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${s.data.name} fled the kingdom`,
+        });
+        this.removeSubject(s);
+      }
+      this.onChanged?.();
+      break;
+    }
+  }
+
+  spawnWitchNear(x: number, y: number): string | null {
+    const id = `subject-${this.nextSubjectId++}`;
+    const name = pickName(2000 + this.nextSubjectId);
+    this.createSubject('witch', 'coven', id, name, {
+      gender: 'female',
+      ageYears: 40,
+      backstory: 'A stranger from the wild wood, nursing old grudges.',
+      lifeLog: appendLifeLogEntry(
+        [],
+        this.daysPlayed,
+        'Emerged from a dark coven',
+        'spawn'
+      ),
+    });
+    const w = this.getById(id);
+    if (!w) return null;
+    w.sprite.setPosition(x + Phaser.Math.Between(-20, 20), y + Phaser.Math.Between(-20, 20));
+    w.data.backstory = backstoryFromLifeLog(w.data.lifeLog ?? []);
+    this.onChanged?.();
+    return id;
+  }
+
   hasRole(role: UnitRole): boolean {
     return this.subjects.some((s) => s.data.role === role);
   }
@@ -358,21 +484,31 @@ export class SubjectSystem {
   ): boolean {
     const managed = this.getById(id);
     if (!managed) return false;
+    const wasPeasant = managed.data.role === 'peasant';
     managed.data.role = role;
     managed.data.maxHp = UNIT_MAX_HP[role];
     managed.data.hp = Math.min(managed.data.hp, managed.data.maxHp);
-    managed.data.temporaryPrincess = Boolean(opts?.temporaryPrincess);
+    if (opts?.temporaryPrincess !== undefined) {
+      managed.data.temporaryPrincess = Boolean(opts.temporaryPrincess);
+    }
     if (opts?.married !== undefined) managed.data.married = opts.married;
     if (role === 'princess' && opts?.temporaryPrincess) {
       managed.data.gender = 'female';
     }
-    if (role === 'peasant') {
-      managed.data.temporaryPrincess = false;
-      managed.data.married = false;
+    if (wasPeasant && role !== 'peasant') {
+      managed.data.workplaceId = undefined;
+      managed.data.job = undefined;
     }
     managed.sprite.setTexture(role, 0);
     managed.sprite.play(idleAnimKey(role));
     managed.interrupt = null;
+    managed.data.lifeLog = appendLifeLogEntry(
+      managed.data.lifeLog,
+      this.daysPlayed,
+      `Became a ${roleLabel(role)}`,
+      'role'
+    );
+    this.applyBodyScale(managed);
     this.onChanged?.();
     return true;
   }
@@ -416,10 +552,19 @@ export class SubjectSystem {
       this.nudgeToward(id, cathedral.x, cathedral.y, 50);
     }
     this.scene.time.delayedCall(durationMs, () => {
+      const prince = this.getById(princeId);
       const princess = this.getById(princessId);
+      if (prince) {
+        prince.data.married = true;
+      }
       if (princess && princess.data.role === 'princess') {
         princess.data.temporaryPrincess = false;
         princess.data.married = true;
+        if (prince) {
+          princess.data.houseId = prince.data.houseId;
+          prince.data.spouseId = princess.data.id;
+          princess.data.spouseId = prince.data.id;
+        }
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${princess.data.name} remains a Princess forever!`,
         });
@@ -427,6 +572,29 @@ export class SubjectSystem {
       for (const id of ids) this.clearInterrupt(id);
       this.onChanged?.();
     });
+  }
+
+  beginEat(subjectId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed || managed.interrupt || managed.data.onWall) return;
+    managed.interrupt = {
+      kind: 'eat',
+      remainingMs: Phase12Balance.eatDurationMs,
+    };
+    managed.data.activity = 'eat';
+    managed.data.activityLabel = 'Seeking a meal';
+
+    const tavern = this.buildings
+      ?.list()
+      .find((b) => b.kind === 'tavern' && b.hp > 0);
+    if (tavern) {
+      this.nudgeToward(subjectId, tavern.x, tavern.y, 50);
+      return;
+    }
+    const home = this.buildings?.getHousePoint(managed.data.houseId);
+    if (home) {
+      this.nudgeToward(subjectId, home.x, home.y, 50);
+    }
   }
 
   healNearestSick(physicianId: string): boolean {
@@ -499,6 +667,10 @@ export class SubjectSystem {
   }
 
   applyStarvation(amount: number): void {
+    this.raiseHungerAll(amount);
+  }
+
+  raiseHungerAll(amount: number): void {
     for (const s of [...this.subjects]) {
       s.data.hunger = Math.min(100, s.data.hunger + amount);
       const wasSick = s.data.sick;
@@ -507,7 +679,11 @@ export class SubjectSystem {
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${s.data.name} fell sick from hunger`,
         });
-        if (s.interrupt?.kind === 'repair' || s.interrupt?.kind === 'harvest') {
+        if (
+          s.interrupt?.kind === 'repair' ||
+          s.interrupt?.kind === 'harvest' ||
+          s.interrupt?.kind === 'eat'
+        ) {
           s.interrupt = null;
         }
       }
@@ -529,6 +705,51 @@ export class SubjectSystem {
       s.data.sick = s.data.hunger >= 60;
       this.applyHpTint(s);
     }
+  }
+
+  recoverHungerFor(id: string, amount: number): void {
+    const managed = this.getById(id);
+    if (!managed) return;
+    managed.data.hunger = Math.max(0, managed.data.hunger - amount);
+    managed.data.sick = managed.data.hunger >= 60;
+    this.applyHpTint(managed);
+  }
+
+  adjustHappiness(id: string, delta: number): void {
+    const managed = this.getById(id);
+    if (!managed) return;
+    managed.data.happiness = Phaser.Math.Clamp(
+      managed.data.happiness + delta,
+      0,
+      100
+    );
+  }
+
+  tickHappiness(): void {
+    for (const s of this.subjects) {
+      if (s.data.hunger >= 60) {
+        s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
+      }
+      if (s.data.sick) {
+        s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
+      }
+      if (s.data.happiness < Phase12Balance.defectHappinessThreshold) {
+        s.data.lowHappyHours = (s.data.lowHappyHours ?? 0) + 1;
+      } else {
+        s.data.lowHappyHours = 0;
+      }
+    }
+  }
+
+  appendLifeLog(id: string, text: string, kind?: string): void {
+    const managed = this.getById(id);
+    if (!managed) return;
+    managed.data.lifeLog = appendLifeLogEntry(
+      managed.data.lifeLog,
+      this.daysPlayed,
+      text,
+      kind
+    );
   }
 
   extractCaptive(id: string): SavedSubject | null {
@@ -617,12 +838,45 @@ export class SubjectSystem {
         gender: s.gender,
         temporaryPrincess: s.temporaryPrincess,
         married: s.married,
+        happiness: s.happiness,
+        ageYears: s.ageYears,
+        body: s.body,
+        job: s.job,
+        workplaceId: s.workplaceId,
+        spouseId: s.spouseId,
+        motherId: s.motherId,
+        fatherId: s.fatherId,
+        pregnant: s.pregnant,
+        pregnantDaysLeft: s.pregnantDaysLeft,
+        thought: s.thought,
+        backstory: s.backstory,
+        goal: s.goal,
+        lifeLog: s.lifeLog,
+        curse: s.curse,
+        cursedAsRole: s.cursedAsRole,
+        lowHappyHours: s.lowHappyHours,
+        activity: s.activity,
+        activityLabel: s.activityLabel,
+        zone: s.zone,
+        interrupt: s.interrupt ?? null,
+        skipBirthLog: true,
       });
+      const managed = this.getById(s.id);
+      if (managed) {
+        if (typeof s.x === 'number' && typeof s.y === 'number') {
+          managed.sprite.setPosition(s.x, s.y);
+          managed.sprite.setDepth(20 + s.y * 0.01);
+        }
+        if (s.interrupt) {
+          managed.interrupt = s.interrupt;
+        }
+      }
       const match = /^subject-(\d+)$/.exec(s.id);
       if (match) {
         this.nextSubjectId = Math.max(this.nextSubjectId, Number(match[1]) + 1);
       }
     }
+    this.migrateMonarchs();
     this.ensureMarker();
   }
 
@@ -640,6 +894,29 @@ export class SubjectSystem {
       gender: s.data.gender,
       temporaryPrincess: s.data.temporaryPrincess,
       married: s.data.married,
+      happiness: s.data.happiness,
+      ageYears: s.data.ageYears,
+      body: s.data.body,
+      job: s.data.job,
+      workplaceId: s.data.workplaceId,
+      spouseId: s.data.spouseId,
+      motherId: s.data.motherId,
+      fatherId: s.data.fatherId,
+      pregnant: s.data.pregnant,
+      pregnantDaysLeft: s.data.pregnantDaysLeft,
+      thought: s.data.thought,
+      backstory: s.data.backstory,
+      goal: s.data.goal,
+      lifeLog: s.data.lifeLog,
+      curse: s.data.curse,
+      cursedAsRole: s.data.cursedAsRole,
+      lowHappyHours: s.data.lowHappyHours,
+      x: s.sprite.x,
+      y: s.sprite.y,
+      activity: s.data.activity,
+      activityLabel: s.data.activityLabel,
+      zone: s.data.zone,
+      interrupt: s.interrupt,
     }));
   }
 
@@ -689,14 +966,47 @@ export class SubjectSystem {
       });
       return false;
     }
-    if ((role === 'king' || role === 'queen') && this.buildings) {
-      const cap = this.buildings.keepCount();
-      if (this.countRole(role) >= cap) {
+    if (role === 'king' || role === 'queen') {
+      if (this.countRole(role) >= 1) {
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: `Need another keep for another ${roleLabel(role)}`,
+          message: `The realm already has a ${roleLabel(role)}`,
         });
         return false;
       }
+    }
+    if (role === 'duke' || role === 'duchess') {
+      if (this.buildings.keepCount() < 2) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `Need a second keep to seat a ${roleLabel(role)}`,
+        });
+        return false;
+      }
+    }
+    if (role === 'guard' && !this.buildings.hasDungeon()) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Build a dungeon before hiring guards',
+      });
+      return false;
+    }
+    if (
+      (role === 'soldier' ||
+        role === 'archer' ||
+        role === 'knight' ||
+        role === 'general' ||
+        role === 'elite_guard' ||
+        role === 'elite_archer') &&
+      !this.buildings.hasBarracks()
+    ) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Build a barracks before hiring that troop',
+      });
+      return false;
+    }
+    if (this.roleAtBuildingCap(role)) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `No free posts for a ${roleLabel(role)} — expand capacity`,
+      });
+      return false;
     }
 
     let houseId: string | null = null;
@@ -724,6 +1034,7 @@ export class SubjectSystem {
         : pickName(2000 + this.nextSubjectId * 41);
     this.createSubject(role, houseId, id, name);
     const managed = this.subjects[this.subjects.length - 1]!;
+    this.bindWorkplace(managed, role);
     this.scene.time.delayedCall(200, () => this.nudgeTowardSchedule(managed));
     this.onChanged?.();
     return true;
@@ -975,13 +1286,12 @@ export class SubjectSystem {
     if (managed.data.hp <= 0) {
       const name = managed.data.name;
       const role = managed.data.role;
-      const houseId = managed.data.houseId;
       this.removeSubject(managed);
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `${name} was slain`,
       });
       if (role === 'king' || role === 'queen') {
-        this.trySuccession(houseId);
+        this.trySuccession();
       }
       this.onChanged?.();
       return true;
@@ -990,27 +1300,20 @@ export class SubjectSystem {
     return false;
   }
 
-  /** Married prince + princess at a keep become king & queen if both thrones are empty. */
-  private trySuccession(keepId: string): void {
-    const hasKing = this.subjects.some(
-      (s) => s.data.role === 'king' && s.data.houseId === keepId
-    );
-    const hasQueen = this.subjects.some(
-      (s) => s.data.role === 'queen' && s.data.houseId === keepId
-    );
+  /** Kingdom-wide: if no king and no queen, promote a married prince + princess. */
+  private trySuccession(): void {
+    const hasKing = this.subjects.some((s) => s.data.role === 'king');
+    const hasQueen = this.subjects.some((s) => s.data.role === 'queen');
     if (hasKing || hasQueen) return;
 
     const prince = this.subjects.find(
-      (s) =>
-        s.data.role === 'prince' &&
-        s.data.married &&
-        s.data.houseId === keepId
+      (s) => s.data.role === 'prince' && s.data.married
     );
     const princess = this.subjects.find(
       (s) =>
         s.data.role === 'princess' &&
         s.data.married &&
-        s.data.houseId === keepId
+        !s.data.temporaryPrincess
     );
     if (!prince || !princess) return;
 
@@ -1019,6 +1322,123 @@ export class SubjectSystem {
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${prince.data.name} and ${princess.data.name} take the throne!`,
     });
+  }
+
+  /** After restore: keep one king / one queen; demote extras to duke / duchess. */
+  migrateMonarchs(): void {
+    const kings = this.subjects.filter((s) => s.data.role === 'king');
+    for (let i = 1; i < kings.length; i++) {
+      const k = kings[i]!;
+      this.transformRole(k.data.id, 'duke', { married: k.data.married });
+    }
+    const queens = this.subjects.filter((s) => s.data.role === 'queen');
+    for (let i = 1; i < queens.length; i++) {
+      const q = queens[i]!;
+      this.transformRole(q.data.id, 'duchess', { married: q.data.married });
+    }
+  }
+
+  applyBodyFromHunger(): void {
+    for (const s of this.subjects) {
+      const h = s.data.hunger;
+      let body = s.data.body;
+      if (h >= 70) {
+        if (body === 'obese') body = 'plump';
+        else if (body === 'plump') body = 'average';
+        else body = 'gaunt';
+      } else if (h <= 15) {
+        if (body === 'gaunt') body = 'average';
+        else if (body === 'average') body = 'plump';
+        else body = 'obese';
+      } else if (h <= 35 && body === 'gaunt') {
+        body = 'average';
+      } else if (h >= 50 && body === 'obese') {
+        body = 'plump';
+      }
+      s.data.body = body;
+      this.applyBodyScale(s);
+    }
+  }
+
+  ageOnDayRolled(): void {
+    for (const s of [...this.subjects]) {
+      s.data.ageYears += 1;
+      if (
+        s.data.role === 'child' &&
+        s.data.ageYears >= Phase12Balance.childPromoteAge
+      ) {
+        this.transformRole(s.data.id, 'peasant', {
+          temporaryPrincess: false,
+          married: false,
+        });
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${s.data.name} grew into a peasant`,
+        });
+      }
+      const lifespan = isRoyalRole(s.data.role)
+        ? Phase12Balance.royalLifespan
+        : Phase12Balance.defaultLifespan;
+      if (s.data.ageYears > lifespan) {
+        const name = s.data.name;
+        this.removeSubject(s);
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${name} died of old age`,
+        });
+        this.onChanged?.();
+      }
+    }
+  }
+
+  listCareerTodos(): CareerTodoItem[] {
+    const todos: CareerTodoItem[] = [];
+    for (const s of this.subjects) {
+      if (!s.data.goal) continue;
+      const targetRole = roleFromCareerGoal(s.data.goal.kind);
+      if (!targetRole) continue;
+      todos.push({
+        subjectId: s.data.id,
+        name: s.data.name,
+        targetRole,
+        targetLabel: roleLabel(targetRole),
+        cost: Phase12Balance.careerCosts[targetRole] ?? 0,
+      });
+    }
+    return todos;
+  }
+
+  promoteCareer(subjectId: string, role: UnitRole): boolean {
+    const managed = this.getById(subjectId);
+    if (!managed) return false;
+    const from = managed.data.role;
+    const allowed =
+      from === 'peasant' ||
+      from === 'guard' ||
+      from === 'elite_guard' ||
+      from === 'soldier';
+    if (!allowed) return false;
+    if (!this.buildings) return false;
+    if (role === 'guard' && !this.buildings.hasDungeon()) return false;
+    if (
+      (role === 'soldier' ||
+        role === 'archer' ||
+        role === 'knight' ||
+        role === 'general' ||
+        role === 'elite_guard' ||
+        role === 'elite_archer') &&
+      !this.buildings.hasBarracks()
+    ) {
+      return false;
+    }
+    if (this.roleAtBuildingCap(role) && role !== from) return false;
+    const ok = this.transformRole(subjectId, role, {
+      temporaryPrincess: false,
+      married: managed.data.married,
+    });
+    if (!ok) return false;
+    managed.data.goal = null;
+    this.bindWorkplace(managed, role);
+    this.onChanged?.();
+    return true;
   }
 
   nudgeToward(
@@ -1142,6 +1562,28 @@ export class SubjectSystem {
       gender?: 'male' | 'female';
       temporaryPrincess?: boolean;
       married?: boolean;
+      happiness?: number;
+      ageYears?: number;
+      body?: BodyCondition;
+      job?: CivilianJob;
+      workplaceId?: string;
+      spouseId?: string;
+      motherId?: string;
+      fatherId?: string;
+      pregnant?: boolean;
+      pregnantDaysLeft?: number;
+      thought?: string;
+      backstory?: string;
+      goal?: SubjectGoal | null;
+      lifeLog?: Subject['lifeLog'];
+      curse?: CurseKind;
+      cursedAsRole?: UnitRole;
+      lowHappyHours?: number;
+      activity?: Subject['activity'];
+      activityLabel?: string;
+      zone?: Subject['zone'];
+      interrupt?: SubjectInterrupt | null;
+      skipBirthLog?: boolean;
     }
   ): void {
     const slot = slotAtHour(role, this.clock.hour);
@@ -1153,6 +1595,9 @@ export class SubjectSystem {
     const seed = Number(id.replace(/\D/g, '')) || 1;
     const gender =
       opts?.gender ?? genderForNewSubject(role, name, seed);
+    const ageYears = opts?.ageYears ?? defaultAgeYears(role);
+    const body = opts?.body ?? 'average';
+    const happiness = opts?.happiness ?? 60;
 
     const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
     sprite.setDepth(20);
@@ -1165,15 +1610,29 @@ export class SubjectSystem {
     sprite.setData('subjectId', id);
     sprite.play(idleAnimKey(role));
 
+    let lifeLog = opts?.lifeLog;
+    if (!opts?.skipBirthLog && !lifeLog?.length) {
+      const birthText =
+        role === 'child'
+          ? `${name} was born`
+          : `${name} joined the kingdom as a ${roleLabel(role)}`;
+      lifeLog = appendLifeLogEntry(
+        [],
+        this.daysPlayed,
+        birthText,
+        role === 'child' ? 'birth' : 'hire'
+      );
+    }
+
     const data: Subject = {
       id,
       name,
       role,
       gender,
       houseId,
-      activity: slot.activity,
-      activityLabel: slot.label,
-      zone: slot.zone,
+      activity: opts?.activity ?? slot.activity,
+      activityLabel: opts?.activityLabel ?? slot.label,
+      zone: opts?.zone ?? slot.zone,
       hp,
       maxHp,
       onWall: Boolean(opts?.onWall),
@@ -1181,6 +1640,23 @@ export class SubjectSystem {
       sick: opts?.sick ?? hunger >= 60,
       temporaryPrincess: Boolean(opts?.temporaryPrincess),
       married: Boolean(opts?.married),
+      happiness,
+      ageYears,
+      body,
+      job: opts?.job,
+      workplaceId: opts?.workplaceId,
+      spouseId: opts?.spouseId,
+      motherId: opts?.motherId,
+      fatherId: opts?.fatherId,
+      pregnant: opts?.pregnant,
+      pregnantDaysLeft: opts?.pregnantDaysLeft,
+      thought: opts?.thought ?? 'Looking around the kingdom…',
+      backstory: opts?.backstory,
+      goal: opts?.goal ?? null,
+      lifeLog,
+      curse: opts?.curse ?? null,
+      cursedAsRole: opts?.cursedAsRole,
+      lowHappyHours: opts?.lowHappyHours ?? 0,
     };
 
     const managed: ManagedSubject = {
@@ -1188,10 +1664,52 @@ export class SubjectSystem {
       sprite,
       moving: false,
       fleeCooldownMs: 0,
-      interrupt: null,
+      interrupt: opts?.interrupt ?? null,
     };
     this.applyHpTint(managed);
+    this.applyBodyScale(managed);
     this.subjects.push(managed);
+  }
+
+  private roleAtBuildingCap(role: UnitRole): boolean {
+    if (!this.buildings) return false;
+    let totalCap = 0;
+    let found = false;
+    for (const b of this.buildings.list()) {
+      if (b.hp <= 0) continue;
+      const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
+      const cap = caps?.[role];
+      if (cap == null) continue;
+      found = true;
+      totalCap += cap;
+    }
+    if (!found) return false;
+    return this.countRole(role) >= totalCap;
+  }
+
+  private bindWorkplace(managed: ManagedSubject, role: UnitRole): void {
+    if (!this.buildings) return;
+    for (const b of this.buildings.list()) {
+      if (b.hp <= 0) continue;
+      const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
+      const cap = caps?.[role];
+      if (cap == null) continue;
+      const used = this.subjects.filter(
+        (s) =>
+          s.data.workplaceId === b.id &&
+          (s.data.role === role || s.data.id === managed.data.id)
+      ).length;
+      if (used >= cap && managed.data.workplaceId !== b.id) continue;
+      managed.data.workplaceId = b.id;
+      const job = civilianJobForBuilding(b.kind);
+      if (job) managed.data.job = job;
+      return;
+    }
+  }
+
+  private applyBodyScale(managed: ManagedSubject): void {
+    const scaleX = bodyScaleX(managed.data.body);
+    managed.sprite.setScale(scaleX, 1);
   }
 
   private removeSubject(managed: ManagedSubject): void {
@@ -1258,6 +1776,19 @@ export class SubjectSystem {
   }
 
   private toSnapshot(managed: ManagedSubject): SubjectSnapshot {
+    const spouse = managed.data.spouseId
+      ? this.getById(managed.data.spouseId)
+      : undefined;
+    const mother = managed.data.motherId
+      ? this.getById(managed.data.motherId)
+      : undefined;
+    const father = managed.data.fatherId
+      ? this.getById(managed.data.fatherId)
+      : undefined;
+    const lineageParts: string[] = [];
+    if (mother) lineageParts.push(`Mother: ${mother.data.name}`);
+    if (father) lineageParts.push(`Father: ${father.data.name}`);
+
     return {
       id: managed.data.id,
       name: managed.data.name,
@@ -1284,6 +1815,19 @@ export class SubjectSystem {
       temporaryPrincess: managed.data.temporaryPrincess,
       married: managed.data.married,
       canCommandTroops: managed.data.role === 'general',
+      happiness: managed.data.happiness,
+      ageYears: managed.data.ageYears,
+      body: managed.data.body,
+      thought: managed.data.thought,
+      goalLabel: managed.data.goal?.text ?? managed.data.goal?.kind,
+      backstory: managed.data.backstory,
+      lifeLog: managed.data.lifeLog,
+      lineageLabel: lineageParts.length ? lineageParts.join(' · ') : undefined,
+      pregnantLabel: managed.data.pregnant
+        ? `Expecting (${managed.data.pregnantDaysLeft ?? '?'} days)`
+        : undefined,
+      spouseLabel: spouse?.data.name,
+      jobLabel: managed.data.job,
     };
   }
 }
@@ -1293,4 +1837,33 @@ function facingFromDelta(dx: number, dy: number): Direction {
     return dx < 0 ? 'left' : 'right';
   }
   return dy < 0 ? 'up' : 'down';
+}
+
+function defaultAgeYears(role: UnitRole): number {
+  if (role === 'child') return 8;
+  if (
+    role === 'king' ||
+    role === 'queen' ||
+    role === 'duke' ||
+    role === 'duchess' ||
+    role === 'bishop' ||
+    role === 'fairy_godmother' ||
+    role === 'witch'
+  ) {
+    return 48 + Math.floor(Math.random() * 22);
+  }
+  return 25;
+}
+
+function bodyScaleX(body: BodyCondition): number {
+  switch (body) {
+    case 'gaunt':
+      return 0.9;
+    case 'plump':
+      return 1.12;
+    case 'obese':
+      return 1.25;
+    default:
+      return 1;
+  }
 }

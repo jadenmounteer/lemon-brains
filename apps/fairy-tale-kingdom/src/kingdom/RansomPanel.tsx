@@ -5,26 +5,30 @@ import { roleLabel } from '../game/subjects/schedules';
 interface RansomPanelProps {
   captives: CaptiveRecord[];
   gold: number;
+  canExecute?: boolean;
   onRansom: (id: string, cost: number) => void;
+  onExecute?: (id: string) => void;
   onClose: () => void;
 }
 
 export function RansomPanel({
   captives,
   gold,
+  canExecute,
   onRansom,
+  onExecute,
   onClose,
 }: RansomPanelProps) {
   return (
     <section className="panel inspector-panel" aria-live="polite">
       <div className="inspector-header">
-        <h2>Ransom</h2>
+        <h2>Captives</h2>
         <button type="button" className="inspector-close" onClick={onClose}>
           Close
         </button>
       </div>
       <p className="muted">
-        Pay gold to free royals held by the enemy army.
+        Ransom royals home, or execute prisoners at the gallows.
       </p>
       {captives.length === 0 ? (
         <p className="muted">No one is captive.</p>
@@ -39,14 +43,26 @@ export function RansomPanel({
                   <span className="muted"> · {roleLabel(c.role)}</span>
                   <p className="muted">{cost}g ransom</p>
                 </div>
-                <button
-                  type="button"
-                  className="market-buy"
-                  disabled={gold < cost}
-                  onClick={() => onRansom(c.id, cost)}
-                >
-                  Pay
-                </button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <button
+                    type="button"
+                    className="market-buy"
+                    disabled={gold < cost}
+                    onClick={() => onRansom(c.id, cost)}
+                  >
+                    Pay
+                  </button>
+                  {onExecute && (
+                    <button
+                      type="button"
+                      className="market-buy"
+                      disabled={!canExecute}
+                      onClick={() => onExecute(c.id)}
+                    >
+                      Execute
+                    </button>
+                  )}
+                </div>
               </li>
             );
           })}

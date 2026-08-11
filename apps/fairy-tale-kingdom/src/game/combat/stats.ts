@@ -16,12 +16,18 @@ export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   cathedral: 80,
   infirmary: 50,
   dungeon: 55,
+  bakery: 40,
+  market: 40,
+  cemetery: 45,
+  gallows: 30,
   keep: 200,
 };
 
 export const UNIT_MAX_HP: Record<UnitRole, number> = {
   peasant: 20,
+  child: 12,
   guard: 40,
+  soldier: 38,
   archer: 30,
   elite_guard: 55,
   elite_archer: 40,
@@ -33,7 +39,14 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   queen: 40,
   prince: 35,
   princess: 35,
+  duke: 42,
+  duchess: 38,
   fairy_godmother: 30,
+  jester: 22,
+  dungeon_keeper: 32,
+  executioner: 36,
+  witch_hunter: 42,
+  witch: 28,
 };
 
 export const MONSTER_MAX_HP = {
@@ -90,6 +103,7 @@ export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
   giant: 60,
   goblin: 18,
   enemy_army: 35,
+  gypsy: 22,
 };
 
 export function isBurnable(kind: BuildKind): boolean {
@@ -105,7 +119,11 @@ export function isBurnable(kind: BuildKind): boolean {
     kind === 'watchtower' ||
     kind === 'cathedral' ||
     kind === 'infirmary' ||
-    kind === 'dungeon'
+    kind === 'dungeon' ||
+    kind === 'bakery' ||
+    kind === 'market' ||
+    kind === 'cemetery' ||
+    kind === 'gallows'
   );
 }
 
