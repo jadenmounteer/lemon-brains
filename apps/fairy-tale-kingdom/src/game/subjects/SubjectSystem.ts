@@ -11,11 +11,14 @@ import {
   type UnitRole,
 } from '../art/assetManifest';
 import type { SavedSubject } from '../../kingdom/LayoutRepository';
-import type {
-  Aabb,
-  BuildingRecord,
-  BuildingSystem,
+import {
+  footprintAabb,
+  KEEP_ID,
+  type Aabb,
+  type BuildingRecord,
+  type BuildingSystem,
 } from '../buildings/BuildingSystem';
+import { isDwelling } from '../combat/stats';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
 import {
@@ -2034,6 +2037,81 @@ export class SubjectSystem {
     return this.buildings?.getHousePoint(houseId) ?? null;
   }
 
+  /**
+   * Bed spot inside the home footprint so roofs lift and sleepers aren't
+   * standing in the yard (ring offsets used to push them south of the door).
+   */
+  private sleepBedPoint(managed: ManagedSubject): Point | null {
+    const houseId = managed.data.houseId;
+    if (!houseId || houseId.startsWith('camp:')) {
+      const home = this.homePointFor(houseId);
+      return home;
+    }
+    if (!this.buildings) return this.homePointFor(houseId);
+
+    let kind: BuildKind | 'keep' | null = null;
+    let hx = 0;
+    let hy = 0;
+    if (houseId === KEEP_ID || livesAtKeep(managed.data.role)) {
+      const keep = this.buildings.getHousePoint(
+        livesAtKeep(managed.data.role) ? houseId : KEEP_ID
+      );
+      if (!keep) return null;
+      kind = 'keep';
+      hx = keep.x;
+      hy = keep.y;
+    } else {
+      const b = this.buildings.getById(houseId);
+      if (!b || (!isDwelling(b.kind) && b.kind !== 'keep')) {
+        return this.homePointFor(houseId);
+      }
+      kind = b.kind;
+      hx = b.x;
+      hy = b.y;
+    }
+
+    const box = footprintAabb(kind, hx, hy);
+    const roommates = this.subjects.filter((s) => s.data.houseId === houseId);
+    let idx = roommates.findIndex((s) => s.data.id === managed.data.id);
+    if (idx < 0) idx = roommates.length;
+    const n = Math.max(roommates.length, idx + 1);
+    const cols = Math.min(3, Math.max(1, Math.ceil(Math.sqrt(n))));
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const rows = Math.max(1, Math.ceil(n / cols));
+
+    // Keep sprite feet inside the footprint (AABB bottom = building anchor y)
+    const padX = 10;
+    const padTop = 14;
+    const padBottom = 10;
+    const innerW = Math.max(8, box.right - box.left - padX * 2);
+    const innerH = Math.max(8, box.bottom - box.top - padTop - padBottom);
+    const x = box.left + padX + ((col + 0.5) / cols) * innerW;
+    const y = box.top + padTop + ((row + 0.55) / rows) * innerH;
+    return {
+      x: Phaser.Math.Clamp(x, box.left + padX, box.right - padX),
+      y: Phaser.Math.Clamp(y, box.top + padTop, box.bottom - padBottom),
+    };
+  }
+
+  /** True when the subject's feet are inside their home footprint. */
+  private isInsideHome(managed: ManagedSubject): boolean {
+    const houseId = managed.data.houseId;
+    if (!houseId || houseId.startsWith('camp:') || !this.buildings) return false;
+    let box: Aabb | null = null;
+    if (houseId === KEEP_ID) {
+      const keep = this.buildings.getKeepPoint();
+      box = footprintAabb('keep', keep.x, keep.y);
+    } else {
+      const b = this.buildings.getById(houseId);
+      if (!b) return false;
+      box = footprintAabb(b.kind, b.x, b.y);
+    }
+    const x = managed.sprite.x;
+    const y = managed.sprite.y;
+    return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
+  }
+
   private createSubject(
     role: UnitRole,
     houseId: string,
@@ -2312,15 +2390,9 @@ export class SubjectSystem {
     }
 
     if (slot.activity === 'sleep') {
-      if (home) {
-        const pt = this.standPointAt(
-          home.x,
-          home.y,
-          managed.data.houseId || 'home',
-          managed.data.id,
-          { indoor: true, radius: 14 }
-        );
-        return { ...pt, sticky: true, mode: 'sleep' };
+      const bed = this.sleepBedPoint(managed);
+      if (bed) {
+        return { ...bed, sticky: true, mode: 'sleep' };
       }
       return { ...fallback, sticky: true, mode: 'sleep' };
     }
@@ -2504,7 +2576,24 @@ export class SubjectSystem {
 
       if (pulse) {
         if (site.mode === 'sleep' || slot.activity === 'sleep') {
+          // Once near home, snap onto the bed slot so the roof lifts
+          if (!this.isInsideHome(managed)) {
+            const bed = this.sleepBedPoint(managed);
+            if (bed) {
+              const doorDist = Phaser.Math.Distance.Between(
+                managed.sprite.x,
+                managed.sprite.y,
+                bed.x,
+                bed.y
+              );
+              if (doorDist <= PRESENCE_ARRIVE_R + 24) {
+                managed.sprite.setPosition(bed.x, bed.y);
+                managed.sprite.setDepth(20 + bed.y * 0.01);
+              }
+            }
+          }
           this.playSleepAnim(managed.data.id);
+          managed.data.activityLabel = 'Sleeping at home';
         } else if (site.mode === 'work' || this.isStickyActivity(slot.activity)) {
           this.playWorkAnim(managed.data.id);
           if (
