@@ -59,6 +59,16 @@ export interface BuildCatalogItem {
   requiresRoyalty?: boolean;
 }
 
+/** Naval purchases spawn a vessel near a dock instead of entering placement mode. */
+export type NavalKind = 'fishingBoat' | 'warship';
+
+export interface NavalCatalogItem {
+  kind: NavalKind;
+  name: string;
+  blurb: string;
+  cost: number;
+}
+
 export const HIRE_CATALOG: HireCatalogItem[] = [
   {
     role: 'peasant',
@@ -346,5 +356,23 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     blurb: 'Nearby archers gain range. Requires King & Queen.',
     cost: 40,
     requiresRoyalty: true,
+  },
+];
+
+/** Docks come with one free fishing boat; buy more here. Requires at least one Dock. */
+export const NAVAL_CATALOG: NavalCatalogItem[] = [
+  {
+    kind: 'fishingBoat',
+    name: 'Fishing Boat',
+    blurb:
+      'Extra vessel for a dock — lets another fisherman sail at once (up to 2 boats per dock). Requires a Dock.',
+    cost: 25,
+  },
+  {
+    kind: 'warship',
+    name: 'Warship',
+    blurb:
+      'Armed vessel crewed by 2 guards. Patrols near its dock and chases off pirate raids (one per Dock).',
+    cost: 65,
   },
 ];

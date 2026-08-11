@@ -128,7 +128,10 @@ export type ActivityId =
   | 'curse'
   | 'execute'
   | 'funeral'
-  | 'joust';
+  | 'joust'
+  | 'fish'
+  | 'crew'
+  | 'exorcise';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
@@ -148,7 +151,10 @@ export type InterruptKind =
   | 'play'
   | 'guard_event'
   | 'curse'
-  | 'execute';
+  | 'execute'
+  | 'fish'
+  | 'crew'
+  | 'exorcise';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -268,6 +274,12 @@ export interface KingdomStats {
   hasBarracks: boolean;
   hasGallows: boolean;
   hasCemetery: boolean;
+  hasDock: boolean;
+  dockCount: number;
+  fishingBoatCount: number;
+  fishingBoatCapacity: number;
+  warshipCount: number;
+  warshipCapacity: number;
   hasKing: boolean;
   hasQueen: boolean;
   hasPrince: boolean;

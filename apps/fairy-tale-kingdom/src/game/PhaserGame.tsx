@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type Phaser from 'phaser';
-import type { BuildKind } from '../marketplace/catalog';
+import type { BuildKind, NavalKind } from '../marketplace/catalog';
 import type { UnitRole } from './art/assetManifest';
 import { createGame } from './createGame';
 import {
@@ -44,6 +44,7 @@ interface PhaserGameProps {
   destroyCampRequest?: { seq: number; campId: string } | null;
   arrestCampRequest?: { seq: number; campId: string } | null;
   focusCampRequest?: { seq: number; campId: string; unitId?: string } | null;
+  navalRequest?: { seq: number; kind: NavalKind } | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onCampSelected: (camp: CampSnapshot | null) => void;
@@ -76,6 +77,7 @@ export function PhaserGame({
   destroyCampRequest,
   arrestCampRequest,
   focusCampRequest,
+  navalRequest,
   onSubjectSelected,
   onBuildingSelected,
   onCampSelected,
@@ -312,6 +314,13 @@ export function PhaserGame({
       unitId: focusCampRequest.unitId,
     });
   }, [focusCampRequest]);
+
+  useEffect(() => {
+    if (!navalRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.BUY_NAVAL, {
+      kind: navalRequest.kind,
+    });
+  }, [navalRequest]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

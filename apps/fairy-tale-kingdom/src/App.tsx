@@ -36,7 +36,9 @@ import { useSettings } from './learning/useSettings';
 import {
   BUILD_CATALOG,
   HIRE_CATALOG,
+  NAVAL_CATALOG,
   type BuildKind,
+  type NavalKind,
 } from './marketplace/catalog';
 import { MarketplacePanel } from './marketplace/MarketplacePanel';
 import { Phase12Balance } from './game/economy/phase12Balance';
@@ -63,6 +65,12 @@ const DEFAULT_STATS: KingdomStats = {
   hasBarracks: false,
   hasGallows: false,
   hasCemetery: false,
+  hasDock: false,
+  dockCount: 0,
+  fishingBoatCount: 0,
+  fishingBoatCapacity: 0,
+  warshipCount: 0,
+  warshipCapacity: 0,
   hasKing: false,
   hasQueen: false,
   hasPrince: false,
@@ -120,6 +128,10 @@ export default function App() {
   const [placeRequest, setPlaceRequest] = useState<{
     seq: number;
     kind: BuildKind;
+  } | null>(null);
+  const [navalRequest, setNavalRequest] = useState<{
+    seq: number;
+    kind: NavalKind;
   } | null>(null);
   const [ransomRequest, setRansomRequest] = useState<{
     seq: number;
@@ -338,6 +350,40 @@ export default function App() {
     ]
   );
 
+  const handleBuyNaval = useCallback(
+    async (kind: NavalKind) => {
+      const item = NAVAL_CATALOG.find((n) => n.kind === kind);
+      if (!item) return;
+      if (!stats.hasDock) {
+        flash('Build a Dock first');
+        return;
+      }
+      if (kind === 'fishingBoat' && stats.fishingBoatCount >= stats.fishingBoatCapacity) {
+        flash('No dock has room for another boat');
+        return;
+      }
+      if (kind === 'warship' && stats.warshipCount >= stats.warshipCapacity) {
+        flash('No dock has room for another warship');
+        return;
+      }
+      const ok = await spend(item.cost);
+      if (!ok) {
+        flash('Not enough gold');
+        return;
+      }
+      setNavalRequest({ seq: Date.now(), kind });
+    },
+    [
+      flash,
+      spend,
+      stats.hasDock,
+      stats.fishingBoatCapacity,
+      stats.fishingBoatCount,
+      stats.warshipCapacity,
+      stats.warshipCount,
+    ]
+  );
+
   const refundPendingPlace = useCallback(
     (notify: boolean) => {
       if (pendingPlaceCost == null) return;
@@ -448,6 +494,7 @@ export default function App() {
             destroyCampRequest={destroyCampRequest}
             arrestCampRequest={arrestCampRequest}
             focusCampRequest={focusCampRequest}
+            navalRequest={navalRequest}
             onSubjectSelected={setSelected}
             onBuildingSelected={setSelectedBuilding}
             onCampSelected={setSelectedCamp}
@@ -622,6 +669,9 @@ export default function App() {
                 }}
                 onBuyBuilding={(kind) => {
                   void handleBuyBuilding(kind);
+                }}
+                onBuyNaval={(kind) => {
+                  void handleBuyNaval(kind);
                 }}
                 onCancelPlace={() => {
                   refundPendingPlace(true);

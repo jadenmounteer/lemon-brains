@@ -304,6 +304,14 @@ export class BuildingSystem {
     return this.buildings.some((b) => b.kind === 'cemetery');
   }
 
+  dockCount(): number {
+    return this.buildings.filter((b) => b.kind === 'dock' && b.hp > 0).length;
+  }
+
+  hasDock(): boolean {
+    return this.dockCount() > 0;
+  }
+
   getInfluenceRadius(): number {
     return Phase12Balance.keepInfluenceRadius;
   }

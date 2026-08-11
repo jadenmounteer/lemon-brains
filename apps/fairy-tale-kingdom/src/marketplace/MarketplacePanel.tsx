@@ -2,7 +2,9 @@ import {
   BUILD_CATALOG,
   FIELDS_PER_GRANARY,
   HIRE_CATALOG,
+  NAVAL_CATALOG,
   type BuildKind,
+  type NavalKind,
 } from './catalog';
 import type { UnitRole } from '../game/art/assetManifest';
 import type { KingdomStats } from '../game/subjects/types';
@@ -13,6 +15,7 @@ interface MarketplacePanelProps {
   placeMode: { active: boolean; kind: BuildKind | null };
   onHire: (role: UnitRole) => void;
   onBuyBuilding: (kind: BuildKind) => void;
+  onBuyNaval: (kind: NavalKind) => void;
   onCancelPlace: () => void;
 }
 
@@ -22,6 +25,7 @@ export function MarketplacePanel({
   placeMode,
   onHire,
   onBuyBuilding,
+  onBuyNaval,
   onCancelPlace,
 }: MarketplacePanelProps) {
   return (
@@ -191,6 +195,45 @@ export function MarketplacePanel({
                 className="market-buy"
                 disabled={disabled}
                 onClick={() => onBuyBuilding(item.kind)}
+              >
+                Buy
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <h3 className="inspector-subhead">Naval</h3>
+      {!stats.hasDock && (
+        <p className="muted">Build a Dock to unlock boats and warships.</p>
+      )}
+      <ul className="market-list">
+        {NAVAL_CATALOG.map((item) => {
+          const atCapacity =
+            item.kind === 'fishingBoat'
+              ? stats.fishingBoatCount >= stats.fishingBoatCapacity
+              : stats.warshipCount >= stats.warshipCapacity;
+          const disabled =
+            placeMode.active || gold < item.cost || !stats.hasDock || atCapacity;
+          return (
+            <li key={item.kind} className="market-row">
+              <div>
+                <strong>{item.name}</strong>
+                <span className="muted"> · {item.cost}g</span>
+                <p className="muted">{item.blurb}</p>
+                {stats.hasDock && atCapacity && (
+                  <p className="muted">
+                    {item.kind === 'fishingBoat'
+                      ? `Boats full (${stats.fishingBoatCount}/${stats.fishingBoatCapacity})`
+                      : `Warships full (${stats.warshipCount}/${stats.warshipCapacity})`}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                className="market-buy"
+                disabled={disabled}
+                onClick={() => onBuyNaval(item.kind)}
               >
                 Buy
               </button>

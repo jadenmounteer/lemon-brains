@@ -1,5 +1,5 @@
 import type { UnitRole } from '../art/assetManifest';
-import type { BuildKind } from '../../marketplace/catalog';
+import type { BuildKind, NavalKind } from '../../marketplace/catalog';
 import type {
   BuildingSnapshot,
   CampSnapshot,
@@ -38,6 +38,7 @@ export const KingdomEvents = {
   DESTROY_CAMP: 'kingdom:destroy-camp',
   ARREST_CAMP: 'kingdom:arrest-camp',
   FOCUS_CAMP: 'kingdom:focus-camp',
+  BUY_NAVAL: 'kingdom:buy-naval',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -136,4 +137,8 @@ export interface FocusCampPayload {
   campId: string;
   /** Roster unit id the player clicked, when known. */
   unitId?: string;
+}
+
+export interface BuyNavalPayload {
+  kind: NavalKind;
 }

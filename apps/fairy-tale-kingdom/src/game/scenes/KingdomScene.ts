@@ -26,6 +26,7 @@ import {
   KingdomEvents,
   type ArrestCampPayload,
   type BeginPlacePayload,
+  type BuyNavalPayload,
   type CareerHirePayload,
   type CommandDetachmentPayload,
   type DestroyCampPayload,
@@ -543,6 +544,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
+    this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -674,6 +676,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
+    this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
   }
 
   private onHire = (payload: HireSubjectPayload) => {
@@ -695,6 +698,26 @@ export class KingdomScene extends Phaser.Scene {
   private onCancelPlace = () => {
     this.buildings.cancelPlace();
     this.emitPlaceMode();
+  };
+
+  private onBuyNaval = (payload: BuyNavalPayload) => {
+    const ok =
+      payload.kind === 'fishingBoat'
+        ? this.naval.buyFishingBoat()
+        : this.naval.buyWarship();
+    if (ok) {
+      this.emitStats();
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message:
+          payload.kind === 'fishingBoat'
+            ? 'A new fishing boat sets out from the dock'
+            : 'A warship joins the fleet',
+      });
+    } else {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No dock has room for that vessel',
+      });
+    }
   };
 
   private onRoyalCaptured = (payload: CaptiveRecord) => {
@@ -781,6 +804,12 @@ export class KingdomScene extends Phaser.Scene {
       hasBarracks: this.buildings.hasBarracks(),
       hasGallows: this.buildings.hasGallows(),
       hasCemetery: this.buildings.hasCemetery(),
+      hasDock: this.buildings.hasDock(),
+      dockCount: this.buildings.dockCount(),
+      fishingBoatCount: this.naval?.fishingBoatCount() ?? 0,
+      fishingBoatCapacity: this.naval?.fishingBoatCapacity() ?? 0,
+      warshipCount: this.naval?.warshipCount() ?? 0,
+      warshipCapacity: this.naval?.warshipCapacity() ?? 0,
       hasKing,
       hasQueen,
       hasPrince: this.subjects.hasRole('prince'),

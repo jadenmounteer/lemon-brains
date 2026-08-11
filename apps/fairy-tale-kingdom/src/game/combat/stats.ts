@@ -50,6 +50,9 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   executioner: 36,
   witch_hunter: 42,
   witch: 28,
+  necromancer: 26,
+  zombie: 22,
+  vampire_wife: 30,
 };
 
 export const MONSTER_MAX_HP = {
@@ -94,6 +97,7 @@ export const CombatBalance = {
   knightHuntRange: 200,
   thiefStealGold: 6,
   thiefCaptureRange: 32,
+  necromancerArrestRange: 32,
   physicianHealRange: 40,
   physicianHealHunger: 35,
   physicianHealHp: 14,

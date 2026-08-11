@@ -199,6 +199,23 @@ const witchSchedule: ScheduleSlot[] = withMeals(
 
 const dukeSchedule = withMeals(royalBase, 'keep', 'keep');
 
+/** Necromancers linger by the cemetery raising the dead until dawn drives them off. */
+const necromancerSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 24, activity: 'gather', zone: 'cemetery', label: 'Raising the dead' },
+];
+
+/** Zombies never rest — they shamble in search of the living around the clock. */
+const zombieSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 24, activity: 'patrol', zone: 'path', label: 'Shambling as a zombie' },
+];
+
+/** Vampire wives prowl by night and retreat to the castle's shadow by day. */
+const vampireWifeSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'hunt', zone: 'forest', label: 'Prowling with the vampire' },
+  { startHour: 6, endHour: 20, activity: 'sleep', zone: 'forest', label: 'Resting in the castle’s shadow' },
+  { startHour: 20, endHour: 24, activity: 'hunt', zone: 'forest', label: 'Prowling with the vampire' },
+];
+
 export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
   switch (role) {
     case 'peasant':
@@ -240,6 +257,12 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
       return witchHunterSchedule;
     case 'witch':
       return witchSchedule;
+    case 'necromancer':
+      return necromancerSchedule;
+    case 'zombie':
+      return zombieSchedule;
+    case 'vampire_wife':
+      return vampireWifeSchedule;
   }
 }
 
@@ -315,5 +338,11 @@ export function roleLabel(role: SubjectRole): string {
       return 'Witch Hunter';
     case 'witch':
       return 'Witch';
+    case 'necromancer':
+      return 'Necromancer';
+    case 'zombie':
+      return 'Zombie';
+    case 'vampire_wife':
+      return 'Vampire Wife';
   }
 }

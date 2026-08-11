@@ -23,6 +23,7 @@ import {
 import type { BuildKind } from '../../marketplace/catalog';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
+import type { SecuritySystem } from '../security/SecuritySystem';
 import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
@@ -82,10 +83,14 @@ export class SubjectSystem {
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
   private pathGrid: PathGrid | null = null;
+  private security: SecuritySystem | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
   private onChanged: (() => void) | null = null;
+  private onDeath:
+    | ((id: string, houseId: string, name: string) => void)
+    | null = null;
   private daysPlayed = 0;
   private patrolInspectionIdx = new Map<string, number>();
 
@@ -102,8 +107,18 @@ export class SubjectSystem {
     this.pathGrid = grid;
   }
 
+  /** Wired after construction so peasants softly avoid pathing into an active cordon. */
+  setSecurity(security: SecuritySystem): void {
+    this.security = security;
+  }
+
   setOnChanged(cb: () => void): void {
     this.onChanged = cb;
+  }
+
+  /** Fires with (subjectId, houseId, name) whenever a subject dies (slain, starved, or old age). */
+  setOnDeath(cb: (id: string, houseId: string, name: string) => void): void {
+    this.onDeath = cb;
   }
 
   setDaysPlayed(n: number): void {
@@ -293,6 +308,36 @@ export class SubjectSystem {
     managed.data.activityLabel = 'Harvesting the fields';
   }
 
+  /** Fisherman boards a boat at a dock and sails out — interrupt lasts for the whole trip. */
+  beginFish(subjectId: string, dockId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed || managed.data.sick) return;
+    managed.interrupt = { kind: 'fish', targetId: dockId };
+    managed.data.activity = 'fish';
+    managed.data.activityLabel = 'Sailing out to fish';
+  }
+
+  /** Guard signs on as permanent crew for a warship until it sinks. */
+  beginCrew(subjectId: string, warshipId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed || managed.data.sick) return;
+    managed.interrupt = { kind: 'crew', targetId: warshipId };
+    managed.data.activity = 'crew';
+    managed.data.activityLabel = 'Crewing a warship';
+  }
+
+  /** Peasants/guards free to board a boat: right role, no interrupt, healthy, not on the wall. */
+  listFreeForNaval(role: UnitRole): ManagedSubject[] {
+    return this.subjects.filter(
+      (s) =>
+        s.data.role === role &&
+        !s.interrupt &&
+        !s.data.onWall &&
+        !s.data.sick &&
+        s.sprite.active
+    );
+  }
+
   listFreeForChat(): ManagedSubject[] {
     return this.subjects.filter(
       (s) => !s.interrupt && !s.data.onWall && !s.moving && !s.data.sick
@@ -394,6 +439,32 @@ export class SubjectSystem {
     if (!w) return null;
     w.sprite.setPosition(x + Phaser.Math.Between(-20, 20), y + Phaser.Math.Between(-20, 20));
     w.data.backstory = backstoryFromLifeLog(w.data.lifeLog ?? []);
+    this.onChanged?.();
+    return id;
+  }
+
+  /** Necromancer emerges near the cemetery at night (spooky layer). */
+  spawnNecromancerNear(x: number, y: number): string | null {
+    const id = `subject-${this.nextSubjectId++}`;
+    const name = pickName(3000 + this.nextSubjectId);
+    this.createSubject('necromancer', 'cemetery', id, name, {
+      gender: 'male',
+      ageYears: 55,
+      backstory: 'A grave-robber who traded his soul for dark rites.',
+      lifeLog: appendLifeLogEntry(
+        [],
+        this.daysPlayed,
+        'Emerged from the cemetery shadows',
+        'spawn'
+      ),
+    });
+    const n = this.getById(id);
+    if (!n) return null;
+    n.sprite.setPosition(
+      x + Phaser.Math.Between(-16, 16),
+      y + Phaser.Math.Between(-16, 16)
+    );
+    n.data.backstory = backstoryFromLifeLog(n.data.lifeLog ?? []);
     this.onChanged?.();
     return id;
   }
@@ -695,7 +766,9 @@ export class SubjectSystem {
         if (
           s.interrupt?.kind === 'repair' ||
           s.interrupt?.kind === 'harvest' ||
-          s.interrupt?.kind === 'eat'
+          s.interrupt?.kind === 'eat' ||
+          s.interrupt?.kind === 'fish' ||
+          s.interrupt?.kind === 'crew'
         ) {
           s.interrupt = null;
         }
@@ -703,10 +776,13 @@ export class SubjectSystem {
       this.applyHpTint(s);
       if (s.data.hunger >= 100) {
         const name = s.data.name;
+        const houseId = s.data.houseId;
+        const id = s.data.id;
         this.removeSubject(s);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${name} starved`,
         });
+        this.onDeath?.(id, houseId, name);
         this.onChanged?.();
       }
     }
@@ -1311,6 +1387,7 @@ export class SubjectSystem {
     if (managed.data.hp <= 0) {
       const name = managed.data.name;
       const role = managed.data.role;
+      const houseId = managed.data.houseId;
       this.removeSubject(managed);
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `${name} was slain`,
@@ -1318,6 +1395,7 @@ export class SubjectSystem {
       if (role === 'king' || role === 'queen') {
         this.trySuccession();
       }
+      this.onDeath?.(id, houseId, name);
       this.onChanged?.();
       return true;
     }
@@ -1405,10 +1483,13 @@ export class SubjectSystem {
         : Phase12Balance.defaultLifespan;
       if (s.data.ageYears > lifespan) {
         const name = s.data.name;
+        const houseId = s.data.houseId;
+        const id = s.data.id;
         this.removeSubject(s);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${name} died of old age`,
         });
+        this.onDeath?.(id, houseId, name);
         this.onChanged?.();
       }
     }
@@ -1797,10 +1878,24 @@ export class SubjectSystem {
 
     const home = this.buildings?.getHousePoint(managed.data.houseId) ?? null;
     const fallback = randomPointInZone(slot.zone, this.world, home);
-    const target =
+    let target =
       slot.activity === 'patrol'
         ? this.pickPatrolTarget(managed, fallback)
         : fallback;
+
+    // Soft block: civilians prefer not to path into an active security cordon.
+    if (
+      this.security?.isActive() &&
+      !isMilitaryRole(managed.data.role) &&
+      this.security.inQuarantine(target.x, target.y)
+    ) {
+      const retry = randomPointInZone(slot.zone, this.world, home);
+      if (!this.security.inQuarantine(retry.x, retry.y)) {
+        target = retry;
+      } else {
+        return;
+      }
+    }
     this.nudgeToward(managed.data.id, target.x, target.y, 40);
   }
 
