@@ -747,7 +747,7 @@ a {
 }
 
 .sandbox-panel {
-  width: min(480px, 100%);
+  width: min(560px, 100%);
   max-height: min(88vh, 760px);
   overflow: auto;
   padding: 1rem 1.1rem 1.25rem;
@@ -786,4 +786,48 @@ a {
   margin-top: 1rem;
   padding-top: 0.75rem;
   border-top: 1px solid rgba(244, 239, 228, 0.15);
+}
+
+.sandbox-toggle-caption {
+  margin: 0.55rem 0 0.2rem;
+  font-size: 0.78rem;
+  opacity: 0.75;
+}
+
+.sandbox-spawn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin: 0.35rem 0 0.55rem;
+}
+
+.sandbox-spawn-label {
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.sandbox-spawn-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.sandbox-spawn-btn {
+  appearance: none;
+  border: 1px solid rgba(244, 239, 228, 0.28);
+  background: rgba(244, 239, 228, 0.08);
+  color: inherit;
+  border-radius: 4px;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.sandbox-spawn-btn:hover:not(:disabled) {
+  background: rgba(244, 239, 228, 0.16);
+}
+
+.sandbox-spawn-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

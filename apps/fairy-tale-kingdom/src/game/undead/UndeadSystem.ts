@@ -85,6 +85,7 @@ export class UndeadSystem {
     this.accumMs = 0;
 
     if (
+      sb.kinds.necromancer &&
       sb.necromancer > 0 &&
       isNight &&
       this.necromancers.length === 0 &&
@@ -99,6 +100,7 @@ export class UndeadSystem {
     this.tickExorcists();
 
     if (
+      sb.kinds.vampire &&
       sb.vampire > 0 &&
       isNight &&
       this.castles.length < 2 &&
@@ -107,6 +109,7 @@ export class UndeadSystem {
       this.spawnVampireCastle();
     }
     if (
+      sb.kinds.vampire &&
       sb.vampire > 0 &&
       isNight &&
       this.castles.length > 0 &&
@@ -119,7 +122,9 @@ export class UndeadSystem {
   }
 
   onSubjectDied(_subjectId: string, houseId: string, name: string): void {
-    const ghostMult = getSandboxRuntime().undead.ghost;
+    const sb = getSandboxRuntime().undead;
+    if (!sb.kinds.ghost) return;
+    const ghostMult = sb.ghost;
     if (ghostMult <= 0 || Math.random() > 0.18 * ghostMult) return;
     if (this.haunts.some((h) => h.houseId === houseId)) return;
     this.haunts.push({ houseId, ghostName: name });
@@ -189,15 +194,51 @@ export class UndeadSystem {
 
   // --- Necromancers -------------------------------------------------------
 
-  private spawnNecromancer(): void {
-    const cem = this.buildings.getCemeteryPoint();
-    if (!cem) return;
+  /** Sandbox: spawn a necromancer near the cemetery (or keep). */
+  debugSpawnNecromancer(): boolean {
+    return this.spawnNecromancer(true);
+  }
+
+  /** Sandbox: plant a vampire castle on the fringe. */
+  debugSpawnVampireCastle(): boolean {
+    return this.spawnVampireCastle(true);
+  }
+
+  /** Sandbox: haunt a random house. */
+  debugSpawnGhost(): boolean {
+    const house = this.buildings
+      .list()
+      .find((b) => b.kind === 'house' || b.kind === 'keep');
+    if (!house) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Sandbox: need a house or keep to haunt',
+      });
+      return false;
+    }
+    if (this.haunts.some((h) => h.houseId === house.id)) {
+      this.haunts = this.haunts.filter((h) => h.houseId !== house.id);
+    }
+    this.haunts.push({ houseId: house.id, ghostName: 'Sandbox Specter' });
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: 'Sandbox: a ghost haunts a home!',
+    });
+    return true;
+  }
+
+  private spawnNecromancer(force = false): boolean {
+    if (!force && !getSandboxRuntime().undead.kinds.necromancer) return false;
+    const cem =
+      this.buildings.getCemeteryPoint() ?? this.buildings.getActiveKeepPoint();
+    if (!cem) return false;
     const id = this.subjects.spawnNecromancerNear(cem.x, cem.y);
-    if (!id) return;
+    if (!id) return false;
     this.necromancers.push({ id, raiseMs: 8000 + Math.random() * 6000 });
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: 'A necromancer stirs among the graves!',
+      message: force
+        ? 'Sandbox: a necromancer stirs!'
+        : 'A necromancer stirs among the graves!',
     });
+    return true;
   }
 
   private tickNecromancers(isNight: boolean, tickMs: number): void {
@@ -467,7 +508,8 @@ export class UndeadSystem {
 
   // --- Vampires ---------------------------------------------------------------
 
-  private spawnVampireCastle(): void {
+  private spawnVampireCastle(force = false): boolean {
+    if (!force && !getSandboxRuntime().undead.kinds.vampire) return false;
     const keep = this.buildings.getActiveKeepPoint();
     for (let attempt = 0; attempt < 40; attempt++) {
       const cx =
@@ -498,10 +540,18 @@ export class UndeadSystem {
         lifeMs: 180_000 + Math.random() * 120_000,
       });
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'A vampire castle appears on the fringe!',
+        message: force
+          ? 'Sandbox: a vampire castle appears!'
+          : 'A vampire castle appears on the fringe!',
       });
-      return;
+      return true;
     }
+    if (force) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Sandbox: no land for a vampire castle',
+      });
+    }
+    return false;
   }
 
   private tryVampireBite(): void {

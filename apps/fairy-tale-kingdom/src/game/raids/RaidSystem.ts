@@ -210,6 +210,58 @@ export class RaidSystem {
     }
   }
 
+  /** Sandbox: spawn a small raid party from a map edge. */
+  debugLaunchRaid(kind: RaidKind, count = 5): void {
+    const pad = 48;
+    const side = Phaser.Math.Between(0, 3);
+    let x = pad;
+    let y = pad;
+    switch (side) {
+      case 0:
+        x = Phaser.Math.Between(pad, this.world.width - pad);
+        y = pad;
+        break;
+      case 1:
+        x = Phaser.Math.Between(pad, this.world.width - pad);
+        y = this.world.height - pad;
+        break;
+      case 2:
+        x = pad;
+        y = Phaser.Math.Between(pad, this.world.height - pad);
+        break;
+      default:
+        x = this.world.width - pad;
+        y = Phaser.Math.Between(pad, this.world.height - pad);
+        break;
+    }
+    if (this.pathGrid) {
+      const snap = this.pathGrid.snapWorldToOpen(x, y);
+      x = snap.x;
+      y = snap.y;
+    }
+    const stealKind: StealKind | undefined =
+      kind === 'bandit' ||
+      kind === 'giant' ||
+      kind === 'goblin' ||
+      kind === 'gypsy'
+        ? kind
+        : undefined;
+    this.launchCampRaiders({
+      kind,
+      x,
+      y,
+      count,
+      homeCampId: `sandbox-raid-${kind}`,
+      homeX: x,
+      homeY: y,
+      stealKind,
+      label: `Sandbox ${LABELS[kind]}`,
+    });
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `Sandbox: ${LABELS[kind]} raid inbound!`,
+    });
+  }
+
   /** Initial siege wave planted at a siege encampment. */
   beginSiegeFromCamp(opts: BeginSiegeFromCampOpts): void {
     if (this.gameOver) return;

@@ -1,5 +1,6 @@
 import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind, NavalKind } from '../../marketplace/catalog';
+import type { SandboxSpawnAction } from '../../kingdom/sandboxSettings';
 import type {
   BuildingSnapshot,
   CampSnapshot,
@@ -39,6 +40,7 @@ export const KingdomEvents = {
   ARREST_CAMP: 'kingdom:arrest-camp',
   FOCUS_CAMP: 'kingdom:focus-camp',
   BUY_NAVAL: 'kingdom:buy-naval',
+  SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -142,3 +144,5 @@ export interface FocusCampPayload {
 export interface BuyNavalPayload {
   kind: NavalKind;
 }
+
+export type SandboxSpawnPayload = SandboxSpawnAction;

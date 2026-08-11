@@ -233,6 +233,18 @@ export class MonsterSystem {
     this.clearSprites();
     this.monsters = [];
     for (const s of saved) {
+      let homeX = s.homeX;
+      let homeY = s.homeY;
+      // Migrate ogres that nested their home on the keep roads.
+      if (
+        s.kind === 'ogre' &&
+        typeof homeX === 'number' &&
+        typeof homeY === 'number'
+      ) {
+        const pushed = this.pushAwayFromKeep({ x: homeX, y: homeY }, 220);
+        homeX = pushed.x;
+        homeY = pushed.y;
+      }
       this.spawnMonster(s.kind, {
         id: s.id,
         name: s.name,
@@ -242,20 +254,51 @@ export class MonsterSystem {
         caveId: s.caveId ?? null,
         x: s.x,
         y: s.y,
-        homeX: s.homeX,
-        homeY: s.homeY,
+        homeX,
+        homeY,
         influenceRadius: s.influenceRadius,
         hunger: s.hunger,
       });
     }
   }
 
+  /** Sandbox: force-spawn a monster (ignores daily caps / dragon uniqueness). */
+  debugSpawn(kind: MonsterKind): void {
+    const m = this.spawnMonster(kind);
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message:
+        kind === 'dragon'
+          ? `Sandbox: ${m.name} the dragon nests nearby!`
+          : `Sandbox: ${m.name} the ${kind} stalks the wilds!`,
+    });
+    this.onChanged?.();
+  }
+
   seedIfEmpty(): void {
     if (this.monsters.length > 0) return;
-    this.spawnMonster('troll');
+    const sb = getSandboxRuntime().monsters;
+    const lines: string[] = [];
+    if (sb.kinds.troll) {
+      const m = this.spawnMonster('troll');
+      lines.push(`${m.name} the troll`);
+    }
+    if (sb.kinds.ogre) {
+      const m = this.spawnMonster('ogre');
+      lines.push(`${m.name} the ogre`);
+    }
+    // Nest a dragon early when caves exist — they mostly sleep/roam until hungry.
+    if (sb.kinds.dragon && getCavePoints().length > 0) {
+      const m = this.spawnMonster('dragon');
+      lines.push(`${m.name} the dragon`);
+    }
+    if (!lines.length) return;
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${this.monsters[0]?.name ?? 'A troll'} appeared in the wilds!`,
+      message:
+        lines.length === 1
+          ? `${lines[0]} appeared in the wilds!`
+          : `Wild beasts stir: ${lines.join(', ')}!`,
     });
+    this.onChanged?.();
   }
 
   damageMonster(id: string, amount: number): boolean {
@@ -308,27 +351,11 @@ export class MonsterSystem {
     this.spawnAccumDays += sb.spawnRate;
     const maxMonsters = Math.min(14, 4 + Math.floor(this.daysPlayed / 3));
     if (this.monsters.length >= maxMonsters) return;
-    // Spawn more often as days rise (every 2 days early → every day late)
-    const interval = this.daysPlayed >= 8 ? 1 : 2;
-    if (this.spawnAccumDays < interval) return;
-    this.spawnAccumDays = 0;
-    const hasDragon = this.monsters.some((m) => m.kind === 'dragon');
-    const pool: MonsterKind[] = [];
-    if (sb.kinds.troll) pool.push('troll');
-    if (sb.kinds.ogre) pool.push('ogre');
-    if (
-      sb.kinds.dragon &&
-      !hasDragon &&
-      (this.dayCount >= 2 || this.daysPlayed >= 2) &&
-      Math.random() < 0.65
-    ) {
-      pool.push('dragon');
-    }
-    if (!pool.length) return;
-    let kind: MonsterKind = pool[Math.floor(Math.random() * pool.length)]!;
-    if (kind !== 'dragon' && pool.includes('ogre') && pool.includes('troll')) {
-      kind = Math.random() < 0.45 ? 'ogre' : 'troll';
-    }
+    // One attempt per accumulated day of spawnRate (sandbox 1 = daily).
+    if (this.spawnAccumDays < 1) return;
+    this.spawnAccumDays -= 1;
+    const kind = this.pickSpawnKind(sb.kinds);
+    if (!kind) return;
     const m = this.spawnMonster(kind);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message:
@@ -337,24 +364,57 @@ export class MonsterSystem {
           : `${m.name} the ${kind} stalks the kingdom!`,
     });
     if (
-      this.daysPlayed >= 8 &&
+      this.daysPlayed >= 6 &&
       this.monsters.length < maxMonsters &&
-      Math.random() < 0.45 * sb.spawnRate
+      Math.random() < 0.5 * sb.spawnRate
     ) {
-      const extras: MonsterKind[] = [];
-      if (sb.kinds.ogre) extras.push('ogre');
-      if (sb.kinds.troll) extras.push('troll');
-      if (!extras.length) {
-        this.onChanged?.();
-        return;
+      const extraKind = this.pickSpawnKind(sb.kinds, { excludeDragon: true });
+      if (extraKind) {
+        const extra = this.spawnMonster(extraKind);
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${extra.name} the ${extra.kind} joins the wilds!`,
+        });
       }
-      const extraKind = extras[Math.floor(Math.random() * extras.length)]!;
-      const extra = this.spawnMonster(extraKind);
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: `${extra.name} the ${extra.kind} joins the wilds!`,
-      });
     }
     this.onChanged?.();
+  }
+
+  /**
+   * Weighted pick favoring kinds you don't already have.
+   * At most one dragon lives at a time; no extra day/RNG gate.
+   */
+  private pickSpawnKind(
+    kinds: { troll: boolean; ogre: boolean; dragon: boolean },
+    opts?: { excludeDragon?: boolean }
+  ): MonsterKind | null {
+    const counts = {
+      troll: this.monsters.filter((m) => m.kind === 'troll').length,
+      ogre: this.monsters.filter((m) => m.kind === 'ogre').length,
+      dragon: this.monsters.filter((m) => m.kind === 'dragon').length,
+    };
+    const weighted: { kind: MonsterKind; w: number }[] = [];
+    if (kinds.troll) {
+      weighted.push({ kind: 'troll', w: (counts.troll === 0 ? 1.4 : 1) / (1 + counts.troll * 0.4) });
+    }
+    if (kinds.ogre) {
+      weighted.push({ kind: 'ogre', w: (counts.ogre === 0 ? 1.6 : 1.1) / (1 + counts.ogre * 0.4) });
+    }
+    if (
+      kinds.dragon &&
+      !opts?.excludeDragon &&
+      counts.dragon === 0 &&
+      getCavePoints().length > 0
+    ) {
+      weighted.push({ kind: 'dragon', w: 1.5 });
+    }
+    if (!weighted.length) return null;
+    const total = weighted.reduce((s, e) => s + e.w, 0);
+    let roll = Math.random() * total;
+    for (const e of weighted) {
+      roll -= e.w;
+      if (roll <= 0) return e.kind;
+    }
+    return weighted[weighted.length - 1]!.kind;
   }
 
   clear(): void {
@@ -463,11 +523,45 @@ export class MonsterSystem {
       const cave = getCavePoints().find((c) => c.id === caveId);
       if (cave) return { x: cave.x, y: cave.y + 8 };
     }
-    return randomPointInZone(
-      kind === 'troll' ? 'forest' : kind === 'ogre' ? 'path' : 'cave',
-      this.world,
-      null
-    );
+    // Ogres used to spawn on 'path' (map center / keep roads) so their home
+    // sphere sat on the bailey. Nest them in the woods like trolls instead.
+    const zone =
+      kind === 'troll' || kind === 'ogre' ? 'forest' : 'cave';
+    let pt = randomPointInZone(zone, this.world, null);
+    pt = this.pushAwayFromKeep(pt, 220);
+    if (this.pathGrid) {
+      pt = this.pathGrid.snapWorldToOpen(pt.x, pt.y);
+      pt = this.pushAwayFromKeep(pt, 200);
+    }
+    return pt;
+  }
+
+  /** Nudge a spawn out of the keep clearing if it landed too close. */
+  private pushAwayFromKeep(pt: Point, minDist: number): Point {
+    const dx = pt.x - this.keep.x;
+    const dy = pt.y - this.keep.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist >= minDist) return pt;
+    if (dist < 1) {
+      const ang = Math.random() * Math.PI * 2;
+      return {
+        x: Phaser.Math.Clamp(
+          this.keep.x + Math.cos(ang) * minDist,
+          40,
+          this.world.width - 40
+        ),
+        y: Phaser.Math.Clamp(
+          this.keep.y + Math.sin(ang) * minDist,
+          40,
+          this.world.height - 40
+        ),
+      };
+    }
+    const scale = minDist / dist;
+    return {
+      x: Phaser.Math.Clamp(this.keep.x + dx * scale, 40, this.world.width - 40),
+      y: Phaser.Math.Clamp(this.keep.y + dy * scale, 40, this.world.height - 40),
+    };
   }
 
   private syncActivity(m: ManagedMonster, hour: number): void {

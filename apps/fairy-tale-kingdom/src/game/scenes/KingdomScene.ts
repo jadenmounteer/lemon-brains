@@ -34,6 +34,7 @@ import {
   type FocusCampPayload,
   type HireSubjectPayload,
   type PayRansomPayload,
+  type SandboxSpawnPayload,
   type SetDaysPlayedPayload,
   type TransformPeasantPayload,
 } from '../subjects/events';
@@ -623,6 +624,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
+    this.game.events.on(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -762,7 +764,52 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
+    this.game.events.off(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
   }
+
+  private onSandboxSpawn = (payload: SandboxSpawnPayload) => {
+    switch (payload.type) {
+      case 'camp':
+        this.encampments.debugSpawnCamp(payload.campKind);
+        break;
+      case 'monster':
+        this.monsters.debugSpawn(payload.monsterKind);
+        break;
+      case 'undead':
+        if (payload.undeadKind === 'vampire') {
+          this.undead.debugSpawnVampireCastle();
+        } else if (payload.undeadKind === 'necromancer') {
+          this.undead.debugSpawnNecromancer();
+        } else {
+          this.undead.debugSpawnGhost();
+        }
+        break;
+      case 'witch': {
+        const keep = this.buildings.getActiveKeepPoint();
+        const id = this.subjects.spawnWitchNear(keep.x + 80, keep.y + 40);
+        this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: id
+            ? 'Sandbox: a witch appears near the keep!'
+            : 'Sandbox: could not spawn a witch',
+        });
+        break;
+      }
+      case 'raid':
+        this.raids.debugLaunchRaid(payload.raidKind);
+        break;
+      case 'unit': {
+        const ok = this.subjects.hire(payload.role);
+        this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: ok
+            ? `Sandbox: hired a ${payload.role}`
+            : `Sandbox: could not hire ${payload.role}`,
+        });
+        break;
+      }
+    }
+    this.emitStats();
+    this.schedulePersist();
+  };
 
   private onHire = (payload: HireSubjectPayload) => {
     const ok = this.subjects.hire(payload.role);

@@ -1,13 +1,22 @@
+import type { UnitRole } from '../game/art/assetManifest';
 import type { CampKind } from '../game/war/WarBalance';
 import type { MonsterKind } from '../game/monsters/MonsterSystem';
+import { HIRE_CATALOG } from '../marketplace/catalog';
 
 export const SANDBOX_REGISTRY_KEY = 'sandboxSettings';
 
 export type CampKindEnable = Record<CampKind, boolean>;
 export type MonsterKindEnable = Record<MonsterKind, boolean>;
+export type UndeadKindEnable = {
+  vampire: boolean;
+  necromancer: boolean;
+  ghost: boolean;
+};
+/** Hireable kingdom roles — toggles gate marketplace hiring. */
+export type UnitKindEnable = Record<UnitRole, boolean>;
 
 export interface SandboxSettings {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   war: {
     /** 0–2 overall war intensity (1 = default). */
     intensity: number;
@@ -23,6 +32,9 @@ export interface SandboxSettings {
     hungerHunt: number;
     kinds: MonsterKindEnable;
   };
+  units: {
+    kinds: UnitKindEnable;
+  };
   sickness: {
     hungerRise: number;
     sickAtHunger: number;
@@ -32,11 +44,15 @@ export interface SandboxSettings {
     vampire: number;
     necromancer: number;
     ghost: number;
+    kinds: UndeadKindEnable;
   };
   buildings: {
     wallHpMult: number;
   };
 }
+
+/** Roles shown as sandbox unit toggles (marketplace hire list). */
+export const SANDBOX_UNIT_ROLES: UnitRole[] = HIRE_CATALOG.map((h) => h.role);
 
 const ALL_CAMPS_ON: CampKindEnable = {
   bandit: true,
@@ -54,8 +70,34 @@ const ALL_MONSTERS_ON: MonsterKindEnable = {
   dragon: true,
 };
 
+const ALL_UNDEAD_ON: UndeadKindEnable = {
+  vampire: true,
+  necromancer: true,
+  ghost: true,
+};
+
+function allUnitsOn(): UnitKindEnable {
+  const kinds = {} as UnitKindEnable;
+  for (const role of SANDBOX_UNIT_ROLES) kinds[role] = true;
+  // Ensure every UnitRole key exists for Record typing / hire checks
+  const extras: UnitRole[] = [
+    'child',
+    'prince',
+    'princess',
+    'witch',
+    'necromancer',
+    'zombie',
+    'vampire_wife',
+    'bandit',
+    'thief',
+    'gypsy',
+  ];
+  for (const role of extras) kinds[role] = true;
+  return kinds;
+}
+
 export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
-  version: 2,
+  version: 3,
   war: {
     intensity: 1,
     campSpawnRate: 1,
@@ -70,6 +112,9 @@ export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
     hungerHunt: 1,
     kinds: { ...ALL_MONSTERS_ON },
   },
+  units: {
+    kinds: allUnitsOn(),
+  },
   sickness: {
     hungerRise: 0.25,
     sickAtHunger: 90,
@@ -79,6 +124,7 @@ export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
     vampire: 1,
     necromancer: 1,
     ghost: 1,
+    kinds: { ...ALL_UNDEAD_ON },
   },
   buildings: {
     wallHpMult: 1,
@@ -100,7 +146,7 @@ export function normalizeSandboxSettings(
   raw: Partial<SandboxSettings> | null | undefined
 ): SandboxSettings {
   const d = DEFAULT_SANDBOX_SETTINGS;
-  if (!raw || (raw.version !== 1 && raw.version !== 2)) {
+  if (!raw || (raw.version !== 1 && raw.version !== 2 && raw.version !== 3)) {
     return structuredClone(d);
   }
 
@@ -113,7 +159,7 @@ export function normalizeSandboxSettings(
   }
 
   return {
-    version: 2,
+    version: 3,
     war: {
       intensity: clampMult(raw.war?.intensity ?? d.war.intensity),
       campSpawnRate: clampMult(raw.war?.campSpawnRate ?? d.war.campSpawnRate),
@@ -138,6 +184,12 @@ export function normalizeSandboxSettings(
         ...(raw.monsters?.kinds ?? {}),
       },
     },
+    units: {
+      kinds: {
+        ...allUnitsOn(),
+        ...(raw.units?.kinds ?? {}),
+      },
+    },
     sickness: {
       hungerRise: clampMult(hungerRise),
       sickAtHunger: clamp(Math.round(sickAtHunger), 40, 100),
@@ -147,6 +199,10 @@ export function normalizeSandboxSettings(
       vampire: clampMult(raw.undead?.vampire ?? d.undead.vampire),
       necromancer: clampMult(raw.undead?.necromancer ?? d.undead.necromancer),
       ghost: clampMult(raw.undead?.ghost ?? d.undead.ghost),
+      kinds: {
+        ...ALL_UNDEAD_ON,
+        ...(raw.undead?.kinds ?? {}),
+      },
     },
     buildings: {
       wallHpMult: clamp(
@@ -198,3 +254,12 @@ export function readSandboxFromRegistry(
     return structuredClone(DEFAULT_SANDBOX_SETTINGS);
   }
 }
+
+/** Instant spawn actions from the sandbox panel (for funsies). */
+export type SandboxSpawnAction =
+  | { type: 'camp'; campKind: CampKind }
+  | { type: 'monster'; monsterKind: MonsterKind }
+  | { type: 'undead'; undeadKind: 'vampire' | 'necromancer' | 'ghost' }
+  | { type: 'witch' }
+  | { type: 'raid'; raidKind: 'bandit' | 'giant' | 'goblin' | 'enemy_army' | 'gypsy' }
+  | { type: 'unit'; role: UnitRole };

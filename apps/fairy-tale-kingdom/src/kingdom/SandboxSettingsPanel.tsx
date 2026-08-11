@@ -1,12 +1,16 @@
+import type { ReactNode } from 'react';
+import type { EnemyRole } from '../game/art/assetManifest';
 import type { CampKind } from '../game/war/WarBalance';
 import type { MonsterKind } from '../game/monsters/MonsterSystem';
-import type { SandboxSettings } from './sandboxSettings';
+import { HIRE_CATALOG } from '../marketplace/catalog';
+import type { SandboxSettings, SandboxSpawnAction } from './sandboxSettings';
 
 interface SandboxSettingsPanelProps {
   settings: SandboxSettings;
   onChange: (next: SandboxSettings) => void;
   onReset: () => void;
   onClose: () => void;
+  onSpawn?: (action: SandboxSpawnAction) => void;
 }
 
 const CAMP_LABELS: { kind: CampKind; label: string }[] = [
@@ -23,6 +27,23 @@ const MONSTER_LABELS: { kind: MonsterKind; label: string }[] = [
   { kind: 'troll', label: 'Troll' },
   { kind: 'ogre', label: 'Ogre' },
   { kind: 'dragon', label: 'Dragon' },
+];
+
+const RAID_LABELS: { kind: EnemyRole; label: string }[] = [
+  { kind: 'bandit', label: 'Bandits' },
+  { kind: 'goblin', label: 'Goblins' },
+  { kind: 'giant', label: 'Giants' },
+  { kind: 'gypsy', label: 'Gypsies' },
+  { kind: 'enemy_army', label: 'Army' },
+];
+
+const UNDEAD_LABELS: {
+  kind: 'vampire' | 'necromancer' | 'ghost';
+  label: string;
+}[] = [
+  { kind: 'vampire', label: 'Vampire' },
+  { kind: 'necromancer', label: 'Necromancer' },
+  { kind: 'ghost', label: 'Ghost' },
 ];
 
 function MultSlider({
@@ -58,13 +79,30 @@ function MultSlider({
   );
 }
 
+function SpawnRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="sandbox-spawn-row">
+      <span className="sandbox-spawn-label">{label}</span>
+      <div className="sandbox-spawn-btns">{children}</div>
+    </div>
+  );
+}
+
 export function SandboxSettingsPanel({
   settings,
   onChange,
   onReset,
   onClose,
+  onSpawn,
 }: SandboxSettingsPanelProps) {
   const set = (next: SandboxSettings) => onChange(next);
+  const spawn = (action: SandboxSpawnAction) => onSpawn?.(action);
 
   return (
     <div className="sandbox-overlay" role="dialog" aria-label="Sandbox settings">
@@ -77,8 +115,91 @@ export function SandboxSettingsPanel({
         </div>
         <p className="muted">
           Local debug knobs — saved in this browser only, not in kingdom saves.
-          100% is the tuned default; 0% turns a system off.
+          100% is the tuned default; 0% turns a system off. Uncheck a type to
+          stop it spawning / being hireable.
         </p>
+
+        {onSpawn && (
+          <>
+            <h3 className="inspector-subhead">Spawn now</h3>
+            <p className="muted" style={{ margin: '0 0 0.5rem', fontSize: '0.78rem' }}>
+              Instant toys — drop enemies into the live kingdom.
+            </p>
+            <SpawnRow label="Camps">
+              {CAMP_LABELS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="sandbox-spawn-btn"
+                  onClick={() => spawn({ type: 'camp', campKind: kind })}
+                >
+                  {label}
+                </button>
+              ))}
+            </SpawnRow>
+            <SpawnRow label="Monsters">
+              {MONSTER_LABELS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="sandbox-spawn-btn"
+                  onClick={() => spawn({ type: 'monster', monsterKind: kind })}
+                >
+                  {label}
+                </button>
+              ))}
+            </SpawnRow>
+            <SpawnRow label="Raids">
+              {RAID_LABELS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="sandbox-spawn-btn"
+                  onClick={() => spawn({ type: 'raid', raidKind: kind })}
+                >
+                  {label}
+                </button>
+              ))}
+            </SpawnRow>
+            <SpawnRow label="Undead">
+              {UNDEAD_LABELS.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className="sandbox-spawn-btn"
+                  onClick={() => spawn({ type: 'undead', undeadKind: kind })}
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="sandbox-spawn-btn"
+                onClick={() => spawn({ type: 'witch' })}
+              >
+                Witch
+              </button>
+            </SpawnRow>
+            <SpawnRow label="Hire">
+              {HIRE_CATALOG.map((item) => (
+                <button
+                  key={item.role}
+                  type="button"
+                  className="sandbox-spawn-btn"
+                  disabled={settings.units.kinds[item.role] === false}
+                  onClick={() => spawn({ type: 'unit', role: item.role })}
+                  title={
+                    settings.units.kinds[item.role] === false
+                      ? 'Enable this unit type below first'
+                      : undefined
+                  }
+                >
+                  {item.name}
+                </button>
+              ))}
+            </SpawnRow>
+          </>
+        )}
 
         <h3 className="inspector-subhead">War &amp; raids</h3>
         <MultSlider
@@ -137,6 +258,7 @@ export function SandboxSettingsPanel({
             }
           />
         </label>
+        <p className="sandbox-toggle-caption">Allow camp types</p>
         <div className="sandbox-toggles">
           {CAMP_LABELS.map(({ kind, label }) => (
             <label key={kind} className="sandbox-check">
@@ -182,6 +304,7 @@ export function SandboxSettingsPanel({
             })
           }
         />
+        <p className="sandbox-toggle-caption">Allow monster types</p>
         <div className="sandbox-toggles">
           {MONSTER_LABELS.map(({ kind, label }) => (
             <label key={kind} className="sandbox-check">
@@ -202,6 +325,33 @@ export function SandboxSettingsPanel({
                 }
               />
               {label}
+            </label>
+          ))}
+        </div>
+
+        <h3 className="inspector-subhead">Kingdom unit types</h3>
+        <p className="muted" style={{ margin: '0 0 0.5rem', fontSize: '0.78rem' }}>
+          Uncheck to hide from the marketplace and block hiring.
+        </p>
+        <div className="sandbox-toggles">
+          {HIRE_CATALOG.map((item) => (
+            <label key={item.role} className="sandbox-check">
+              <input
+                type="checkbox"
+                checked={settings.units.kinds[item.role] !== false}
+                onChange={(e) =>
+                  set({
+                    ...settings,
+                    units: {
+                      kinds: {
+                        ...settings.units.kinds,
+                        [item.role]: e.target.checked,
+                      },
+                    },
+                  })
+                }
+              />
+              {item.name}
             </label>
           ))}
         </div>
@@ -254,6 +404,30 @@ export function SandboxSettingsPanel({
         />
 
         <h3 className="inspector-subhead">Undead</h3>
+        <p className="sandbox-toggle-caption">Allow undead types</p>
+        <div className="sandbox-toggles">
+          {UNDEAD_LABELS.map(({ kind, label }) => (
+            <label key={kind} className="sandbox-check">
+              <input
+                type="checkbox"
+                checked={settings.undead.kinds[kind]}
+                onChange={(e) =>
+                  set({
+                    ...settings,
+                    undead: {
+                      ...settings.undead,
+                      kinds: {
+                        ...settings.undead.kinds,
+                        [kind]: e.target.checked,
+                      },
+                    },
+                  })
+                }
+              />
+              {label}
+            </label>
+          ))}
+        </div>
         <MultSlider
           label="Vampire / castles"
           value={settings.undead.vampire}

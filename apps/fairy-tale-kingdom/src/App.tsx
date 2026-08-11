@@ -30,6 +30,7 @@ import { RansomPanel } from './kingdom/RansomPanel';
 import { TodoPanel } from './kingdom/TodoPanel';
 import { useKingdom } from './kingdom/useKingdom';
 import { useSandboxSettings } from './kingdom/useSandboxSettings';
+import type { SandboxSpawnAction } from './kingdom/sandboxSettings';
 import {
   loadShowCareerTodos,
   saveShowCareerTodos,
@@ -188,6 +189,10 @@ export default function App() {
     seq: number;
     campId: string;
     unitId?: string;
+  } | null>(null);
+  const [sandboxSpawnRequest, setSandboxSpawnRequest] = useState<{
+    seq: number;
+    action: SandboxSpawnAction;
   } | null>(null);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
@@ -531,6 +536,9 @@ export default function App() {
               sandboxSettings={sandboxSettings}
               onSandboxSettingsChange={updateSandboxSettings}
               onSandboxSettingsReset={resetSandboxSettings}
+              onSandboxSpawn={(action) =>
+                setSandboxSpawnRequest({ seq: Date.now(), action })
+              }
             />
           )}
         </div>
@@ -542,6 +550,7 @@ export default function App() {
             remountKey={remountKey}
             daysPlayed={kingdom.daysPlayed}
             sandboxSettings={sandboxSettings}
+            sandboxSpawnRequest={sandboxSpawnRequest}
             hireRequest={hireRequest}
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
@@ -727,6 +736,7 @@ export default function App() {
                 infiniteGold={infiniteGold}
                 stats={stats}
                 placeMode={placeMode}
+                enabledRoles={sandboxSettings.units.kinds}
                 onHire={(role) => {
                   void handleHire(role);
                 }}

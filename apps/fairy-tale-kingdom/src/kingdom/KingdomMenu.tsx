@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PlayingManualPanel } from './PlayingManualPanel';
 import { SandboxSettingsPanel } from './SandboxSettingsPanel';
-import type { SandboxSettings } from './sandboxSettings';
+import type { SandboxSettings, SandboxSpawnAction } from './sandboxSettings';
 
 interface KingdomMenuProps {
   kingdomName: string;
@@ -16,6 +16,7 @@ interface KingdomMenuProps {
   sandboxSettings?: SandboxSettings;
   onSandboxSettingsChange?: (next: SandboxSettings) => void;
   onSandboxSettingsReset?: () => void;
+  onSandboxSpawn?: (action: SandboxSpawnAction) => void;
 }
 
 export function KingdomMenu({
@@ -31,6 +32,7 @@ export function KingdomMenu({
   sandboxSettings,
   onSandboxSettingsChange,
   onSandboxSettingsReset,
+  onSandboxSpawn,
 }: KingdomMenuProps) {
   const [open, setOpen] = useState(forceOpen);
   const [showNewForm, setShowNewForm] = useState(forceOpen);
@@ -200,6 +202,7 @@ export function KingdomMenu({
             onChange={onSandboxSettingsChange}
             onReset={onSandboxSettingsReset}
             onClose={() => setShowSandbox(false)}
+            onSpawn={onSandboxSpawn}
           />
         )}
     </div>

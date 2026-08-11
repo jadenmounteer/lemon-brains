@@ -89,7 +89,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   cemetery: { w: 48, h: 34 },
   gallows: { w: 28, h: 38 },
   road: { w: 16, h: 16 },
-  bridge: { w: 48, h: 20 },
+  bridge: { w: 56, h: 20 },
   dock: { w: 40, h: 28 },
   keep: { w: 80, h: 64 },
 };
@@ -843,21 +843,12 @@ export class BuildingSystem {
     this.pathGrid.clear();
     for (const b of this.buildings) {
       if (b.kind === 'bridge') {
-        // Walkable span over water
-        const cells =
-          (b.rotation ?? 0) === 90
-            ? [
-                [b.x, b.y - 16],
-                [b.x, b.y],
-                [b.x, b.y + 16],
-              ]
-            : [
-                [b.x - 16, b.y],
-                [b.x, b.y],
-                [b.x + 16, b.y],
-              ];
-        for (const [cx, cy] of cells) {
-          this.pathGrid.clearTerrainAtWorld(cx!, cy!);
+        // Clear every tile under the span so units can cross water
+        const box = bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0));
+        for (let wy = box.top + 4; wy < box.bottom; wy += TILE_SIZE / 2) {
+          for (let wx = box.left + 4; wx < box.right; wx += TILE_SIZE / 2) {
+            this.pathGrid.clearTerrainAtWorld(wx, wy);
+          }
         }
         continue;
       }
@@ -978,14 +969,24 @@ export class BuildingSystem {
         this.ghost.setTexture(wallTextureKey(this.previewWallMask(x, y)));
       }
     } else if (this.placeKind === 'bridge') {
-      const x = snapCoord(worldX);
-      const y = snapCoord(worldY);
+      // Align to terrain tiles like roads — bridges must cover a water channel.
+      const x = fortSnap(worldX);
+      const y = fortSnap(worldY);
       this.ghost.setPosition(x, y);
       this.ghostWallId = null;
-      this.ghost.setTexture(
-        this.placeRotation === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge
-      );
-      this.ghostValid = this.canPlaceAt('bridge', x, y, null, this.placeRotation);
+      // Prefer the player's rotation; flip if only the other axis spans water.
+      let rot = this.placeRotation;
+      let valid = this.canPlaceAt('bridge', x, y, null, rot);
+      if (!valid) {
+        const other: 0 | 90 = rot === 90 ? 0 : 90;
+        if (this.canPlaceAt('bridge', x, y, null, other)) {
+          rot = other;
+          this.placeRotation = other;
+          valid = true;
+        }
+      }
+      this.ghost.setTexture(rot === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge);
+      this.ghostValid = valid;
     } else if (this.placeKind === 'road' || this.placeKind === 'dock') {
       // Roads/docks snap to the full terrain-tile grid so they line up with the map.
       const x = fortSnap(worldX);
@@ -1690,31 +1691,41 @@ export class BuildingSystem {
     return this.landTerrainOk(box);
   }
 
-  /** Span must cross water in the middle with land at both ends (mirrors rebuildPathGrid). */
+  /**
+   * Span must rest on walkable land at both ends and cover at least one water
+   * tile in between (works for 1–2 tile river channels).
+   */
   private bridgeTerrainOk(x: number, y: number, rotation: 0 | 90): boolean {
     if (!this.mapData) return true;
-    const pts: [number, number][] =
-      rotation === 90
-        ? [
-            [x, y - 16],
-            [x, y],
-            [x, y + 16],
-          ]
-        : [
-            [x - 16, y],
-            [x, y],
-            [x + 16, y],
-          ];
-    const tiles = pts.map(([px, py]) => this.tileAt(px, py));
-    if (tiles.some((t) => t === null)) return false;
-    const [a, mid, b] = tiles as number[];
-    return (
-      mid === TerrainTile.water &&
-      a !== TerrainTile.water &&
-      !isTerrainBlocked(a!) &&
-      b !== TerrainTile.water &&
-      !isTerrainBlocked(b!)
-    );
+    const box = bridgeAabb(x, y, rotation);
+    const samples: number[] = [];
+    if (rotation === 90) {
+      const cx = (box.left + box.right) / 2;
+      for (let py = box.top + TILE_SIZE / 2; py < box.bottom; py += TILE_SIZE / 2) {
+        const t = this.tileAt(cx, py);
+        if (t === null) return false;
+        samples.push(t);
+      }
+    } else {
+      const cy = (box.top + box.bottom) / 2;
+      for (let px = box.left + TILE_SIZE / 2; px < box.right; px += TILE_SIZE / 2) {
+        const t = this.tileAt(px, cy);
+        if (t === null) return false;
+        samples.push(t);
+      }
+    }
+    if (samples.length < 3) return false;
+    const endA = samples[0]!;
+    const endB = samples[samples.length - 1]!;
+    if (
+      endA === TerrainTile.water ||
+      isTerrainBlocked(endA) ||
+      endB === TerrainTile.water ||
+      isTerrainBlocked(endB)
+    ) {
+      return false;
+    }
+    return samples.some((t) => t === TerrainTile.water);
   }
 
   /** Must sit on/near the coast — some water tile bordering the footprint. */

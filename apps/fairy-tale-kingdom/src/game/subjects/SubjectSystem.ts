@@ -33,6 +33,7 @@ import type { RaidSystem } from '../raids/RaidSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
 import type { EncampmentSystem } from '../war/EncampmentSystem';
+import { getSandboxRuntime } from '../sandboxRuntime';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { genderForNewSubject, genderLabel } from './gender';
@@ -1328,6 +1329,12 @@ export class SubjectSystem {
 
   hire(role: UnitRole): boolean {
     if (!this.buildings) return false;
+    if (getSandboxRuntime().units.kinds[role] === false) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${roleLabel(role)} hiring is off in sandbox settings`,
+      });
+      return false;
+    }
     if (role === 'fairy_godmother' && this.hasRole(role)) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `You already have a ${roleLabel(role)}`,

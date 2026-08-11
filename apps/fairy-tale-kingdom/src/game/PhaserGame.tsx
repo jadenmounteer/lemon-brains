@@ -24,6 +24,7 @@ import type {
 import {
   SANDBOX_REGISTRY_KEY,
   type SandboxSettings,
+  type SandboxSpawnAction,
 } from '../kingdom/sandboxSettings';
 import { setSandboxRuntime } from './sandboxRuntime';
 
@@ -31,6 +32,7 @@ interface PhaserGameProps {
   remountKey: number;
   daysPlayed: number;
   sandboxSettings: SandboxSettings;
+  sandboxSpawnRequest?: { seq: number; action: SandboxSpawnAction } | null;
   hireRequest: { seq: number; role: UnitRole } | null;
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
@@ -73,6 +75,7 @@ export function PhaserGame({
   remountKey,
   daysPlayed,
   sandboxSettings,
+  sandboxSpawnRequest,
   hireRequest,
   placeRequest,
   cancelPlaceToken,
@@ -283,6 +286,14 @@ export function PhaserGame({
     setSandboxRuntime(sandboxSettings);
     gameRef.current?.registry.set(SANDBOX_REGISTRY_KEY, sandboxSettings);
   }, [sandboxSettings]);
+
+  useEffect(() => {
+    if (!sandboxSpawnRequest) return;
+    gameRef.current?.events.emit(
+      KingdomEvents.SANDBOX_SPAWN,
+      sandboxSpawnRequest.action
+    );
+  }, [sandboxSpawnRequest]);
 
   useEffect(() => {
     if (!commandRequest) return;

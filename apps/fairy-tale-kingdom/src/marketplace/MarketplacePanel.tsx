@@ -14,6 +14,8 @@ interface MarketplacePanelProps {
   infiniteGold?: boolean;
   stats: KingdomStats;
   placeMode: { active: boolean; kind: BuildKind | null };
+  /** Sandbox: when false for a role, hide that hire row. */
+  enabledRoles?: Partial<Record<UnitRole, boolean>>;
   onHire: (role: UnitRole) => void;
   onBuyBuilding: (kind: BuildKind) => void;
   onBuyNaval: (kind: NavalKind) => void;
@@ -25,12 +27,16 @@ export function MarketplacePanel({
   infiniteGold = false,
   stats,
   placeMode,
+  enabledRoles,
   onHire,
   onBuyBuilding,
   onBuyNaval,
   onCancelPlace,
 }: MarketplacePanelProps) {
   const canAfford = (cost: number) => infiniteGold || gold >= cost;
+  const hireItems = HIRE_CATALOG.filter(
+    (item) => enabledRoles?.[item.role] !== false
+  );
   return (
     <section className="panel market-panel">
       <h2>Marketplace</h2>
@@ -67,7 +73,7 @@ export function MarketplacePanel({
 
       <h3 className="inspector-subhead">Hire</h3>
       <ul className="market-list">
-        {HIRE_CATALOG.map((item) => {
+        {hireItems.map((item) => {
           const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
           const uniqueTaken =
             item.unique &&

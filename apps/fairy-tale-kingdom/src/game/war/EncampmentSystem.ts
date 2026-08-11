@@ -363,6 +363,32 @@ export class EncampmentSystem {
     return { id: camp.id, kind: camp.kind, x: camp.x, y: camp.y };
   }
 
+  /** Sandbox: plant a camp with a starter garrison (siege camps use the map edge). */
+  debugSpawnCamp(kind: CampKind): boolean {
+    const pos = kind === 'siege' ? this.pickEdgePoint() : this.pickFringePoint();
+    if (!pos) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No open land for that camp',
+      });
+      return false;
+    }
+    const camp = this.createCamp(kind, pos.x, pos.y, {
+      garrison: kind === 'siege' ? 0 : 2,
+      quiet: true,
+    });
+    if (!camp) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Could not place that camp',
+      });
+      return false;
+    }
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `Sandbox: ${CAMP_LABEL[kind]} spawned`,
+    });
+    this.onChanged?.();
+    return true;
+  }
+
   /** A subject has walked in and joined this camp's garrison — id must already be a real subject. */
   registerDefector(campId: string, subjectId: string, name: string): void {
     const camp = this.camps.find((c) => c.id === campId);

@@ -64,8 +64,9 @@ export function generateKingdomMap(
   // Irregular coastal ocean (not a perfect rectangular frame)
   paintIrregularCoast(data, cols, rows, midCol, midRow, rand, scale);
 
-  // Inland lakes (scaled for larger maps)
-  const lakeCount = Math.max(3, Math.round(3 + rand() * 4 * scale));
+  // Inland lakes — uncommon and compact so the realm stays walkable
+  const lakeCount =
+    rand() < 0.55 ? 0 : Math.max(1, Math.round(rand() * 1.25 * scale));
   const lakeCenters: { c: number; r: number }[] = [];
   for (let i = 0; i < lakeCount; i++) {
     const spot = paintBlob(
@@ -76,9 +77,9 @@ export function generateKingdomMap(
       midRow,
       rand,
       TerrainTile.water,
-      Math.round(5 + rand() * 8 * scale),
-      Math.round(4 + rand() * 6 * scale),
-      0.22
+      Math.round(3 + rand() * 4 * scale),
+      Math.round(2 + rand() * 3 * scale),
+      0.2
     );
     if (spot) lakeCenters.push(spot);
   }
@@ -101,8 +102,9 @@ export function generateKingdomMap(
     if (spot) mountains.push(tileCenter(spot.c, spot.r));
   }
 
-  // Rivers that cut through the interior (sparse — early game is walkable before bridges)
-  const riverCount = Math.max(1, Math.round(1 + rand() * 1.15 * scale));
+  // Rivers — usually one thin channel (or none); bridges need a narrow span
+  const riverCount =
+    rand() < 0.35 ? 0 : rand() < 0.85 ? 1 : Math.min(2, Math.round(scale));
   const riverPaths: { c: number; r: number }[][] = [];
   for (let i = 0; i < riverCount; i++) {
     const path = paintMeanderingRiver(
@@ -118,9 +120,9 @@ export function generateKingdomMap(
     if (path.length > 8) riverPaths.push(path);
   }
 
-  // Occasional tributary — keep rare so regions stay connected without bridges
+  // Rare tributary
   for (const path of riverPaths) {
-    if (path.length < 28 || rand() > 0.88) continue;
+    if (path.length < 36 || rand() > 0.94) continue;
     const fork = path[Math.floor(path.length * (0.3 + rand() * 0.4))]!;
     paintTributary(data, cols, rows, midCol, midRow, rand, fork, lakeCenters);
   }
@@ -244,29 +246,30 @@ function paintIrregularCoast(
   rand: () => number,
   scale: number
 ): void {
-  const base = Math.max(3, Math.floor(Math.min(cols, rows) * 0.035 * scale));
+  // Thin coastal fringe — ocean rim only, not a deep inland flood
+  const base = Math.max(2, Math.floor(Math.min(cols, rows) * 0.018 * scale));
   const topDepth = new Array(cols).fill(0).map(() => 0);
   const botDepth = new Array(cols).fill(0).map(() => 0);
   const leftDepth = new Array(rows).fill(0).map(() => 0);
   const rightDepth = new Array(rows).fill(0).map(() => 0);
 
-  let t = base + Math.floor(rand() * 3);
-  let b = base + Math.floor(rand() * 3);
+  let t = base + Math.floor(rand() * 2);
+  let b = base + Math.floor(rand() * 2);
   for (let c = 0; c < cols; c++) {
     t += Math.floor(rand() * 3) - 1;
     b += Math.floor(rand() * 3) - 1;
-    t = Math.max(base - 1, Math.min(base + 5, t));
-    b = Math.max(base - 1, Math.min(base + 5, b));
+    t = Math.max(base - 1, Math.min(base + 2, t));
+    b = Math.max(base - 1, Math.min(base + 2, b));
     topDepth[c] = t;
     botDepth[c] = b;
   }
-  let l = base + Math.floor(rand() * 3);
-  let ri = base + Math.floor(rand() * 3);
+  let l = base + Math.floor(rand() * 2);
+  let ri = base + Math.floor(rand() * 2);
   for (let r = 0; r < rows; r++) {
     l += Math.floor(rand() * 3) - 1;
     ri += Math.floor(rand() * 3) - 1;
-    l = Math.max(base - 1, Math.min(base + 5, l));
-    ri = Math.max(base - 1, Math.min(base + 5, ri));
+    l = Math.max(base - 1, Math.min(base + 2, l));
+    ri = Math.max(base - 1, Math.min(base + 2, ri));
     leftDepth[r] = l;
     rightDepth[r] = ri;
   }
@@ -283,9 +286,8 @@ function paintIrregularCoast(
     }
   }
 
-  // Occasional coastal inlets / bays cutting further inland
-  const bayCount = Math.round(2 + 2 * scale);
-  for (let i = 0; i < bayCount; i++) {
+  // Rare small coastal inlet
+  if (rand() < 0.45) {
     const side = Math.floor(rand() * 4);
     let c = 0;
     let r = 0;
@@ -311,8 +313,8 @@ function paintIrregularCoast(
       c,
       r,
       TerrainTile.water,
-      4 + Math.floor(rand() * 5),
-      3 + Math.floor(rand() * 4),
+      2 + Math.floor(rand() * 3),
+      2 + Math.floor(rand() * 2),
       rand
     );
   }
@@ -425,7 +427,8 @@ function paintMeanderingRiver(
   let c = sc;
   let r = sr;
   const maxSteps = cols + rows + Math.floor(rand() * 40);
-  let width = rand() < 0.18 ? 2 : 1;
+  // Single-tile channel so a standard bridge can span land–water–land
+  const width = 0;
 
   for (let step = 0; step < maxSteps; step++) {
     stampRiverCell(data, cols, rows, midCol, midRow, c, r, width, rand);
@@ -450,11 +453,6 @@ function paintMeanderingRiver(
       // Oxbow / lazy bend away from the goal briefly
       c += rand() < 0.5 ? 1 : -1;
       r += rand() < 0.5 ? 1 : -1;
-    }
-
-    // Occasionally widen mid-course (delta / marsh feel) — mostly stay narrow
-    if (step > 0 && step % 36 === 0) {
-      width = rand() < 0.22 ? 2 : 1;
     }
 
     c = clamp(c, 1, cols - 2);
@@ -492,7 +490,7 @@ function paintTributary(
   let r = start.r;
   const steps = Math.floor((cols + rows) * 0.35);
   for (let i = 0; i < steps; i++) {
-    stampRiverCell(data, cols, rows, midCol, midRow, c, r, 1, rand);
+    stampRiverCell(data, cols, rows, midCol, midRow, c, r, 0, rand);
     if (Math.hypot(c - target.c, r - target.r) < 2) break;
     const dc = Math.sign(target.c - c);
     const dr = Math.sign(target.r - r);
@@ -519,9 +517,11 @@ function stampRiverCell(
   width: number,
   rand: () => number
 ): void {
-  for (let dr = -width; dr <= width; dr++) {
-    for (let dc = -width; dc <= width; dc++) {
-      if (Math.abs(dc) + Math.abs(dr) > width + (rand() < 0.3 ? 1 : 0)) continue;
+  // width 0 = single tile (bridge-friendly); width 1 = thin diamond
+  const rad = Math.max(0, width);
+  for (let dr = -rad; dr <= rad; dr++) {
+    for (let dc = -rad; dc <= rad; dc++) {
+      if (Math.abs(dc) + Math.abs(dr) > rad) continue;
       const cc = c + dc;
       const rr = r + dr;
       if (rr < 1 || cc < 1 || rr >= rows - 1 || cc >= cols - 1) continue;
@@ -530,6 +530,24 @@ function stampRiverCell(
       const t = data[rr]![cc]!;
       if (t === TerrainTile.mountain && Math.abs(dc) + Math.abs(dr) > 0) continue;
       data[rr]![cc] = TerrainTile.water;
+    }
+  }
+  // Occasional single bank freckle for shoreline texture (still 1-tile channel)
+  if (rad === 0 && rand() < 0.08) {
+    const dc = rand() < 0.5 ? 1 : -1;
+    const rr = r;
+    const cc = c + (rand() < 0.5 ? dc : 0);
+    const r2 = rand() < 0.5 ? r + (rand() < 0.5 ? 1 : -1) : rr;
+    const c2 = rand() < 0.5 ? cc : c;
+    if (
+      r2 >= 1 &&
+      c2 >= 1 &&
+      r2 < rows - 1 &&
+      c2 < cols - 1 &&
+      !inKeepCore(c2, r2, midCol, midRow) &&
+      data[r2]![c2] !== TerrainTile.mountain
+    ) {
+      data[r2]![c2] = TerrainTile.water;
     }
   }
 }
