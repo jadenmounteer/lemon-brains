@@ -4,6 +4,7 @@ import type { BuildingSystem } from '../buildings/BuildingSystem';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { RaidSystem } from '../raids/RaidSystem';
 import { KingdomEvents } from '../subjects/events';
+import { ringOffset } from '../subjects/zones';
 import type { FestivalKind } from './festivalRequirements';
 
 export type VenueKind = 'festival' | 'wedding' | 'joust' | 'funeral';
@@ -202,11 +203,13 @@ export class EventVenueSystem {
           !s.interrupt
       )
       .slice(0, 3);
-    for (const g of guards) {
+    guards.forEach((g, i) => {
       g.interrupt = { kind: 'guard_event', remainingMs: 3000 };
-      this.subjects.nudgeToward(g.data.id, v.x, v.y, 50);
+      const off = ringOffset(i, guards.length, 40);
+      const dest = this.subjects.snapToWalkable(v.x + off.x, v.y + off.y);
+      this.subjects.nudgeToward(g.data.id, dest.x, dest.y, 50);
       if (!v.guardIds.includes(g.data.id)) v.guardIds.push(g.data.id);
-    }
+    });
   }
 
   private burn(v: ActiveVenue, by: string): void {

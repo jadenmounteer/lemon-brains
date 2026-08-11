@@ -6,6 +6,7 @@ import type { SecuritySystem } from '../security/SecuritySystem';
 import { CombatBalance } from '../combat/stats';
 import { KingdomEvents } from '../subjects/events';
 import { getSandboxRuntime } from '../sandboxRuntime';
+import { ringOffset } from '../subjects/zones';
 
 interface Haunt {
   houseId: string;
@@ -363,6 +364,7 @@ export class UndeadSystem {
   private tickHauntedTenants(): void {
     if (!this.haunts.length) return;
     const safe = this.buildings.getActiveKeepPoint();
+    const fleeing: { id: string; houseId: string }[] = [];
     for (const h of this.haunts) {
       for (const s of this.subjects.listManaged()) {
         if (s.data.houseId !== h.houseId) continue;
@@ -375,9 +377,17 @@ export class UndeadSystem {
           s.data.activityLabel = 'Fleeing a haunted house';
           s.data.thought = 'A ghost! We must leave!';
         }
-        this.subjects.nudgeToward(s.data.id, safe.x, safe.y, 55);
+        fleeing.push({ id: s.data.id, houseId: h.houseId });
       }
     }
+    fleeing.forEach((f, i) => {
+      const off = ringOffset(i, fleeing.length, 56);
+      const dest = this.subjects.snapToWalkable(
+        safe.x + off.x,
+        safe.y + off.y + 20
+      );
+      this.subjects.nudgeToward(f.id, dest.x, dest.y, 55);
+    });
   }
 
   private releaseHauntedTenants(houseId: string): void {

@@ -228,6 +228,7 @@ export class RoyaltySystem {
       if (this.ballRemainingMs <= 0) {
         this.ballRemainingMs = 0;
         this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
+        this.subjects.clearGatherActivities(['ball']);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: 'The royal ball has ended',
         });
@@ -253,6 +254,7 @@ export class RoyaltySystem {
         this.festivalRemainingMs = 0;
         this.activeFestivalKind = null;
         this.festivalCooldownMs = EconomyBalance.festivalMinIntervalMs;
+        this.subjects.clearGatherActivities(['festival']);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: 'The festival winds down',
         });
@@ -291,7 +293,7 @@ export class RoyaltySystem {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: toastForFestival(pick.kind),
       });
-      this.subjects.markFestivalGather();
+      this.subjects.markFestivalGather({ x: pick.x, y: pick.y });
       this.onFestivalStart?.(pick);
     }
   }

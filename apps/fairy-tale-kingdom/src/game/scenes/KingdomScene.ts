@@ -1191,17 +1191,21 @@ export class KingdomScene extends Phaser.Scene {
       cam.stopFollow();
     }
     const clamped = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
-    const prevZoom = cam.zoom;
-    const nextZoom = Phaser.Math.Clamp(prevZoom * clamped, ZOOM_MIN, ZOOM_MAX);
-    if (Math.abs(nextZoom - prevZoom) < 0.0005) return;
+    const nextZoom = Phaser.Math.Clamp(cam.zoom * clamped, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(nextZoom - cam.zoom) < 0.0005) return;
 
-    // Keep the world point under the cursor fixed. Phaser world = scroll + screen/zoom
-    // (zoom is around the view center, which cancels out algebraically).
-    const worldX = cam.scrollX + screenX / prevZoom;
-    const worldY = cam.scrollY + screenY / prevZoom;
+    // Use the same getWorldPoint path as placement/selection, then refresh the
+    // camera matrix so scroll correction stays under the cursor (not diagonal).
+    const before = cam.getWorldPoint(screenX, screenY);
     cam.setZoom(nextZoom);
-    cam.scrollX = worldX - screenX / nextZoom;
-    cam.scrollY = worldY - screenY / nextZoom;
+    (
+      cam as Phaser.Cameras.Scene2D.Camera & {
+        preRender: (resolution?: number) => void;
+      }
+    ).preRender();
+    const after = cam.getWorldPoint(screenX, screenY);
+    cam.scrollX -= after.x - before.x;
+    cam.scrollY -= after.y - before.y;
   }
 
   private publishSelection(

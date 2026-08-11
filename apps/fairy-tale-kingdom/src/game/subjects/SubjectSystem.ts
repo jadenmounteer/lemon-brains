@@ -43,7 +43,7 @@ import type {
   SubjectInterrupt,
   SubjectSnapshot,
 } from './types';
-import { randomPointInZone, type Point, type WorldBounds } from './zones';
+import { randomPointInZone, ringOffset, type Point, type WorldBounds } from './zones';
 
 export type ManagedSubject = {
   data: Subject;
@@ -82,6 +82,7 @@ export class SubjectSystem {
   private marker: Phaser.GameObjects.Arc | null = null;
   private dayEmitAccumMs = 0;
   private healAccumMs = 0;
+  private rescueAccumMs = 0;
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
   private pathGrid: PathGrid | null = null;
@@ -546,10 +547,11 @@ export class SubjectSystem {
     });
     const managed = this.getById(id);
     if (managed) {
-      managed.sprite.setPosition(
+      const pos = this.snapToWalkable(
         x + Phaser.Math.Between(-16, 16),
         y + Phaser.Math.Between(-16, 16)
       );
+      managed.sprite.setPosition(pos.x, pos.y);
       managed.sprite.setDepth(20 + managed.sprite.y * 0.01);
     }
     this.onChanged?.();
@@ -725,21 +727,51 @@ export class SubjectSystem {
   }
 
   markBallGather(): void {
-    for (const s of this.subjects) {
-      if (!livesAtKeep(s.data.role) && s.data.role !== 'peasant') continue;
+    const keep = this.buildings?.getActiveKeepPoint?.() ?? {
+      x: this.world.width / 2,
+      y: this.world.height / 2,
+    };
+    const guests = this.subjects.filter(
+      (s) => livesAtKeep(s.data.role) || s.data.role === 'peasant'
+    );
+    guests.forEach((s, i) => {
       s.data.activity = 'ball';
       s.data.activityLabel = 'Attending the royal ball';
       s.data.zone = 'keep';
-      this.nudgeTowardSchedule(s);
-    }
+      const off = ringOffset(i, guests.length, 56);
+      const dest = this.snapToWalkable(keep.x + off.x, keep.y + off.y + 28);
+      this.nudgeToward(s.data.id, dest.x, dest.y, 45);
+    });
   }
 
-  markFestivalGather(): void {
-    for (const s of this.subjects) {
-      if (s.data.allegiance === 'camp') continue;
+  markFestivalGather(venue?: { x: number; y: number }): void {
+    const anchor = venue ??
+      this.buildings?.getActiveKeepPoint?.() ?? {
+        x: this.world.width / 2,
+        y: this.world.height / 2,
+      };
+    const guests = this.subjects.filter((s) => s.data.allegiance !== 'camp');
+    guests.forEach((s, i) => {
       s.data.activity = 'festival';
       s.data.activityLabel = 'Celebrating at the festival';
       s.data.zone = 'keep';
+      const off = ringOffset(i, guests.length, 72);
+      const dest = this.snapToWalkable(anchor.x + off.x, anchor.y + off.y);
+      this.nudgeToward(s.data.id, dest.x, dest.y, 40);
+    });
+  }
+
+  /** Drop temporary gather/flee labels so schedules resume. */
+  clearGatherActivities(
+    kinds: Array<'ball' | 'festival' | 'flee'> = ['ball', 'festival', 'flee']
+  ): void {
+    const set = new Set(kinds);
+    for (const s of this.subjects) {
+      if (!set.has(s.data.activity as 'ball' | 'festival' | 'flee')) continue;
+      const slot = slotAtHour(s.data.role, this.clock.hour);
+      s.data.activity = slot.activity;
+      s.data.activityLabel = slot.label;
+      s.data.zone = slot.zone;
     }
   }
 
@@ -751,9 +783,9 @@ export class SubjectSystem {
     durationMs: number
   ): void {
     const ids = [princeId, princessId, bishopId];
-    for (const id of ids) {
+    ids.forEach((id, i) => {
       const m = this.getById(id);
-      if (!m) continue;
+      if (!m) return;
       m.interrupt = {
         kind: 'wedding',
         partnerId: princessId,
@@ -761,8 +793,10 @@ export class SubjectSystem {
       };
       m.data.activity = 'wedding';
       m.data.activityLabel = 'At a royal wedding';
-      this.nudgeToward(id, cathedral.x, cathedral.y, 50);
-    }
+      const off = ringOffset(i, ids.length, 22);
+      const dest = this.snapToWalkable(cathedral.x + off.x, cathedral.y + off.y);
+      this.nudgeToward(id, dest.x, dest.y, 50);
+    });
     this.scene.time.delayedCall(durationMs, () => {
       const prince = this.getById(princeId);
       const princess = this.getById(princessId);
@@ -1107,8 +1141,9 @@ export class SubjectSystem {
       const managed = this.getById(s.id);
       if (managed) {
         if (typeof s.x === 'number' && typeof s.y === 'number') {
-          managed.sprite.setPosition(s.x, s.y);
-          managed.sprite.setDepth(20 + s.y * 0.01);
+          const land = this.snapToWalkable(s.x, s.y);
+          managed.sprite.setPosition(land.x, land.y);
+          managed.sprite.setDepth(20 + land.y * 0.01);
         }
         if (s.interrupt) {
           managed.interrupt = s.interrupt;
@@ -1403,6 +1438,7 @@ export class SubjectSystem {
   update(deltaMs: number): void {
     const rolled = this.clock.tick(deltaMs);
     this.syncActivities();
+    this.rescueStranded(deltaMs);
 
     if (rolled) {
       this.scene.game.events.emit(KingdomEvents.DAY_ROLLED);
@@ -1420,6 +1456,13 @@ export class SubjectSystem {
     if (!this.raidMode) {
       for (const managed of this.subjects) {
         if (managed.interrupt) continue;
+        if (
+          managed.data.activity === 'ball' ||
+          managed.data.activity === 'festival' ||
+          managed.data.activity === 'flee'
+        ) {
+          continue;
+        }
         if (!managed.moving && Math.random() < deltaMs * 0.0004) {
           this.nudgeTowardSchedule(managed);
         }
@@ -1724,6 +1767,17 @@ export class SubjectSystem {
     let x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
     let y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
 
+    // If stranded on water/mountain, teleport onto the nearest open land first
+    if (this.pathGrid?.isWorldBlocked(managed.sprite.x, managed.sprite.y)) {
+      const safe = this.snapToWalkable(managed.sprite.x, managed.sprite.y);
+      managed.sprite.setPosition(safe.x, safe.y);
+      managed.sprite.setDepth(20 + safe.y * 0.01);
+    }
+
+    const snappedGoal = this.snapToWalkable(x, y);
+    x = snappedGoal.x;
+    y = snappedGoal.y;
+
     // Path around walls / closed gates / water / mountains for all ground units
     if (this.pathGrid) {
       const path = this.pathGrid.findPath(
@@ -1748,6 +1802,13 @@ export class SubjectSystem {
         if (
           !this.pathGrid.isSegmentClear(managed.sprite.x, managed.sprite.y, x, y)
         ) {
+          // Still blocked — snap onto first path cell
+          const land = path[1]!;
+          managed.sprite.setPosition(land.x, land.y);
+          managed.sprite.setDepth(20 + land.y * 0.01);
+          const continuePath = () =>
+            this.nudgeToward(id, targetX, targetY, speed, onArrive);
+          this.tweenMove(managed, path[Math.min(2, path.length - 1)]!.x, path[Math.min(2, path.length - 1)]!.y, speed, continuePath);
           return;
         }
         const atGoal =
@@ -1778,6 +1839,27 @@ export class SubjectSystem {
     }
 
     this.tweenMove(managed, x, y, speed, onArrive);
+  }
+
+  /** Snap a world point onto walkable land (bridges count). */
+  snapToWalkable(x: number, y: number): Point {
+    if (!this.pathGrid) return { x, y };
+    return this.pathGrid.snapWorldToOpen(x, y);
+  }
+
+  /** Periodically pull anyone stuck on water/mountains onto land. */
+  private rescueStranded(deltaMs: number): void {
+    if (!this.pathGrid) return;
+    this.rescueAccumMs += deltaMs;
+    if (this.rescueAccumMs < 1500) return;
+    this.rescueAccumMs = 0;
+    for (const managed of this.subjects) {
+      if (!managed.sprite.active || managed.moving || managed.data.onWall) continue;
+      if (!this.pathGrid.isWorldBlocked(managed.sprite.x, managed.sprite.y)) continue;
+      const safe = this.snapToWalkable(managed.sprite.x, managed.sprite.y);
+      managed.sprite.setPosition(safe.x, safe.y);
+      managed.sprite.setDepth(20 + safe.y * 0.01);
+    }
   }
 
   private tweenMove(
@@ -1884,7 +1966,8 @@ export class SubjectSystem {
   ): void {
     const slot = slotAtHour(role, this.clock.hour);
     const home = this.homePointFor(houseId);
-    const start = randomPointInZone(slot.zone, this.world, home);
+    const rawStart = randomPointInZone(slot.zone, this.world, home);
+    const start = this.snapToWalkable(rawStart.x, rawStart.y);
     const maxHp = opts?.maxHp ?? UNIT_MAX_HP[role];
     const hp = opts?.hp ?? maxHp;
     const hunger = opts?.hunger ?? 0;
@@ -2058,6 +2141,14 @@ export class SubjectSystem {
     if (this.raidMode) return;
     for (const managed of this.subjects) {
       if (managed.interrupt) continue;
+      // Keep event gathers visible until the event systems clear them
+      if (
+        managed.data.activity === 'ball' ||
+        managed.data.activity === 'festival' ||
+        managed.data.activity === 'flee'
+      ) {
+        continue;
+      }
       const slot = slotAtHour(managed.data.role, this.clock.hour);
       managed.data.activity = slot.activity;
       managed.data.activityLabel = slot.label;
@@ -2075,7 +2166,8 @@ export class SubjectSystem {
     managed.data.zone = slot.zone;
 
     const home = this.homePointFor(managed.data.houseId);
-    const fallback = randomPointInZone(slot.zone, this.world, home);
+    const rawFallback = randomPointInZone(slot.zone, this.world, home);
+    const fallback = this.snapToWalkable(rawFallback.x, rawFallback.y);
     let target =
       managed.data.allegiance === 'camp' && managed.data.campId
         ? this.pickCampWanderTarget(managed.data.campId, home, fallback)

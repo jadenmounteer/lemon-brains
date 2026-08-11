@@ -94,8 +94,8 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   keep: { w: 80, h: 64 },
 };
 
-const STAIR_SNAP_DIST = 28;
-const GATE_SNAP_DIST = 40;
+const STAIR_SNAP_DIST = 48;
+const GATE_SNAP_DIST = 56;
 
 /** Snap world coord to fortification cell center. */
 export function fortSnap(n: number): number {
@@ -1692,6 +1692,8 @@ export class BuildingSystem {
       if (intersects(candidate, keepBox)) return false;
     }
     for (const b of this.buildings) {
+      // Stairs intentionally sit on/against their attached wall segment
+      if (wallId && b.id === wallId) continue;
       const bBox =
         b.kind === 'bridge'
           ? bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0))

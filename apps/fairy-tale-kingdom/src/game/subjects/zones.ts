@@ -10,6 +10,18 @@ export interface Point {
   y: number;
 }
 
+/** Stable ring offset so gather events don't stack everyone on one pixel. */
+export function ringOffset(
+  index: number,
+  total: number,
+  radius: number
+): Point {
+  const n = Math.max(1, total);
+  const ang = (index / n) * Math.PI * 2 + (index % 2) * 0.35;
+  const r = radius * (0.45 + (index % 4) * 0.18);
+  return { x: Math.cos(ang) * r, y: Math.sin(ang) * r };
+}
+
 export interface CavePoint extends Point {
   id: string;
 }

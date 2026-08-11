@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
-import type { SubjectSystem } from '../subjects/SubjectSystem';
+import type { ManagedSubject, SubjectSystem } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { KingdomEvents } from '../subjects/events';
+import { ringOffset } from '../subjects/zones';
 
 export type SecurityEvent = 'zombie' | 'raid' | 'siege' | null;
 
@@ -39,6 +40,7 @@ export class SecuritySystem {
   clear(): void {
     if (!this.event) return;
     this.event = null;
+    this.subjects.clearGatherActivities(['flee']);
     this.barkGuards('Cordon lifted. Resume patrol.');
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: 'The cordon is lifted.',
@@ -84,8 +86,10 @@ export class SecuritySystem {
   }
 
   private orderCiviliansFlee(): void {
-    const safe = this.buildings.getActiveKeepPoint?.() ?? this.buildings.listKeepPoints()[0];
+    const safe =
+      this.buildings.getActiveKeepPoint?.() ?? this.buildings.listKeepPoints()[0];
     if (!safe) return;
+    const fleeing: ManagedSubject[] = [];
     for (const s of this.subjects.listManaged()) {
       if (
         s.data.role === 'guard' ||
@@ -99,9 +103,17 @@ export class SecuritySystem {
         continue;
       }
       if (!this.inQuarantine(s.sprite.x, s.sprite.y)) continue;
-      this.subjects.nudgeToward(s.data.id, safe.x, safe.y, 55);
+      fleeing.push(s);
+    }
+    fleeing.forEach((s, i) => {
+      const off = ringOffset(i, fleeing.length, 64);
+      const dest = this.subjects.snapToWalkable(
+        safe.x + off.x,
+        safe.y + off.y + 24
+      );
+      this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 55);
       s.data.activity = 'flee';
       s.data.activityLabel = 'Fleeing the quarantine';
-    }
+    });
   }
 }

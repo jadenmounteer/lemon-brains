@@ -1,5 +1,6 @@
 import type { SubjectSystem, ManagedSubject } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+import { ringOffset } from '../subjects/zones';
 
 type Beat = 'dance' | 'talk' | 'music' | 'awe' | 'eat';
 
@@ -49,14 +50,16 @@ export class FestivalFunSystem {
       Math.floor(Math.random() * 5)
     ]!;
 
-    for (const s of celebrants) {
-      const ang = Math.random() * Math.PI * 2;
-      const r = 28 + Math.random() * 48;
-      const tx = this.venue.x + Math.cos(ang) * r;
-      const ty = this.venue.y + Math.sin(ang) * r;
-      this.subjects.nudgeToward(s.data.id, tx, ty, 36);
+    celebrants.forEach((s, i) => {
+      const off = ringOffset(i, celebrants.length, 64);
+      const jitter = ((i * 17) % 11) - 5;
+      const dest = this.subjects.snapToWalkable(
+        this.venue.x + off.x + jitter,
+        this.venue.y + off.y + ((i * 13) % 9) - 4
+      );
+      this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 36);
       this.applyBeat(s, beat);
-    }
+    });
 
     if (beat === 'talk' && celebrants.length >= 2) {
       const a = celebrants[0]!;

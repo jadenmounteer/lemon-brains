@@ -98,6 +98,16 @@ export class PathGrid {
     return this.isBlocked(g.col, g.row);
   }
 
+  /** Nearest walkable world point (bridges/cleared land included). */
+  snapWorldToOpen(x: number, y: number): Point {
+    const g = this.worldToGrid(x, y);
+    if (!this.isBlocked(g.col, g.row)) {
+      return { x, y };
+    }
+    const alt = this.nearestOpen(g);
+    return alt ? this.gridToWorld(alt.col, alt.row) : { x, y };
+  }
+
   /** True if every sample along the segment is walkable (stops corner-cutting across rivers). */
   isSegmentClear(ax: number, ay: number, bx: number, by: number): boolean {
     const dist = Math.hypot(bx - ax, by - ay);
