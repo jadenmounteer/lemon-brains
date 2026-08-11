@@ -3,6 +3,7 @@ import {
   PROP_KEYS,
   TERRAIN_KEY,
   TILE_SIZE,
+  UNIT_HEIGHT,
   isTerrainBlocked,
 } from '../art/assetManifest';
 import { BuildingSystem } from '../buildings/BuildingSystem';
@@ -50,6 +51,7 @@ const MAP_ROWS = 64;
 const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
+const FOLLOW_ZOOM = 3;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 3.5;
 const PAN_THRESHOLD_PX = 6;
@@ -776,26 +778,29 @@ export class KingdomScene extends Phaser.Scene {
 
   private beginFollowSubject(id: string): void {
     this.followSubjectId = id;
-    this.cameras.main.setZoom(3);
+    const managed = this.subjects.getById(id);
+    if (!managed) return;
+    const cam = this.cameras.main;
+    cam.setZoom(FOLLOW_ZOOM);
+    // Phaser scroll is not "top-left / zoom" — use startFollow so midPoint tracks the sprite.
+    cam.startFollow(managed.sprite, true, 0.18, 0.18);
+    cam.setFollowOffset(0, -UNIT_HEIGHT / 2);
   }
 
   private clearFollowCam(): void {
+    if (!this.followSubjectId) return;
     this.followSubjectId = null;
+    const cam = this.cameras.main;
+    cam.stopFollow();
+    cam.setZoom(CAMERA_ZOOM);
   }
 
-  private updateFollowCam(deltaMs: number): void {
+  private updateFollowCam(_deltaMs: number): void {
     if (!this.followSubjectId) return;
     const managed = this.subjects.getById(this.followSubjectId);
-    if (!managed) {
+    if (!managed?.sprite.active) {
       this.clearFollowCam();
-      return;
     }
-    const cam = this.cameras.main;
-    const t = Math.min(1, (deltaMs / 1000) * 4);
-    const targetX = managed.sprite.x - cam.width / (2 * cam.zoom);
-    const targetY = managed.sprite.y - cam.height / (2 * cam.zoom);
-    cam.scrollX = Phaser.Math.Linear(cam.scrollX, targetX, t);
-    cam.scrollY = Phaser.Math.Linear(cam.scrollY, targetY, t);
   }
 
   private updateInfluenceCircle(
