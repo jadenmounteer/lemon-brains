@@ -68,7 +68,10 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
     case 'granary':
       return 'Storage';
     case 'barracks':
+    case 'ballista':
       return 'Military';
+    case 'watchtower':
+      return 'Defense';
     case 'keep':
       return 'Seat of power';
   }

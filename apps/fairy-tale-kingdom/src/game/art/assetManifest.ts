@@ -52,7 +52,23 @@ export const PROP_KEYS = {
   granary: 'prop-granary',
   barracks: 'prop-barracks',
   manor: 'prop-manor',
+  ballista: 'prop-ballista',
+  watchtower: 'prop-watchtower',
+  ram: 'prop-ram',
+  catapult: 'prop-catapult',
+  trebuchet: 'prop-trebuchet',
+  flame: 'vfx-flame',
+  smoke: 'vfx-smoke',
+  rock: 'vfx-rock',
+  arrow: 'vfx-arrow',
+  bolt: 'vfx-bolt',
+  dust: 'vfx-dust',
 } as const;
+
+/** N=1 E=2 S=4 W=8 neighbor bitmask → `prop-wall-{mask}` */
+export function wallTextureKey(mask: number): string {
+  return `prop-wall-${mask & 15}`;
+}
 
 /** Future drop-in paths relative to public/ (assetUrl) */
 export const dropInPaths = {

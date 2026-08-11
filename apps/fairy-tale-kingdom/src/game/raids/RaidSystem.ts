@@ -9,6 +9,9 @@ import { isRoyalRole } from '../art/assetManifest';
 import type { BuildingRecord, BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance, RAIDER_MAX_HP } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
+import { SiegeBalance } from '../siege/balance';
+import type { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
+import type { SiegeVfx } from '../siege/SiegeVfx';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
 
@@ -25,7 +28,11 @@ type RaiderState =
   | 'breaching'
   | 'burning'
   | 'sieging'
+  | 'investing'
+  | 'routing'
   | 'done';
+
+export type SiegePhase = 'none' | 'muster' | 'reduce' | 'storm' | 'routing';
 
 export interface ActiveRaider {
   kind: RaidKind;
@@ -39,6 +46,8 @@ export interface ActiveRaider {
   targetBuildingId: string | null;
   thinkAccumMs: number;
   camp?: Phaser.GameObjects.Arc;
+  investX?: number;
+  investY?: number;
 }
 
 const STEAL_AMOUNTS: Record<Exclude<RaidKind, 'enemy_army'>, number> = {
@@ -70,8 +79,17 @@ export class RaidSystem {
   private buildings: BuildingSystem | null = null;
   private subjects: SubjectSystem | null = null;
   private pathGrid: PathGrid | null = null;
+  private engines: SiegeEngineSystem | null = null;
+  private vfx: SiegeVfx | null = null;
   private onChanged: (() => void) | null = null;
   private siegeToastShown = false;
+  private siegePhase: SiegePhase = 'none';
+  private musterMs = 0;
+  private waveStartCount = 0;
+  private killTimes: number[] = [];
+  private routToastShown = false;
+  private activeWaveKind: RaidKind | null = null;
+  private campPoint: KeepPoint | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -91,6 +109,15 @@ export class RaidSystem {
     this.pathGrid = grid;
   }
 
+  setEngines(engines: SiegeEngineSystem): void {
+    this.engines = engines;
+    engines.setOnKill(() => this.recordKill());
+  }
+
+  setVfx(vfx: SiegeVfx): void {
+    this.vfx = vfx;
+  }
+
   setOnChanged(cb: () => void): void {
     this.onChanged = cb;
   }
@@ -99,8 +126,18 @@ export class RaidSystem {
     return this.gameOver;
   }
 
+  getSiegePhase(): SiegePhase {
+    return this.siegePhase;
+  }
+
+  isArmySiege(): boolean {
+    return this.activeWaveKind === 'enemy_army' && this.hasActiveRaiders();
+  }
+
   hasActiveRaiders(): boolean {
-    return this.raiders.some((r) => r.state !== 'done' && r.sprite.active);
+    const units = this.raiders.some((r) => r.state !== 'done' && r.sprite.active);
+    const eng = (this.engines?.countAlive() ?? 0) > 0;
+    return units || eng;
   }
 
   nearestRaider(
@@ -111,7 +148,7 @@ export class RaidSystem {
     let best: ActiveRaider | null = null;
     let bestD = radius;
     for (const r of this.raiders) {
-      if (!r.sprite.active || r.state === 'done') continue;
+      if (!r.sprite.active || r.state === 'done' || r.state === 'routing') continue;
       const d = Phaser.Math.Distance.Between(x, y, r.sprite.x, r.sprite.y);
       if (d < bestD) {
         bestD = d;
@@ -123,10 +160,10 @@ export class RaidSystem {
 
   damageRaider(raider: ActiveRaider, amount: number): boolean {
     if (!raider.sprite.active || raider.state === 'done') return false;
-    const mult = raider.kind === 'giant' ? 1 : 1;
-    raider.hp = Math.max(0, raider.hp - amount * mult);
+    raider.hp = Math.max(0, raider.hp - amount);
     const ratio = raider.hp / raider.maxHp;
     if (ratio <= 0.35) raider.sprite.setTint(0xff6666);
+    this.vfx?.hitFlash(raider.sprite);
     if (raider.hp <= 0) {
       this.killRaider(raider);
       return true;
@@ -143,9 +180,19 @@ export class RaidSystem {
       this.spawnRaid();
     }
 
+    this.tickSiegePhase(deltaMs);
+
+    const routing = this.siegePhase === 'routing';
+    const storming = this.siegePhase === 'storm';
+    this.engines?.update(deltaMs, storming, routing);
+
     for (const raider of [...this.raiders]) {
       if (!raider.sprite.active || raider.state === 'done') continue;
       this.tickRaider(raider, deltaMs);
+    }
+
+    if (!this.hasActiveRaiders() && this.siegePhase !== 'none') {
+      this.endWave();
     }
   }
 
@@ -155,6 +202,49 @@ export class RaidSystem {
       r.sprite.destroy();
     }
     this.raiders = [];
+    this.engines?.clear();
+  }
+
+  private tickSiegePhase(deltaMs: number): void {
+    if (this.activeWaveKind !== 'enemy_army') return;
+    if (this.siegePhase === 'routing' || this.siegePhase === 'none') return;
+
+    if (this.siegePhase === 'muster') {
+      this.musterMs += deltaMs;
+      if (this.musterMs >= SiegeBalance.musterHoldMs) {
+        this.siegePhase = 'reduce';
+      }
+      return;
+    }
+
+    if (this.siegePhase === 'reduce') {
+      const pathOpen = this.pathToKeepOpen();
+      if (pathOpen) {
+        this.siegePhase = 'storm';
+        for (const r of this.raiders) {
+          if (r.state === 'investing' || r.state === 'breaching') {
+            r.state = 'pathing';
+            this.repath(r);
+          }
+        }
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'The walls are breached — the host storms the keep!',
+        });
+      }
+    }
+  }
+
+  private pathToKeepOpen(): boolean {
+    if (!this.pathGrid) return true;
+    const from = this.campPoint ?? {
+      x: this.world.width / 2,
+      y: 40,
+    };
+    const path = this.pathGrid.findPath(from, {
+      x: this.keep.x,
+      y: this.keep.y + 20,
+    });
+    return Boolean(path && path.length > 0);
   }
 
   private spawnRaid(): void {
@@ -171,15 +261,36 @@ export class RaidSystem {
     const count =
       kind === 'enemy_army' ? Phaser.Math.Between(3, 5) : Phaser.Math.Between(1, 2);
 
+    const edge = this.randomEdgeSpawn();
+    this.campPoint = edge;
+    this.activeWaveKind = kind;
+    this.waveStartCount = count;
+    this.killTimes = [];
+    this.routToastShown = false;
+    this.siegeToastShown = false;
+
+    let label = LABELS[kind];
+    if (kind === 'enemy_army') {
+      this.siegePhase = 'muster';
+      this.musterMs = 0;
+      this.engines?.spawnForRaid(this.raidCount, edge.x, edge.y);
+      const eng = this.engines?.countAlive() ?? 0;
+      this.waveStartCount = count + eng;
+      label = `a siege host (${count} infantry${eng ? `, ${eng} engines` : ''})`;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'A siege host approaches!',
+      });
+    } else {
+      this.siegePhase = 'none';
+    }
+
     this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
       kind,
-      label: LABELS[kind],
+      label,
     });
 
     this.buildings?.setRaidActive(true);
-    this.siegeToastShown = false;
 
-    const edge = this.randomEdgeSpawn();
     const camp = this.scene.add
       .circle(edge.x, edge.y, 10, 0x6b3e2e, 0.55)
       .setStrokeStyle(1, 0x1c241c)
@@ -188,7 +299,7 @@ export class RaidSystem {
     for (let i = 0; i < count; i++) {
       const ox = edge.x + Phaser.Math.Between(-20, 20);
       const oy = edge.y + Phaser.Math.Between(-20, 20);
-      this.launchRaider(kind, ox, oy, i === 0 ? camp : undefined);
+      this.launchRaider(kind, ox, oy, i === 0 ? camp : undefined, i, count);
     }
   }
 
@@ -196,7 +307,9 @@ export class RaidSystem {
     kind: RaidKind,
     x: number,
     y: number,
-    camp?: Phaser.GameObjects.Arc
+    camp?: Phaser.GameObjects.Arc,
+    index = 0,
+    total = 1
   ): void {
     const sprite = this.scene.add.sprite(x, y, kind, 0);
     sprite.setDepth(25);
@@ -207,6 +320,7 @@ export class RaidSystem {
     sprite.play(idleAnimKey(kind));
 
     const maxHp = RAIDER_MAX_HP[kind];
+    const invest = this.investPoint(index, total);
     const raider: ActiveRaider = {
       kind,
       sprite,
@@ -214,20 +328,60 @@ export class RaidSystem {
       maxHp,
       path: [],
       pathIndex: 0,
-      state: 'pathing',
+      state: kind === 'enemy_army' ? 'investing' : 'pathing',
       targetSubjectId: null,
       targetBuildingId: null,
       thinkAccumMs: 0,
       camp,
+      investX: invest.x,
+      investY: invest.y,
     };
     this.raiders.push(raider);
-    this.repath(raider);
+    if (kind !== 'enemy_army') this.repath(raider);
+  }
+
+  private investPoint(index: number, total: number): KeepPoint {
+    const camp = this.campPoint ?? { x: 40, y: 40 };
+    const dx = this.keep.x - camp.x;
+    const dy = this.keep.y - camp.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = dx / len;
+    const ny = dy / len;
+    // Line outside walls toward keep
+    const dist = Math.min(len * 0.45, 160);
+    const px = -ny;
+    const py = nx;
+    const spread =
+      (index - (total - 1) / 2) * SiegeBalance.investSpread;
+    return {
+      x: camp.x + nx * dist + px * spread,
+      y: camp.y + ny * dist + py * spread,
+    };
   }
 
   private tickRaider(raider: ActiveRaider, deltaMs: number): void {
     raider.thinkAccumMs += deltaMs;
     const think = raider.thinkAccumMs >= CombatBalance.tickMs;
     if (think) raider.thinkAccumMs = 0;
+
+    if (raider.state === 'routing') {
+      this.tickRouting(raider, deltaMs);
+      return;
+    }
+
+    if (this.siegePhase === 'routing') {
+      this.beginRoutRaider(raider);
+      return;
+    }
+
+    // Army invest / reduce before storm
+    if (
+      raider.kind === 'enemy_army' &&
+      (this.siegePhase === 'muster' || this.siegePhase === 'reduce')
+    ) {
+      this.tickInvestReduce(raider, deltaMs, think);
+      return;
+    }
 
     const atKeep =
       Phaser.Math.Distance.Between(
@@ -261,11 +415,21 @@ export class RaidSystem {
         raider.targetSubjectId = unit.data.id;
         raider.targetBuildingId = null;
       } else {
-        const burn = this.buildings?.burnablesNear(
-          raider.sprite.x,
-          raider.sprite.y,
-          CombatBalance.pillageRadius
-        );
+        let burn: BuildingRecord | null | undefined = null;
+        if (raider.kind === 'enemy_army' || this.siegePhase === 'storm') {
+          burn = this.buildings?.fieldsNear(
+            raider.sprite.x,
+            raider.sprite.y,
+            SiegeBalance.fieldBurnPriorityRadius
+          );
+        }
+        if (!burn) {
+          burn = this.buildings?.burnablesNear(
+            raider.sprite.x,
+            raider.sprite.y,
+            CombatBalance.pillageRadius
+          );
+        }
         if (burn) {
           raider.state = 'burning';
           raider.targetBuildingId = burn.id;
@@ -297,6 +461,8 @@ export class RaidSystem {
         } else {
           this.faceToward(raider, target.sprite.x, target.sprite.y);
           raider.sprite.play(idleAnimKey(raider.kind), true);
+          this.vfx?.meleeLunge(raider.sprite, target.sprite.x, target.sprite.y);
+          this.vfx?.hitFlash(target.sprite);
           if (
             raider.kind === 'enemy_army' &&
             isRoyalRole(target.data.role)
@@ -330,10 +496,11 @@ export class RaidSystem {
         } else {
           this.faceToward(raider, b.x, b.y);
           raider.sprite.play(idleAnimKey(raider.kind), true);
-          b.sprite.setTint(0xff5522);
           let dmg = CombatBalance.raiderBurn;
           if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
-          const destroyed = this.buildings?.damageBuilding(b.id, dmg);
+          const destroyed = this.buildings?.damageBuilding(b.id, dmg, {
+            fire: true,
+          });
           if (destroyed && b.kind === 'house') {
             this.subjects?.onHouseDestroyed(b.id);
           }
@@ -345,13 +512,11 @@ export class RaidSystem {
       }
     }
 
-    // Path / breach
     if (!raider.path.length || raider.pathIndex >= raider.path.length) {
       this.repath(raider);
     }
 
     if (!raider.path.length) {
-      // Completely blocked — breach nearest wall/bridge ahead
       const blocker = this.buildings?.findBlockingAhead(
         raider.sprite.x,
         raider.sprite.y,
@@ -379,7 +544,6 @@ export class RaidSystem {
       return;
     }
 
-    // If next step is into a blocker (grid stale), breach
     const blocker = this.buildings?.findBlockingAhead(
       raider.sprite.x,
       raider.sprite.y,
@@ -398,9 +562,116 @@ export class RaidSystem {
     this.stepToward(raider, waypoint.x, waypoint.y, deltaMs);
   }
 
+  private tickInvestReduce(
+    raider: ActiveRaider,
+    deltaMs: number,
+    think: boolean
+  ): void {
+    const ix = raider.investX ?? this.keep.x;
+    const iy = raider.investY ?? this.keep.y + 80;
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      ix,
+      iy
+    );
+    if (dist > 14) {
+      this.stepToward(raider, ix, iy, deltaMs);
+      raider.state = 'investing';
+      return;
+    }
+
+    // Hold line; help breach nearest fortification in reduce
+    if (this.siegePhase === 'reduce' && think) {
+      const fort = this.buildings?.nearestFortification(
+        raider.sprite.x,
+        raider.sprite.y,
+        100
+      );
+      if (fort) {
+        const fd = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          fort.x,
+          fort.y
+        );
+        if (fd > 36) {
+          this.stepToward(raider, fort.x, fort.y, deltaMs);
+        } else {
+          raider.state = 'breaching';
+          this.breach(raider, fort);
+        }
+        return;
+      }
+    }
+    raider.sprite.play(idleAnimKey(raider.kind), true);
+  }
+
+  private tickRouting(raider: ActiveRaider, deltaMs: number): void {
+    const edge = this.campPoint ?? { x: 24, y: 24 };
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      edge.x,
+      edge.y
+    );
+    if (dist < 20) {
+      this.killRaider(raider, false);
+      return;
+    }
+    // Faster flee
+    this.stepToward(raider, edge.x, edge.y, deltaMs * 1.45);
+    raider.sprite.setTint(0xaaaaaa);
+  }
+
+  private beginRoutRaider(raider: ActiveRaider): void {
+    raider.state = 'routing';
+    raider.targetSubjectId = null;
+    raider.targetBuildingId = null;
+    raider.path = [];
+  }
+
+  private triggerRout(): void {
+    if (this.siegePhase === 'routing') return;
+    this.siegePhase = 'routing';
+    if (!this.routToastShown) {
+      this.routToastShown = true;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'The attackers are routing!',
+      });
+    }
+    for (const r of this.raiders) {
+      if (r.state !== 'done') this.beginRoutRaider(r);
+    }
+    this.engines?.abandonAll();
+  }
+
+  private recordKill(): void {
+    const t = this.elapsedMs;
+    this.killTimes.push(t);
+    this.killTimes = this.killTimes.filter(
+      (k) => t - k <= SiegeBalance.routWindowMs
+    );
+    if (this.waveStartCount <= 0) return;
+
+    const recentBurst = this.killTimes.filter(
+      (k) => t - k <= SiegeBalance.routBurstWindowMs
+    ).length;
+    if (recentBurst >= SiegeBalance.routBurstKills) {
+      this.triggerRout();
+      return;
+    }
+    const recent = this.killTimes.length;
+    if (recent / this.waveStartCount >= SiegeBalance.routLossFraction) {
+      this.triggerRout();
+    }
+  }
+
   private breach(raider: ActiveRaider, building: BuildingRecord): void {
     this.faceToward(raider, building.x, building.y);
     raider.sprite.play(idleAnimKey(raider.kind), true);
+    this.vfx?.meleeLunge(raider.sprite, building.x, building.y);
+    this.buildings?.shakeBuilding(building.id);
     let dmg = CombatBalance.raiderBreach;
     if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
     const destroyed = this.buildings?.damageBuilding(building.id, dmg);
@@ -436,10 +707,31 @@ export class RaidSystem {
     const dx = tx - raider.sprite.x;
     const dy = ty - raider.sprite.y;
     const dist = Math.hypot(dx, dy) || 1;
-    const speed = MOVE_SPEED[raider.kind];
+    let speed = MOVE_SPEED[raider.kind];
+    if (raider.state === 'routing') speed *= 1.35;
     const step = (speed * deltaMs) / 1000;
-    const nx = raider.sprite.x + (dx / dist) * Math.min(step, dist);
-    const ny = raider.sprite.y + (dy / dist) * Math.min(step, dist);
+    let nx = raider.sprite.x + (dx / dist) * Math.min(step, dist);
+    let ny = raider.sprite.y + (dy / dist) * Math.min(step, dist);
+
+    // Respect walls for ground movement (raiders already path; this catches fights)
+    if (
+      this.pathGrid?.isWorldBlocked(nx, ny) &&
+      raider.state !== 'breaching' &&
+      raider.state !== 'routing'
+    ) {
+      const path = this.pathGrid.findPath(
+        { x: raider.sprite.x, y: raider.sprite.y },
+        { x: tx, y: ty }
+      );
+      if (path && path.length > 1) {
+        const wp = path[1]!;
+        const d2 =
+          Math.hypot(wp.x - raider.sprite.x, wp.y - raider.sprite.y) || 1;
+        nx = raider.sprite.x + ((wp.x - raider.sprite.x) / d2) * Math.min(step, d2);
+        ny = raider.sprite.y + ((wp.y - raider.sprite.y) / d2) * Math.min(step, d2);
+      }
+    }
+
     this.faceToward(raider, tx, ty);
     const dir = facingFromDelta(dx, dy);
     raider.sprite.play(walkAnimKey(raider.kind, dir), true);
@@ -451,10 +743,12 @@ export class RaidSystem {
     void facingFromDelta(tx - raider.sprite.x, ty - raider.sprite.y);
   }
 
-  private killRaider(raider: ActiveRaider): void {
+  private killRaider(raider: ActiveRaider, countKill = true): void {
+    if (raider.state === 'done') return;
     raider.state = 'done';
     raider.camp?.destroy();
     raider.camp = undefined;
+    if (countKill) this.recordKill();
     this.scene.tweens.add({
       targets: raider.sprite,
       alpha: 0,
@@ -463,11 +757,18 @@ export class RaidSystem {
         raider.sprite.destroy();
         this.raiders = this.raiders.filter((r) => r !== raider);
         if (!this.hasActiveRaiders()) {
-          this.buildings?.setRaidActive(false);
+          this.endWave();
         }
         this.onChanged?.();
       },
     });
+  }
+
+  private endWave(): void {
+    this.buildings?.setRaidActive(false);
+    this.siegePhase = 'none';
+    this.activeWaveKind = null;
+    this.engines?.clear();
   }
 
   private tickSiege(raider: ActiveRaider, think: boolean): void {
@@ -521,7 +822,7 @@ export class RaidSystem {
       label: LABELS[raider.kind],
     });
 
-    this.killRaider(raider);
+    this.killRaider(raider, false);
   }
 
   private triggerGameOver(): void {

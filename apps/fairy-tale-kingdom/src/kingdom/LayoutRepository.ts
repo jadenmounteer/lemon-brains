@@ -1,9 +1,11 @@
 import { LocalStorageAdapter, type StoragePort } from '@knowledge-quest/storage';
 import type { UnitRole } from '../game/art/assetManifest';
 import { BUILDING_MAX_HP, UNIT_MAX_HP } from '../game/combat/stats';
-import type { BuildKind } from '../marketplace/catalog';
+import { BUILD_CATALOG, type BuildKind } from '../marketplace/catalog';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
+
+const VALID_BUILD_KINDS = new Set<string>(BUILD_CATALOG.map((c) => c.kind));
 
 export interface SavedBuilding {
   id: string;
@@ -58,7 +60,9 @@ export class LayoutRepository {
       }
       return {
         ...parsed,
-        buildings: parsed.buildings.map(normalizeBuilding),
+        buildings: parsed.buildings
+          .filter((b) => VALID_BUILD_KINDS.has(b.kind))
+          .map(normalizeBuilding),
         subjects: parsed.subjects.map(normalizeSubject),
       };
     } catch {

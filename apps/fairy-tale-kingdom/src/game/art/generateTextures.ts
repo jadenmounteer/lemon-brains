@@ -8,6 +8,7 @@ import {
   UNIT_HEIGHT,
   UNIT_ROLES,
   UNIT_WIDTH,
+  wallTextureKey,
   type AnimRole,
 } from './assetManifest';
 import { palette } from './palette';
@@ -257,17 +258,132 @@ function drawHouse(scene: Phaser.Scene) {
   tex.refresh();
 }
 
-function drawWall(scene: Phaser.Scene) {
+/** Neighbor bits: N=1 E=2 S=4 W=8 */
+function drawWallVariant(scene: Phaser.Scene, mask: number, key: string) {
   const w = 16;
   const h = 32;
-  const tex = createCanvas(scene, PROP_KEYS.wall, w, h);
+  const tex = createCanvas(scene, key, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 2, 4, 12, 26, palette.stone);
-  fillRect(ctx, 2, 4, 12, 1, palette.ink);
-  fillRect(ctx, 2, 4, 1, 26, palette.stoneDark);
-  fillRect(ctx, 4, 0, 3, 6, palette.stone);
-  fillRect(ctx, 9, 0, 3, 6, palette.stone);
+  fillRect(ctx, 4, 8, 8, 20, palette.stone);
+  fillRect(ctx, 4, 8, 8, 1, palette.ink);
+  if (mask & 1) fillRect(ctx, 5, 0, 6, 10, palette.stone);
+  if (mask & 4) fillRect(ctx, 5, 26, 6, 6, palette.stone);
+  if (mask & 2) fillRect(ctx, 10, 12, 6, 10, palette.stone);
+  if (mask & 8) fillRect(ctx, 0, 12, 6, 10, palette.stone);
+  fillRect(ctx, 4, 4, 3, 5, palette.stone);
+  fillRect(ctx, 9, 4, 3, 5, palette.stone);
+  fillRect(ctx, 4, 8, 1, 20, palette.stoneDark);
   tex.refresh();
+}
+
+function drawWall(scene: Phaser.Scene) {
+  for (let mask = 0; mask < 16; mask++) {
+    drawWallVariant(scene, mask, wallTextureKey(mask));
+  }
+  drawWallVariant(scene, 0, PROP_KEYS.wall);
+}
+
+function drawBallista(scene: Phaser.Scene) {
+  const w = 24;
+  const h = 20;
+  const tex = createCanvas(scene, PROP_KEYS.ballista, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 12, 16, 6, palette.wood);
+  fillRect(ctx, 10, 4, 4, 12, palette.woodDark);
+  fillRect(ctx, 2, 6, 20, 2, palette.metal);
+  fillRect(ctx, 18, 5, 4, 4, palette.metal);
+  tex.refresh();
+}
+
+function drawWatchtower(scene: Phaser.Scene) {
+  const w = 24;
+  const h = 40;
+  const tex = createCanvas(scene, PROP_KEYS.watchtower, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 14, 12, 24, palette.stone);
+  fillRect(ctx, 4, 8, 16, 8, palette.stoneDark);
+  fillRect(ctx, 4, 8, 16, 1, palette.ink);
+  fillRect(ctx, 8, 18, 3, 3, palette.cream);
+  fillRect(ctx, 13, 18, 3, 3, palette.cream);
+  fillRect(ctx, 5, 4, 3, 6, palette.stone);
+  fillRect(ctx, 16, 4, 3, 6, palette.stone);
+  tex.refresh();
+}
+
+function drawRam(scene: Phaser.Scene) {
+  const w = 28;
+  const h = 18;
+  const tex = createCanvas(scene, PROP_KEYS.ram, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 8, 20, 6, palette.wood);
+  fillRect(ctx, 20, 6, 6, 8, palette.metal);
+  fillRect(ctx, 4, 14, 4, 3, palette.woodDark);
+  fillRect(ctx, 14, 14, 4, 3, palette.woodDark);
+  tex.refresh();
+}
+
+function drawCatapult(scene: Phaser.Scene) {
+  const w = 28;
+  const h = 22;
+  const tex = createCanvas(scene, PROP_KEYS.catapult, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 14, 18, 5, palette.wood);
+  fillRect(ctx, 12, 4, 3, 12, palette.woodDark);
+  fillRect(ctx, 8, 2, 10, 4, palette.wood);
+  fillRect(ctx, 6, 18, 4, 3, palette.woodDark);
+  fillRect(ctx, 16, 18, 4, 3, palette.woodDark);
+  tex.refresh();
+}
+
+function drawTrebuchet(scene: Phaser.Scene) {
+  const w = 32;
+  const h = 28;
+  const tex = createCanvas(scene, PROP_KEYS.trebuchet, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 18, 20, 6, palette.wood);
+  fillRect(ctx, 14, 2, 3, 20, palette.woodDark);
+  fillRect(ctx, 4, 4, 12, 3, palette.wood);
+  fillRect(ctx, 2, 6, 4, 4, palette.metal);
+  fillRect(ctx, 8, 22, 4, 4, palette.woodDark);
+  fillRect(ctx, 20, 22, 4, 4, palette.woodDark);
+  tex.refresh();
+}
+
+function drawVfx(scene: Phaser.Scene) {
+  const flame = createCanvas(scene, PROP_KEYS.flame, 8, 12);
+  const fctx = flame.getContext();
+  fillRect(fctx, 2, 4, 4, 7, 0xff6622);
+  fillRect(fctx, 3, 1, 2, 5, 0xffcc44);
+  flame.refresh();
+
+  const smoke = createCanvas(scene, PROP_KEYS.smoke, 8, 8);
+  const sctx = smoke.getContext();
+  fillRect(sctx, 2, 2, 4, 4, 0x888888);
+  fillRect(sctx, 1, 3, 2, 2, 0x666666);
+  smoke.refresh();
+
+  const rock = createCanvas(scene, PROP_KEYS.rock, 6, 6);
+  const rctx = rock.getContext();
+  fillRect(rctx, 1, 1, 4, 4, palette.stoneDark);
+  rock.refresh();
+
+  const arrow = createCanvas(scene, PROP_KEYS.arrow, 10, 3);
+  const actx = arrow.getContext();
+  fillRect(actx, 0, 1, 8, 1, palette.wood);
+  fillRect(actx, 7, 0, 3, 3, palette.metal);
+  arrow.refresh();
+
+  const bolt = createCanvas(scene, PROP_KEYS.bolt, 12, 3);
+  const bctx = bolt.getContext();
+  fillRect(bctx, 0, 1, 10, 1, palette.metal);
+  fillRect(bctx, 9, 0, 3, 3, palette.metal);
+  bolt.refresh();
+
+  const dust = createCanvas(scene, PROP_KEYS.dust, 10, 8);
+  const dctx = dust.getContext();
+  fillRect(dctx, 2, 3, 6, 3, 0xc4a574);
+  fillRect(dctx, 1, 2, 2, 2, 0xa08050);
+  dust.refresh();
 }
 
 function drawTavern(scene: Phaser.Scene) {
@@ -391,10 +507,7 @@ function drawManor(scene: Phaser.Scene) {
  * Keys match assetManifest / future PNG drop-ins.
  */
 export function generateTextures(scene: Phaser.Scene): void {
-  for (const key of [
-    TERRAIN_KEY,
-    ...UNIT_ROLES,
-    ...ENEMY_ROLES,
+  const propKeys = [
     PROP_KEYS.keep,
     PROP_KEYS.house,
     PROP_KEYS.wall,
@@ -406,7 +519,20 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.granary,
     PROP_KEYS.barracks,
     PROP_KEYS.manor,
-  ]) {
+    PROP_KEYS.ballista,
+    PROP_KEYS.watchtower,
+    PROP_KEYS.ram,
+    PROP_KEYS.catapult,
+    PROP_KEYS.trebuchet,
+    PROP_KEYS.flame,
+    PROP_KEYS.smoke,
+    PROP_KEYS.rock,
+    PROP_KEYS.arrow,
+    PROP_KEYS.bolt,
+    PROP_KEYS.dust,
+    ...Array.from({ length: 16 }, (_, i) => wallTextureKey(i)),
+  ];
+  for (const key of [TERRAIN_KEY, ...UNIT_ROLES, ...ENEMY_ROLES, ...propKeys]) {
     if (scene.textures.exists(key)) {
       scene.textures.remove(key);
     }
@@ -429,6 +555,12 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawGranary(scene);
   drawBarracks(scene);
   drawManor(scene);
+  drawBallista(scene);
+  drawWatchtower(scene);
+  drawRam(scene);
+  drawCatapult(scene);
+  drawTrebuchet(scene);
+  drawVfx(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
   for (let i = 0; i < 4; i++) {

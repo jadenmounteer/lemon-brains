@@ -57,6 +57,11 @@ export class PathGrid {
     return this.blocked[row * this.cols + col]!;
   }
 
+  isWorldBlocked(x: number, y: number): boolean {
+    const g = this.worldToGrid(x, y);
+    return this.isBlocked(g.col, g.row);
+  }
+
   findPath(from: Point, to: Point): Point[] | null {
     let start = this.worldToGrid(from.x, from.y);
     let goal = this.worldToGrid(to.x, to.y);

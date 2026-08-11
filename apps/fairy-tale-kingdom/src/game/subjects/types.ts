@@ -41,11 +41,12 @@ export type ActivityId =
   | 'repair'
   | 'chat'
   | 'harvest'
-  | 'wave';
+  | 'wave'
+  | 'defend';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
-export type InterruptKind = 'flee' | 'repair' | 'chat' | 'harvest';
+export type InterruptKind = 'flee' | 'repair' | 'chat' | 'harvest' | 'defend';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;

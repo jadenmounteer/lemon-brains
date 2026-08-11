@@ -9,7 +9,9 @@ export type BuildKind =
   | 'field'
   | 'granary'
   | 'barracks'
-  | 'manor';
+  | 'manor'
+  | 'ballista'
+  | 'watchtower';
 
 export const BEDS_PER_HOUSE = 3;
 
@@ -104,7 +106,7 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'wall',
     name: 'Wall',
-    blurb: 'Blocks enemies until destroyed.',
+    blurb: 'Snaps to the fort grid and connects to neighbors. Blocks everyone until destroyed.',
     cost: 15,
   },
   {
@@ -116,7 +118,7 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'drawbridge',
     name: 'Drawbridge',
-    blurb: 'Walkable in peacetime; auto-closes during raids until destroyed or raid ends.',
+    blurb: 'Snaps into a wall line as a gate. Open in peacetime; closes during raids.',
     cost: 50,
   },
   {
@@ -144,6 +146,20 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     name: 'Manor',
     blurb: 'Fine home with 2 beds. Requires King & Queen. Burnable.',
     cost: 70,
+    requiresRoyalty: true,
+  },
+  {
+    kind: 'ballista',
+    name: 'Ballista',
+    blurb: 'Auto-fires bolts at raiders and siege engines. Requires King & Queen.',
+    cost: 55,
+    requiresRoyalty: true,
+  },
+  {
+    kind: 'watchtower',
+    name: 'Watchtower',
+    blurb: 'Nearby archers gain range. Requires King & Queen.',
+    cost: 40,
     requiresRoyalty: true,
   },
 ];

@@ -11,6 +11,8 @@ export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   granary: 40,
   barracks: 45,
   manor: 35,
+  ballista: 35,
+  watchtower: 40,
   keep: 200,
 };
 
@@ -55,6 +57,7 @@ export const CombatBalance = {
   chatRange: 40,
   chatDurationMs: 3000,
   tickMs: 400,
+  engineMeleeDamage: 7,
 } as const;
 
 export function isBurnable(kind: BuildKind): boolean {
@@ -65,7 +68,9 @@ export function isBurnable(kind: BuildKind): boolean {
     kind === 'field' ||
     kind === 'granary' ||
     kind === 'barracks' ||
-    kind === 'manor'
+    kind === 'manor' ||
+    kind === 'ballista' ||
+    kind === 'watchtower'
   );
 }
 
@@ -77,4 +82,8 @@ export function isBlockingKind(kind: BuildKind, drawbridgeClosed: boolean): bool
 
 export function isDwelling(kind: BuildKind): boolean {
   return kind === 'house' || kind === 'manor';
+}
+
+export function isFortKind(kind: BuildKind): boolean {
+  return kind === 'wall' || kind === 'drawbridge';
 }

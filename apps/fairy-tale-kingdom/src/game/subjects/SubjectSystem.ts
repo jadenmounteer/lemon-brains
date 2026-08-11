@@ -11,7 +11,9 @@ import type { SavedSubject } from '../../kingdom/LayoutRepository';
 import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
 import { UNIT_MAX_HP } from '../combat/stats';
 import { CombatBalance } from '../combat/stats';
+import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
+import { isMilitaryRole } from '../art/assetManifest';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { pickName } from './names';
@@ -51,6 +53,7 @@ export class SubjectSystem {
   private dayEmitAccumMs = 0;
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
+  private pathGrid: PathGrid | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
@@ -63,6 +66,10 @@ export class SubjectSystem {
 
   setBuildings(buildings: BuildingSystem): void {
     this.buildings = buildings;
+  }
+
+  setPathGrid(grid: PathGrid): void {
+    this.pathGrid = grid;
   }
 
   setOnChanged(cb: () => void): void {
@@ -82,6 +89,49 @@ export class SubjectSystem {
     this.raidMode = active;
     if (active && !was) {
       this.cancelInterrupts(['repair', 'chat', 'harvest']);
+    }
+    if (!active && was) {
+      this.cancelInterrupts(['defend', 'flee']);
+    }
+  }
+
+  beginDefend(subjectId: string, x: number, y: number): void {
+    const managed = this.getById(subjectId);
+    if (!managed || !isMilitaryRole(managed.data.role)) return;
+    managed.interrupt = { kind: 'defend' };
+    managed.data.activity = 'defend';
+    managed.data.activityLabel = 'Defending the walls';
+    this.nudgeToward(subjectId, x, y, 55);
+  }
+
+  tickDefenseMuster(armySiege: boolean): void {
+    if (!armySiege || !this.buildings) {
+      this.cancelInterrupts(['defend']);
+      return;
+    }
+    const muster = this.buildings.defenseMusterPoint();
+    let i = 0;
+    for (const managed of this.subjects) {
+      if (!isMilitaryRole(managed.data.role)) continue;
+      if (managed.data.sick) continue;
+      if (managed.data.onWall) continue;
+      if (managed.interrupt?.kind === 'flee') continue;
+      const ox = ((i % 5) - 2) * 14;
+      const oy = Math.floor(i / 5) * 12;
+      i += 1;
+      if (managed.interrupt?.kind !== 'defend') {
+        this.beginDefend(managed.data.id, muster.x + ox, muster.y + oy);
+      } else if (!managed.moving) {
+        const d = Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          muster.x + ox,
+          muster.y + oy
+        );
+        if (d > 40) {
+          this.nudgeToward(managed.data.id, muster.x + ox, muster.y + oy, 55);
+        }
+      }
     }
   }
 
@@ -658,11 +708,59 @@ export class SubjectSystem {
     if (managed.data.onWall) return;
 
     const pad = 32;
-    const x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
-    const y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
+    let x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
+    let y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
+
+    // Path around walls / closed gates for all ground units
+    if (this.pathGrid) {
+      const path = this.pathGrid.findPath(
+        { x: managed.sprite.x, y: managed.sprite.y },
+        { x, y }
+      );
+      if (path && path.length > 1) {
+        const hop = Math.min(3, path.length - 1);
+        x = path[hop]!.x;
+        y = path[hop]!.y;
+        const atGoal =
+          Phaser.Math.Distance.Between(
+            path[path.length - 1]!.x,
+            path[path.length - 1]!.y,
+            targetX,
+            targetY
+          ) < 18;
+        const continuePath = !atGoal
+          ? () => this.nudgeToward(id, targetX, targetY, speed, onArrive)
+          : onArrive;
+        this.tweenMove(managed, x, y, speed, continuePath);
+        return;
+      }
+      // No path — do not walk through fortifications
+      if (this.pathGrid.isWorldBlocked(x, y)) {
+        onArrive?.();
+        return;
+      }
+    }
+
     const dx = x - managed.sprite.x;
     const dy = y - managed.sprite.y;
     if (Math.hypot(dx, dy) < 6) {
+      onArrive?.();
+      return;
+    }
+
+    this.tweenMove(managed, x, y, speed, onArrive);
+  }
+
+  private tweenMove(
+    managed: ManagedSubject,
+    x: number,
+    y: number,
+    speed: number,
+    onArrive?: () => void
+  ): void {
+    const dx = x - managed.sprite.x;
+    const dy = y - managed.sprite.y;
+    if (Math.hypot(dx, dy) < 4) {
       onArrive?.();
       return;
     }
@@ -678,7 +776,7 @@ export class SubjectSystem {
     managed.sprite.play(walkAnimKey(managed.data.role, dir), true);
     managed.moving = true;
     const dist = Math.hypot(dx, dy);
-    const duration = Math.max(300, (dist / moveSpeed) * 1000);
+    const duration = Math.max(200, (dist / moveSpeed) * 1000);
 
     this.scene.tweens.add({
       targets: managed.sprite,

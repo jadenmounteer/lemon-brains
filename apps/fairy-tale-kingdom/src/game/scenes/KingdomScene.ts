@@ -16,6 +16,8 @@ import { LayoutRepository } from '../../kingdom/LayoutRepository';
 import { PathGrid } from '../path/PathGrid';
 import { RaidSystem } from '../raids/RaidSystem';
 import { RoyaltySystem } from '../royalty/RoyaltySystem';
+import { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
+import { SiegeVfx } from '../siege/SiegeVfx';
 import {
   KingdomEvents,
   type BeginPlacePayload,
@@ -48,6 +50,8 @@ export class KingdomScene extends Phaser.Scene {
   private hunger!: HungerSystem;
   private royalty!: RoyaltySystem;
   private pathGrid!: PathGrid;
+  private siegeEngines!: SiegeEngineSystem;
+  private siegeVfx!: SiegeVfx;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private layoutRepo = new LayoutRepository();
   private captivesRepo = new CaptivesRepository();
@@ -83,6 +87,11 @@ export class KingdomScene extends Phaser.Scene {
       .setOrigin(0.5, 0.85);
 
     this.pathGrid = new PathGrid(WORLD_WIDTH, WORLD_HEIGHT, PATH_TILE);
+    this.siegeVfx = new SiegeVfx(this);
+    this.siegeEngines = new SiegeEngineSystem(this);
+    this.siegeEngines.setPathGrid(this.pathGrid);
+    this.siegeEngines.setVfx(this.siegeVfx);
+    this.siegeEngines.setKeep({ x: cx, y: cy });
     this.captives = this.captivesRepo.loadSync();
 
     this.subjects = new SubjectSystem(this, {
@@ -94,11 +103,14 @@ export class KingdomScene extends Phaser.Scene {
     , () => this.schedulePersist());
     this.buildings.setKeepSprite(keepSprite);
     this.buildings.setPathGrid(this.pathGrid);
+    this.buildings.setVfx(this.siegeVfx);
     this.subjects.setBuildings(this.buildings);
+    this.subjects.setPathGrid(this.pathGrid);
     this.subjects.setOnChanged(() => {
       this.emitStats();
       this.schedulePersist();
     });
+    this.siegeEngines.setBuildings(this.buildings);
 
     this.buildings.setOnDestroyed((b) => {
       if (b.kind === 'house' || b.kind === 'manor') {
@@ -121,6 +133,8 @@ export class KingdomScene extends Phaser.Scene {
     this.raids.setBuildings(this.buildings);
     this.raids.setSubjects(this.subjects);
     this.raids.setPathGrid(this.pathGrid);
+    this.raids.setEngines(this.siegeEngines);
+    this.raids.setVfx(this.siegeVfx);
     this.raids.setOnChanged(() => this.schedulePersist());
 
     this.combat = new CombatSystem(
@@ -129,6 +143,8 @@ export class KingdomScene extends Phaser.Scene {
       this.buildings,
       this.raids
     );
+    this.combat.setEngines(this.siegeEngines);
+    this.combat.setVfx(this.siegeVfx);
     this.tasks = new TaskSystem(this.subjects, this.buildings);
     this.hunger = new HungerSystem(this, this.subjects);
     this.tasks.setHunger(this.hunger);
@@ -226,11 +242,14 @@ export class KingdomScene extends Phaser.Scene {
             message: 'Building placed',
           });
         } else {
+          const kind = this.buildings.placingKind();
           this.game.events.emit(KingdomEvents.MARKET_TOAST, {
             message:
-              this.buildings.placingKind() === 'stairs'
+              kind === 'stairs'
                 ? 'Stairs must snap to a wall'
-                : 'Cannot place on another object',
+                : kind === 'drawbridge'
+                  ? 'Drawbridge must snap into a wall gap'
+                  : 'Cannot place on another object',
           });
         }
         return;
@@ -317,6 +336,8 @@ export class KingdomScene extends Phaser.Scene {
 
   shutdown() {
     this.raids?.clear();
+    this.siegeEngines?.clear();
+    this.siegeVfx?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
