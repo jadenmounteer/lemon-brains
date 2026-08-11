@@ -1774,11 +1774,29 @@ function drawVenueBanner(
   tex.refresh();
 }
 
+function drawBallTable(scene: Phaser.Scene) {
+  const w = 36;
+  const h = 16;
+  const tex = createCanvas(scene, PROP_KEYS.ballTable, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 6, 32, 8, palette.wood);
+  fillRect(ctx, 2, 6, 32, 1, palette.ink);
+  fillRect(ctx, 4, 8, 6, 3, palette.clothPrincess);
+  fillRect(ctx, 14, 8, 8, 3, palette.gold);
+  fillRect(ctx, 26, 8, 6, 3, palette.clothKing);
+  pixel(ctx, 8, 5, palette.cream);
+  pixel(ctx, 18, 5, palette.cream);
+  pixel(ctx, 28, 5, palette.cream);
+  tex.refresh();
+}
+
 function drawVenueProps(scene: Phaser.Scene) {
   drawVenueBanner(scene, PROP_KEYS.venueFestival, palette.clothPeasant, true);
   drawVenueBanner(scene, PROP_KEYS.venueWedding, palette.clothPrincess, true);
   drawVenueBanner(scene, PROP_KEYS.venueJoust, palette.clothKnight, false);
   drawVenueBanner(scene, PROP_KEYS.venueFuneral, palette.stoneDark, false);
+  drawVenueBanner(scene, PROP_KEYS.venueBall, palette.clothKing, true);
+  drawBallTable(scene);
 }
 
 function drawBanditCamp(scene: Phaser.Scene) {
@@ -1920,6 +1938,8 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.venueWedding,
     PROP_KEYS.venueJoust,
     PROP_KEYS.venueFuneral,
+    PROP_KEYS.venueBall,
+    PROP_KEYS.ballTable,
     PROP_KEYS.houseInterior,
     PROP_KEYS.keepInterior,
     PROP_KEYS.tavernInterior,

@@ -131,6 +131,8 @@ export const PROP_KEYS = {
   venueWedding: 'prop-venue-wedding',
   venueJoust: 'prop-venue-joust',
   venueFuneral: 'prop-venue-funeral',
+  venueBall: 'prop-venue-ball',
+  ballTable: 'prop-ball-table',
   road: 'prop-road',
   bridge: 'prop-bridge',
   bridgeV: 'prop-bridge-v',

@@ -776,22 +776,65 @@ export class SubjectSystem {
     return true;
   }
 
-  markBallGather(): void {
+  /**
+   * Gather guests in the keep courtyard (walkable land hard against the keep),
+   * not out by the outer wall where pathing used to dump them.
+   */
+  markBallGather(): Point {
     const keep = this.buildings?.getActiveKeepPoint?.() ?? {
       x: this.world.width / 2,
       y: this.world.height / 2,
     };
+    const court = this.findBallCourtyard(keep);
     const guests = this.subjects.filter(
-      (s) => livesAtKeep(s.data.role) || s.data.role === 'peasant'
+      (s) =>
+        s.data.allegiance !== 'camp' &&
+        (livesAtKeep(s.data.role) ||
+          s.data.role === 'peasant' ||
+          s.data.role === 'jester' ||
+          s.data.role === 'fairy_godmother')
     );
     guests.forEach((s, i) => {
       s.data.activity = 'ball';
       s.data.activityLabel = 'Attending the royal ball';
       s.data.zone = 'keep';
-      const off = ringOffset(i, guests.length, 56);
-      const dest = this.snapToWalkable(keep.x + off.x, keep.y + off.y + 28);
+      const off = ringOffset(i, guests.length, 34);
+      const dest = this.snapToWalkable(court.x + off.x, court.y + off.y);
       this.nudgeToward(s.data.id, dest.x, dest.y, 45);
     });
+    return court;
+  }
+
+  /** Open ground hugging the keep — prefers the southern bailey. */
+  private findBallCourtyard(keep: Point): Point {
+    const tries: [number, number][] = [
+      [0, 36],
+      [0, 28],
+      [0, 44],
+      [-18, 32],
+      [18, 32],
+      [-28, 24],
+      [28, 24],
+      [0, 20],
+      [0, -24],
+      [-24, -16],
+      [24, -16],
+    ];
+    for (const [dx, dy] of tries) {
+      const x = keep.x + dx;
+      const y = keep.y + dy;
+      if (this.pathGrid && this.pathGrid.isWorldBlocked(x, y)) continue;
+      // Prefer a spot that can path from just outside the keep footprint
+      if (this.pathGrid) {
+        const path = this.pathGrid.findPath(
+          { x: keep.x, y: keep.y + 8 },
+          { x, y }
+        );
+        if (!path || path.length < 1) continue;
+      }
+      return { x, y };
+    }
+    return this.snapToWalkable(keep.x, keep.y + 36);
   }
 
   markFestivalGather(venue?: { x: number; y: number }): void {
@@ -1229,8 +1272,30 @@ export class SubjectSystem {
     }));
   }
 
+  /**
+   * Kingdom population for the Pop HUD / food pressure.
+   * Excludes living-camp garrisons and mindless undead (they were inflating Pop).
+   */
   count(): number {
+    return this.subjects.filter((s) => this.countsTowardPopulation(s)).length;
+  }
+
+  /** Total managed sprites including camp hostiles (pathing, combat iteration helpers). */
+  countAll(): number {
     return this.subjects.length;
+  }
+
+  private countsTowardPopulation(s: ManagedSubject): boolean {
+    if (s.data.allegiance === 'camp') return false;
+    if (
+      s.data.role === 'zombie' ||
+      s.data.role === 'vampire_wife' ||
+      s.data.role === 'witch' ||
+      s.data.role === 'necromancer'
+    ) {
+      return false;
+    }
+    return true;
   }
 
   royalCounts(): Map<string, number> {
@@ -2295,8 +2360,11 @@ export class SubjectSystem {
       this.select(null);
       this.scene.game.events.emit(KingdomEvents.SUBJECT_SELECTED, null);
     }
+    this.clearActivityAnim(managed);
     managed.sprite.destroy();
     this.subjects = this.subjects.filter((s) => s !== managed);
+    // Always refresh Pop / persist — camp deaths used to skip onChanged
+    this.onChanged?.();
   }
 
   private applyHpTint(managed: ManagedSubject): void {

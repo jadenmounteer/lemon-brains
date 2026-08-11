@@ -46,6 +46,7 @@ import { FamilySystem } from '../family/FamilySystem';
 import { WitchSystem } from '../witches/WitchSystem';
 import { EventVenueSystem } from '../events/EventVenueSystem';
 import { FestivalFunSystem } from '../events/FestivalFunSystem';
+import { BallFunSystem } from '../events/BallFunSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
 import { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { SecuritySystem } from '../security/SecuritySystem';
@@ -100,6 +101,7 @@ export class KingdomScene extends Phaser.Scene {
   private justice!: JusticeSystem; // used via executeCaptive
   private bubbles!: SpeechBubbleSystem;
   private festivalFun!: FestivalFunSystem;
+  private ballFun!: BallFunSystem;
   private security!: SecuritySystem;
   private militaryPatrol!: MilitaryPatrolSystem;
   private undead!: UndeadSystem;
@@ -298,6 +300,7 @@ export class KingdomScene extends Phaser.Scene {
     this.bubbles = new SpeechBubbleSystem(this);
     this.subjects.setBubbles(this.bubbles);
     this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
+    this.ballFun = new BallFunSystem(this, this.subjects, this.bubbles);
     this.security = new SecuritySystem(
       this,
       this.subjects,
@@ -336,6 +339,12 @@ export class KingdomScene extends Phaser.Scene {
         this.venues.startFestivalAt?.(pick.x, pick.y);
       }
     });
+    this.royalty.setOnBallStart((pt) => {
+      this.ballFun.start(pt.x, pt.y);
+    });
+    this.royalty.setOnBallEnd(() => {
+      this.ballFun.stop();
+    });
 
     this.monsters.setBuildings(this.buildings);
     this.monsters.setSubjects(this.subjects);
@@ -363,6 +372,10 @@ export class KingdomScene extends Phaser.Scene {
         fgmCooldownMs: saved.fgmCooldownMs,
         ...(saved.royaltyState ?? {}),
       });
+      if (this.royalty.isBallActive()) {
+        const court = this.subjects.markBallGather();
+        this.ballFun.start(court.x, court.y);
+      }
       if (saved.monsters && saved.monsters.length > 0) {
         this.monsters.restore(saved.monsters);
       } else {
@@ -694,6 +707,10 @@ export class KingdomScene extends Phaser.Scene {
     if (!this.royalty?.isFestivalActive()) {
       this.festivalFun?.stop();
     }
+    this.ballFun?.update(delta);
+    if (!this.royalty?.isBallActive()) {
+      this.ballFun?.stop();
+    }
     this.security?.update(delta);
     this.militaryPatrol?.update(
       delta,
@@ -725,6 +742,8 @@ export class KingdomScene extends Phaser.Scene {
     this.thieves?.clear();
     this.encampments?.clear();
     this.venues?.clear();
+    this.festivalFun?.stop();
+    this.ballFun?.stop();
     this.bubbles?.clearAll();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);

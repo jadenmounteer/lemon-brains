@@ -26,6 +26,8 @@ export class RoyaltySystem {
   private onFestivalStart:
     | ((pick: { kind: FestivalKind; x: number; y: number }) => void)
     | null = null;
+  private onBallStart: ((pt: { x: number; y: number }) => void) | null = null;
+  private onBallEnd: (() => void) | null = null;
   private lastMorningHour = -1;
   private weddingCooldownMs = 0;
   private readonly parade: ParadeSystem;
@@ -36,6 +38,14 @@ export class RoyaltySystem {
     private readonly buildings: BuildingSystem
   ) {
     this.parade = new ParadeSystem(scene, subjects, buildings);
+  }
+
+  setOnBallStart(cb: (pt: { x: number; y: number }) => void): void {
+    this.onBallStart = cb;
+  }
+
+  setOnBallEnd(cb: () => void): void {
+    this.onBallEnd = cb;
   }
 
   isInspired(): boolean {
@@ -229,6 +239,7 @@ export class RoyaltySystem {
         this.ballRemainingMs = 0;
         this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
         this.subjects.clearGatherActivities(['ball']);
+        this.onBallEnd?.();
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: 'The royal ball has ended',
         });
@@ -241,9 +252,10 @@ export class RoyaltySystem {
       this.ballRemainingMs = EconomyBalance.ballDurationMs;
       this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'A royal ball begins at the keep!',
+        message: 'A royal ball begins in the keep courtyard!',
       });
-      this.subjects.markBallGather();
+      const court = this.subjects.markBallGather();
+      this.onBallStart?.(court);
     }
   }
 
