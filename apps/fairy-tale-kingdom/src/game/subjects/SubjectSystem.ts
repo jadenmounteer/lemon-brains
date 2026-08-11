@@ -104,6 +104,17 @@ export class SubjectSystem {
     this.nudgeToward(subjectId, x, y, 55);
   }
 
+  beginFleeFromMonster(subjectId: string, fromX: number, fromY: number): void {
+    const managed = this.getById(subjectId);
+    if (!managed || managed.data.role !== 'peasant') return;
+    managed.interrupt = { kind: 'flee' };
+    managed.data.activity = 'flee';
+    managed.data.activityLabel = 'Fleeing a monster';
+    const awayX = managed.sprite.x - (fromX - managed.sprite.x);
+    const awayY = managed.sprite.y - (fromY - managed.sprite.y);
+    this.nudgeToward(subjectId, awayX, awayY, 70);
+  }
+
   tickDefenseMuster(armySiege: boolean): void {
     if (!armySiege || !this.buildings) {
       this.cancelInterrupts(['defend']);
@@ -462,12 +473,7 @@ export class SubjectSystem {
 
   combatants(): ManagedSubject[] {
     return this.subjects.filter(
-      (s) =>
-        !s.data.sick &&
-        (s.data.role === 'guard' ||
-          s.data.role === 'archer' ||
-          s.data.role === 'elite_guard' ||
-          s.data.role === 'elite_archer')
+      (s) => !s.data.sick && isMilitaryRole(s.data.role)
     );
   }
 

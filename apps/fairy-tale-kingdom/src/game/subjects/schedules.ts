@@ -43,6 +43,15 @@ const fairySchedule: ScheduleSlot[] = [
   { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Turning in' },
 ];
 
+const knightSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 6, endHour: 11, activity: 'train', zone: 'field', label: 'Training with blade and shield' },
+  { startHour: 11, endHour: 14, activity: 'patrol', zone: 'path', label: 'Riding the roads' },
+  { startHour: 14, endHour: 18, activity: 'patrol', zone: 'wall', label: 'Guarding the walls' },
+  { startHour: 18, endHour: 21, activity: 'idle_keep', zone: 'keep', label: 'Reporting at the keep' },
+  { startHour: 21, endHour: 24, activity: 'hunt', zone: 'cave', label: 'Hunting sleeping dragons' },
+];
+
 export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
   switch (role) {
     case 'peasant':
@@ -53,6 +62,8 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
     case 'archer':
     case 'elite_archer':
       return archerSchedule;
+    case 'knight':
+      return knightSchedule;
     case 'king':
     case 'queen':
     case 'prince':
@@ -99,6 +110,8 @@ export function roleLabel(role: SubjectRole): string {
       return 'Elite Guard';
     case 'elite_archer':
       return 'Elite Archer';
+    case 'knight':
+      return 'Knight';
     case 'king':
       return 'King';
     case 'queen':

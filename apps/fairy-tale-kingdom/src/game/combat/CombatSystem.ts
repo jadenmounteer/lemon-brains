@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
+import { isKnightRole } from '../art/assetManifest';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { EconomyBalance } from '../economy/economy';
+import type { MonsterSystem } from '../monsters/MonsterSystem';
 import type { RaidSystem } from '../raids/RaidSystem';
 import { SiegeBalance } from '../siege/balance';
 import type { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
@@ -10,8 +12,8 @@ import { KingdomEvents } from '../subjects/events';
 import { CombatBalance } from './stats';
 
 /**
- * Periodic combat tick: guards melee, archers shoot (wall/tower bonus),
- * ballistae auto-fire, engine priority, defense muster during army sieges.
+ * Periodic combat: raids, siege engines, ballistae, and monster hunts
+ * (knights vs sleeping dragons).
  */
 export class CombatSystem {
   private accumMs = 0;
@@ -19,6 +21,7 @@ export class CombatSystem {
   private inspired = false;
   private engines: SiegeEngineSystem | null = null;
   private vfx: SiegeVfx | null = null;
+  private monsters: MonsterSystem | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -35,23 +38,23 @@ export class CombatSystem {
     this.vfx = vfx;
   }
 
+  setMonsters(monsters: MonsterSystem): void {
+    this.monsters = monsters;
+  }
+
   setInspired(active: boolean): void {
     this.inspired = active;
   }
 
   update(deltaMs: number): void {
-    const active = this.raids.hasActiveRaiders();
-    this.buildings.setRaidActive(active);
-    this.subjects.setRaidMode(active);
+    const raidActive = this.raids.hasActiveRaiders();
+    this.buildings.setRaidActive(raidActive);
+    this.subjects.setRaidMode(raidActive);
 
-    if (!active) {
-      this.accumMs = 0;
-      this.ballistaCooldown.clear();
-      return;
+    if (raidActive) {
+      this.subjects.tickFleeAndClimb(this.raids, deltaMs);
+      this.subjects.tickDefenseMuster(this.raids.isArmySiege());
     }
-
-    this.subjects.tickFleeAndClimb(this.raids, deltaMs);
-    this.subjects.tickDefenseMuster(this.raids.isArmySiege());
 
     for (const [id, cd] of [...this.ballistaCooldown]) {
       const next = cd - deltaMs;
@@ -63,20 +66,26 @@ export class CombatSystem {
     if (this.accumMs < CombatBalance.tickMs) return;
     this.accumMs = 0;
 
-    this.friendlyFire();
-    this.tickBallistae();
+    this.friendlyFire(raidActive);
+    if (raidActive) this.tickBallistae();
+    this.tickMonsterCombat();
   }
 
-  private friendlyFire(): void {
+  private dmgMult(): number {
     let dmgMult = 1;
     if (this.buildings.hasBarracks()) dmgMult *= EconomyBalance.barracksDamageMult;
     if (this.inspired) dmgMult *= EconomyBalance.waveCombatMult;
+    return dmgMult;
+  }
+
+  private friendlyFire(raidActive: boolean): void {
+    if (!raidActive) return;
+    const dmgMult = this.dmgMult();
 
     for (const fighter of this.subjects.combatants()) {
       const isArcher =
         fighter.data.role === 'archer' || fighter.data.role === 'elite_archer';
 
-      // Prefer siege engines for archers / nearby melee
       const engine = this.engines?.nearestEngine(
         fighter.sprite.x,
         fighter.sprite.y,
@@ -135,7 +144,6 @@ export class CombatSystem {
           : CombatBalance.aggroRadius
       );
 
-      // Melee can also bash engines in range
       if (!isArcher && engine) {
         const ed = Phaser.Math.Distance.Between(
           fighter.sprite.x,
@@ -143,11 +151,13 @@ export class CombatSystem {
           engine.sprite.x,
           engine.sprite.y
         );
-        if (ed <= CombatBalance.guardRange + 10) {
-          const base =
-            fighter.data.role === 'elite_guard'
+        const base =
+          fighter.data.role === 'knight'
+            ? CombatBalance.knightMelee
+            : fighter.data.role === 'elite_guard'
               ? CombatBalance.eliteGuardMelee
               : CombatBalance.guardMelee;
+        if (ed <= CombatBalance.guardRange + 10) {
           this.vfx?.meleeLunge(fighter.sprite, engine.sprite.x, engine.sprite.y);
           const dead = this.engines?.damageEngine(engine, base * dmgMult);
           if (dead) {
@@ -193,9 +203,11 @@ export class CombatSystem {
           continue;
         }
         const base =
-          fighter.data.role === 'elite_guard'
-            ? CombatBalance.eliteGuardMelee
-            : CombatBalance.guardMelee;
+          fighter.data.role === 'knight'
+            ? CombatBalance.knightMelee
+            : fighter.data.role === 'elite_guard'
+              ? CombatBalance.eliteGuardMelee
+              : CombatBalance.guardMelee;
         this.vfx?.meleeLunge(fighter.sprite, target.sprite.x, target.sprite.y);
         this.vfx?.hitFlash(target.sprite);
         const dead = this.raids.damageRaider(target, base * dmgMult);
@@ -240,6 +252,124 @@ export class CombatSystem {
             }
           }
         );
+      }
+    }
+  }
+
+  private tickMonsterCombat(): void {
+    if (!this.monsters) return;
+    const dmgMult = this.dmgMult();
+
+    for (const fighter of this.subjects.combatants()) {
+      const isKnight = isKnightRole(fighter.data.role);
+      const isArcher =
+        fighter.data.role === 'archer' || fighter.data.role === 'elite_archer';
+
+      // Knights prioritize sleeping dragons
+      if (isKnight) {
+        const sleepers = this.monsters.sleepingDragons();
+        let best = null as (typeof sleepers)[0] | null;
+        let bestD = Number(CombatBalance.knightHuntRange);
+        for (const d of sleepers) {
+          const dist = Phaser.Math.Distance.Between(
+            fighter.sprite.x,
+            fighter.sprite.y,
+            d.sprite.x,
+            d.sprite.y
+          );
+          if (dist < bestD) {
+            bestD = dist;
+            best = d;
+          }
+        }
+        if (best) {
+          if (bestD > CombatBalance.guardRange + 6) {
+            this.subjects.nudgeToward(
+              fighter.data.id,
+              best.sprite.x,
+              best.sprite.y,
+              60
+            );
+            fighter.data.activity = 'hunt';
+            fighter.data.activityLabel = `Hunting ${best.name}`;
+            continue;
+          }
+          this.vfx?.meleeLunge(fighter.sprite, best.sprite.x, best.sprite.y);
+          const dmg =
+            (CombatBalance.knightMelee + CombatBalance.knightDragonBonus) *
+            dmgMult;
+          const dead = this.monsters.damageMonster(best.id, dmg);
+          if (dead) {
+            this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+              message: `${fighter.data.name} slew the dragon ${best.name}!`,
+            });
+          }
+          continue;
+        }
+      }
+
+      // Awake monsters: knights/guards melee; archers can chip lightly (not dragons while asleep)
+      const monster = this.monsters.nearestMonster(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        isArcher ? this.archerRange(fighter.sprite.x, fighter.sprite.y, fighter.data.onWall) : CombatBalance.aggroRadius,
+        { awakeOnly: true }
+      );
+      if (!monster) continue;
+
+      // Only knights meaningfully fight dragons; others skip dragons
+      if (monster.kind === 'dragon' && !isKnight) continue;
+
+      const dist = Phaser.Math.Distance.Between(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        monster.sprite.x,
+        monster.sprite.y
+      );
+
+      if (isArcher) {
+        if (dist > this.archerRange(fighter.sprite.x, fighter.sprite.y, fighter.data.onWall)) {
+          continue;
+        }
+        let dmg =
+          fighter.data.role === 'elite_archer'
+            ? CombatBalance.eliteArcherRanged
+            : CombatBalance.archerRanged;
+        dmg *= dmgMult * 0.75;
+        this.vfx?.projectileArc(
+          fighter.sprite.x,
+          fighter.sprite.y - 10,
+          monster.sprite.x,
+          monster.sprite.y - 8,
+          'arrow',
+          () => {
+            this.monsters?.damageMonster(monster.id, dmg);
+          }
+        );
+        continue;
+      }
+
+      if (dist > CombatBalance.guardRange) {
+        this.subjects.nudgeToward(
+          fighter.data.id,
+          monster.sprite.x,
+          monster.sprite.y,
+          55
+        );
+        continue;
+      }
+      const base =
+        fighter.data.role === 'knight'
+          ? CombatBalance.knightMelee
+          : fighter.data.role === 'elite_guard'
+            ? CombatBalance.eliteGuardMelee
+            : CombatBalance.guardMelee;
+      this.vfx?.meleeLunge(fighter.sprite, monster.sprite.x, monster.sprite.y);
+      const dead = this.monsters.damageMonster(monster.id, base * dmgMult);
+      if (dead) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${fighter.data.name} slew ${monster.name}`,
+        });
       }
     }
   }

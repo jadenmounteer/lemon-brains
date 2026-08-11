@@ -26,7 +26,7 @@ export interface BuildingSnapshot {
   residents?: BuildingResident[];
 }
 
-export type ZoneId = 'home' | 'path' | 'keep' | 'wall' | 'field';
+export type ZoneId = 'home' | 'path' | 'keep' | 'wall' | 'field' | 'cave' | 'forest' | 'mountain';
 
 export type ActivityId =
   | 'sleep'
@@ -42,7 +42,10 @@ export type ActivityId =
   | 'chat'
   | 'harvest'
   | 'wave'
-  | 'defend';
+  | 'defend'
+  | 'steal'
+  | 'smash'
+  | 'hunt';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 

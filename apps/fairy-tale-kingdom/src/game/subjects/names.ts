@@ -53,3 +53,39 @@ export function pickName(seed: number): string {
   const last = LAST[Math.floor(rand() * LAST.length)]!;
   return `${first} ${last}`;
 }
+
+const MONSTER_FIRST = [
+  'Grim',
+  'Blight',
+  'Ash',
+  'Thorn',
+  'Gore',
+  'Moss',
+  'Iron',
+  'Shadow',
+  'Bramble',
+  'Cinder',
+];
+
+const TROLL_LAST = ['Tusk', 'Mire', 'Crag', 'Bog', 'Knuckle'];
+const OGRE_LAST = ['Smash', 'Maul', 'Hill', 'Boulder', 'Fist'];
+const DRAGON_LAST = [
+  'Scale',
+  'Ember',
+  'Wyrm',
+  'Fang',
+  'Nightwing',
+  'Goldhoard',
+];
+
+export function pickMonsterName(
+  kind: 'troll' | 'ogre' | 'dragon',
+  seed: number
+): string {
+  const rand = mulberry32(seed);
+  const first = MONSTER_FIRST[Math.floor(rand() * MONSTER_FIRST.length)]!;
+  const lasts =
+    kind === 'troll' ? TROLL_LAST : kind === 'ogre' ? OGRE_LAST : DRAGON_LAST;
+  const last = lasts[Math.floor(rand() * lasts.length)]!;
+  return `${first} ${last}`;
+}

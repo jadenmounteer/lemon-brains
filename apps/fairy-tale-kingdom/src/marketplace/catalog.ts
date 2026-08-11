@@ -54,6 +54,12 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
     cost: 25,
   },
   {
+    role: 'knight',
+    name: 'Knight',
+    blurb: 'Elite melee fighter. Slays dragons while they sleep in caves.',
+    cost: 45,
+  },
+  {
     role: 'elite_guard',
     name: 'Elite Guard',
     blurb: 'Hardened melee fighter. Requires King & Queen.',

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   ENEMY_ROLES,
+  MONSTER_ROLES,
   PROP_KEYS,
   TERRAIN_KEY,
   TILE_SIZE,
@@ -49,7 +50,7 @@ function createCanvas(
 }
 
 function drawTerrain(scene: Phaser.Scene) {
-  const width = TILE_SIZE * 4;
+  const width = TILE_SIZE * 7;
   const height = TILE_SIZE;
   const tex = createCanvas(scene, TERRAIN_KEY, width, height);
   const ctx = tex.getContext();
@@ -87,6 +88,28 @@ function drawTerrain(scene: Phaser.Scene) {
   fillRect(ctx, TILE_SIZE * 3, 0, TILE_SIZE, 3, palette.grass);
   fillRect(ctx, TILE_SIZE * 3, TILE_SIZE - 3, TILE_SIZE, 3, palette.grass);
 
+  // 4 water
+  fillRect(ctx, TILE_SIZE * 4, 0, TILE_SIZE, TILE_SIZE, palette.water);
+  for (let i = 0; i < 5; i++) {
+    pixel(
+      ctx,
+      TILE_SIZE * 4 + 2 + i * 2,
+      4 + (i % 3) * 3,
+      palette.waterLight
+    );
+  }
+
+  // 5 forest
+  fillRect(ctx, TILE_SIZE * 5, 0, TILE_SIZE, TILE_SIZE, palette.forest);
+  fillRect(ctx, TILE_SIZE * 5 + 4, 4, 4, 8, palette.forestDark);
+  fillRect(ctx, TILE_SIZE * 5 + 9, 6, 4, 7, palette.grassDark);
+  pixel(ctx, TILE_SIZE * 5 + 2, 12, palette.grassLight);
+
+  // 6 mountain
+  fillRect(ctx, TILE_SIZE * 6, 0, TILE_SIZE, TILE_SIZE, palette.mountain);
+  fillRect(ctx, TILE_SIZE * 6 + 3, 3, 10, 10, palette.mountainLight);
+  fillRect(ctx, TILE_SIZE * 6 + 6, 1, 4, 4, palette.stone);
+
   tex.refresh();
 }
 
@@ -118,6 +141,14 @@ function clothFor(role: AnimRole): number {
       return palette.clothGiant;
     case 'enemy_army':
       return palette.clothEnemyArmy;
+    case 'knight':
+      return palette.clothKnight;
+    case 'troll':
+      return palette.clothTroll;
+    case 'ogre':
+      return palette.clothOgre;
+    case 'dragon':
+      return palette.clothDragon;
   }
 }
 
@@ -133,7 +164,8 @@ function drawUnitFrame(
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
   const cloth = clothFor(role);
-  const tall = role === 'giant' ? -2 : 0;
+  const tall = role === 'giant' || role === 'ogre' || role === 'troll' ? -2 : 0;
+  const dragonish = role === 'dragon';
 
   fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
 
@@ -147,6 +179,22 @@ function drawUnitFrame(
   fillRect(ctx, originX + 11, 10 + baseY + tall, 1, 8 - tall, palette.ink);
 
   fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 6, palette.skin);
+  if (dragonish) {
+    fillRect(ctx, originX + 4, 4 + baseY + tall, 8, 6, cloth);
+    fillRect(ctx, originX + 3, 6 + baseY + tall, 2, 2, palette.gold);
+    fillRect(ctx, originX + 11, 6 + baseY + tall, 2, 2, palette.gold);
+    // wing hint
+    fillRect(ctx, originX + 1, 10 + baseY, 3, 5, cloth);
+    fillRect(ctx, originX + 12, 10 + baseY, 3, 5, cloth);
+  }
+  if (role === 'knight') {
+    fillRect(ctx, originX + 5, 3 + baseY, 6, 3, palette.metal);
+    fillRect(ctx, originX + 11, 12 + baseY, 2, 5, palette.metal);
+  }
+  if (role === 'troll') {
+    fillRect(ctx, originX + 4, 3 + baseY + tall, 2, 2, cloth);
+    fillRect(ctx, originX + 10, 3 + baseY + tall, 2, 2, cloth);
+  }
   fillRect(ctx, originX + 4, 4 + baseY + tall, 1, 6, palette.ink);
   fillRect(ctx, originX + 11, 4 + baseY + tall, 1, 6, palette.ink);
   fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 1, palette.ink);
@@ -502,8 +550,22 @@ function drawManor(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawCave(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 32;
+  const tex = createCanvas(scene, PROP_KEYS.cave, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 8, 32, 22, palette.mountain);
+  fillRect(ctx, 4, 8, 32, 1, palette.ink);
+  fillRect(ctx, 12, 14, 16, 16, palette.ink);
+  fillRect(ctx, 14, 16, 12, 12, 0x1a1010);
+  fillRect(ctx, 6, 4, 8, 6, palette.mountainLight);
+  fillRect(ctx, 26, 4, 8, 6, palette.mountainLight);
+  tex.refresh();
+}
+
 /**
- * Generate all Phase 1 textures into the scene texture manager.
+ * Generate all textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
  */
 export function generateTextures(scene: Phaser.Scene): void {
@@ -530,9 +592,16 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.arrow,
     PROP_KEYS.bolt,
     PROP_KEYS.dust,
+    PROP_KEYS.cave,
     ...Array.from({ length: 16 }, (_, i) => wallTextureKey(i)),
   ];
-  for (const key of [TERRAIN_KEY, ...UNIT_ROLES, ...ENEMY_ROLES, ...propKeys]) {
+  for (const key of [
+    TERRAIN_KEY,
+    ...UNIT_ROLES,
+    ...ENEMY_ROLES,
+    ...MONSTER_ROLES,
+    ...propKeys,
+  ]) {
     if (scene.textures.exists(key)) {
       scene.textures.remove(key);
     }
@@ -543,6 +612,9 @@ export function generateTextures(scene: Phaser.Scene): void {
     drawUnitSheet(scene, role);
   }
   for (const role of ENEMY_ROLES) {
+    drawUnitSheet(scene, role);
+  }
+  for (const role of MONSTER_ROLES) {
     drawUnitSheet(scene, role);
   }
   drawKeep(scene);
@@ -561,9 +633,10 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawCatapult(scene);
   drawTrebuchet(scene);
   drawVfx(scene);
+  drawCave(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 7; i++) {
     const name = String(i);
     if (!terrain.has(name)) {
       terrain.add(name, 0, i * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE);

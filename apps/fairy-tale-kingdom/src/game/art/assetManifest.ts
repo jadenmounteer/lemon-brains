@@ -17,6 +17,7 @@ export const UNIT_ROLES = [
   'archer',
   'elite_guard',
   'elite_archer',
+  'knight',
   'king',
   'queen',
   'prince',
@@ -29,7 +30,11 @@ export type UnitRole = (typeof UNIT_ROLES)[number];
 export const ENEMY_ROLES = ['bandit', 'giant', 'enemy_army'] as const;
 export type EnemyRole = (typeof ENEMY_ROLES)[number];
 
-export type AnimRole = UnitRole | EnemyRole;
+/** World monsters (scheduled NPCs, not raid waves) */
+export const MONSTER_ROLES = ['troll', 'ogre', 'dragon'] as const;
+export type MonsterRole = (typeof MONSTER_ROLES)[number];
+
+export type AnimRole = UnitRole | EnemyRole | MonsterRole;
 
 /** Terrain tileset key + tile indices */
 export const TERRAIN_KEY = 'terrain';
@@ -38,7 +43,14 @@ export const TerrainTile = {
   grassAlt: 1,
   dirt: 2,
   dirtEdge: 3,
+  water: 4,
+  forest: 5,
+  mountain: 6,
 } as const;
+
+export function isTerrainBlocked(tile: number): boolean {
+  return tile === TerrainTile.water || tile === TerrainTile.mountain;
+}
 
 export const PROP_KEYS = {
   keep: 'prop-keep',
@@ -63,6 +75,7 @@ export const PROP_KEYS = {
   arrow: 'vfx-arrow',
   bolt: 'vfx-bolt',
   dust: 'vfx-dust',
+  cave: 'prop-cave',
 } as const;
 
 /** N=1 E=2 S=4 W=8 neighbor bitmask → `prop-wall-{mask}` */
@@ -135,6 +148,11 @@ export function isMilitaryRole(role: UnitRole): boolean {
     role === 'guard' ||
     role === 'archer' ||
     role === 'elite_guard' ||
-    role === 'elite_archer'
+    role === 'elite_archer' ||
+    role === 'knight'
   );
+}
+
+export function isKnightRole(role: UnitRole): boolean {
+  return role === 'knight';
 }

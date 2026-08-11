@@ -22,6 +22,7 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   archer: 30,
   elite_guard: 55,
   elite_archer: 40,
+  knight: 50,
   king: 45,
   queen: 40,
   prince: 35,
@@ -29,17 +30,20 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   fairy_godmother: 30,
 };
 
-export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
-  bandit: 25,
-  giant: 60,
-  enemy_army: 35,
-};
+export const MONSTER_MAX_HP = {
+  troll: 55,
+  ogre: 70,
+  dragon: 120,
+  dragonTwoHead: 160,
+} as const;
 
 export const CombatBalance = {
   guardMelee: 8,
   archerRanged: 5,
   eliteGuardMelee: 12,
   eliteArcherRanged: 8,
+  knightMelee: 14,
+  knightDragonBonus: 18,
   archerWallRangeMult: 1.5,
   archerWallDamageMult: 1.25,
   raiderMelee: 6,
@@ -58,7 +62,21 @@ export const CombatBalance = {
   chatDurationMs: 3000,
   tickMs: 400,
   engineMeleeDamage: 7,
+  monsterMelee: 7,
+  dragonBreath: 10,
+  ogreSmash: 12,
+  trollRegen: 2,
+  dragonStealGold: 8,
+  dragonTwoHeadStealGold: 14,
+  monsterAggro: 70,
+  knightHuntRange: 200,
 } as const;
+
+export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
+  bandit: 25,
+  giant: 60,
+  enemy_army: 35,
+};
 
 export function isBurnable(kind: BuildKind): boolean {
   return (

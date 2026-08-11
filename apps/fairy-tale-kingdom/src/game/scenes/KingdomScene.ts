@@ -4,6 +4,7 @@ import {
   TERRAIN_KEY,
   TILE_SIZE,
   TerrainTile,
+  isTerrainBlocked,
 } from '../art/assetManifest';
 import { BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatSystem } from '../combat/CombatSystem';
@@ -13,6 +14,7 @@ import {
   type CaptiveRecord,
 } from '../../kingdom/CaptivesRepository';
 import { LayoutRepository } from '../../kingdom/LayoutRepository';
+import { MonsterSystem } from '../monsters/MonsterSystem';
 import { PathGrid } from '../path/PathGrid';
 import { RaidSystem } from '../raids/RaidSystem';
 import { RoyaltySystem } from '../royalty/RoyaltySystem';
@@ -28,12 +30,15 @@ import {
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 import { TaskSystem } from '../subjects/TaskSystem';
+import { setWorldBiomes, type CavePoint, type Point } from '../subjects/zones';
 
 const MAP_COLS = 80;
 const MAP_ROWS = 50;
 const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 3.5;
 const PAN_THRESHOLD_PX = 6;
 const NIGHT_TINT = 0x0a1520;
 const PATH_TILE = 16;
@@ -52,7 +57,10 @@ export class KingdomScene extends Phaser.Scene {
   private pathGrid!: PathGrid;
   private siegeEngines!: SiegeEngineSystem;
   private siegeVfx!: SiegeVfx;
+  private monsters!: MonsterSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
+  private mapData: number[][] = [];
+  private caveSprites: Phaser.GameObjects.Image[] = [];
   private layoutRepo = new LayoutRepository();
   private captivesRepo = new CaptivesRepository();
   private captives: CaptiveRecord[] = [];
@@ -64,9 +72,10 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   create() {
-    const mapData = buildMapData();
+    const built = buildMapData();
+    this.mapData = built.data;
     const map = this.make.tilemap({
-      data: mapData,
+      data: this.mapData,
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
     });
@@ -86,7 +95,23 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(10)
       .setOrigin(0.5, 0.85);
 
+    setWorldBiomes({
+      caves: built.caves,
+      forests: built.forests,
+      mountains: built.mountains,
+    });
+    this.caveSprites = [];
+    for (const cave of built.caves) {
+      const img = this.add
+        .image(cave.x, cave.y, PROP_KEYS.cave)
+        .setDepth(7)
+        .setOrigin(0.5, 0.85);
+      this.caveSprites.push(img);
+    }
+
     this.pathGrid = new PathGrid(WORLD_WIDTH, WORLD_HEIGHT, PATH_TILE);
+    this.pathGrid.applyTerrainFromMap(this.mapData, isTerrainBlocked);
+
     this.siegeVfx = new SiegeVfx(this);
     this.siegeEngines = new SiegeEngineSystem(this);
     this.siegeEngines.setPathGrid(this.pathGrid);
@@ -111,6 +136,16 @@ export class KingdomScene extends Phaser.Scene {
       this.schedulePersist();
     });
     this.siegeEngines.setBuildings(this.buildings);
+
+    this.monsters = new MonsterSystem(this, {
+      width: WORLD_WIDTH,
+      height: WORLD_HEIGHT,
+    });
+    this.monsters.setKeep({ x: cx, y: cy });
+    this.monsters.setPathGrid(this.pathGrid);
+    this.monsters.setVfx(this.siegeVfx);
+    this.monsters.setClock(this.subjects.clock);
+    this.monsters.setOnChanged(() => this.schedulePersist());
 
     this.buildings.setOnDestroyed((b) => {
       if (b.kind === 'house' || b.kind === 'manor') {
@@ -145,10 +180,14 @@ export class KingdomScene extends Phaser.Scene {
     );
     this.combat.setEngines(this.siegeEngines);
     this.combat.setVfx(this.siegeVfx);
+    this.combat.setMonsters(this.monsters);
     this.tasks = new TaskSystem(this.subjects, this.buildings);
     this.hunger = new HungerSystem(this, this.subjects);
     this.tasks.setHunger(this.hunger);
     this.royalty = new RoyaltySystem(this, this.subjects);
+
+    this.monsters.setBuildings(this.buildings);
+    this.monsters.setSubjects(this.subjects);
 
     const saved = this.layoutRepo.loadSync();
     if (saved && saved.buildings.length > 0) {
@@ -163,9 +202,15 @@ export class KingdomScene extends Phaser.Scene {
         this.subjects.spawnSeed();
       }
       this.royalty.restoreTimers(saved.princeSpawnMs, saved.fgmCooldownMs);
+      if (saved.monsters && saved.monsters.length > 0) {
+        this.monsters.restore(saved.monsters);
+      } else {
+        this.monsters.seedIfEmpty();
+      }
     } else {
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
       this.subjects.spawnSeed();
+      this.monsters.seedIfEmpty();
       this.persistLayout();
     }
 
@@ -184,7 +229,7 @@ export class KingdomScene extends Phaser.Scene {
     this.applyNightOverlay();
 
     this.add
-      .text(12, 12, 'Drag to look · click a subject or building', {
+      .text(12, 12, 'Drag to look · scroll to zoom · click a subject, monster, or building', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -193,6 +238,18 @@ export class KingdomScene extends Phaser.Scene {
       })
       .setScrollFactor(0)
       .setDepth(1000);
+
+    this.input.on(
+      'wheel',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _gos: unknown,
+        _dx: number,
+        dy: number
+      ) => {
+        this.zoomAtPointer(dy);
+      }
+    );
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       if (!pointer.leftButtonDown()) return;
@@ -257,13 +314,20 @@ export class KingdomScene extends Phaser.Scene {
 
       const hit = this.resolveHit(pointer);
       if (hit?.type === 'subject') {
+        this.monsters.select(null);
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishSelection(this.subjects.select(hit.id));
+      } else if (hit?.type === 'monster') {
+        this.publishSelection(this.subjects.select(null));
+        this.publishBuildingSelection(this.buildings.select(null));
+        this.publishSelection(this.monsters.select(hit.id));
       } else if (hit?.type === 'building') {
+        this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         const residents = this.subjects.residentsOf(hit.id);
         this.publishBuildingSelection(this.buildings.select(hit.id, residents));
       } else {
+        this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
       }
@@ -286,6 +350,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
     this.game.events.on(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.on(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
+    this.game.events.on(KingdomEvents.DAY_ROLLED, this.onDayRolled);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -307,6 +372,9 @@ export class KingdomScene extends Phaser.Scene {
         if (this.subjects.getSelectedId()) {
           const snap = this.subjects.refreshSelectedSnapshot();
           if (snap) this.publishSelection(snap);
+        } else {
+          const mSnap = this.monsters.refreshSelectedSnapshot();
+          if (mSnap) this.publishSelection(mSnap);
         }
         if (this.buildings.getSelectedId()) {
           const id = this.buildings.getSelectedId()!;
@@ -321,6 +389,7 @@ export class KingdomScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     this.subjects?.update(delta);
+    this.monsters?.update(delta);
     this.raids?.update(delta);
     this.royalty?.update(delta);
     const inspired = this.royalty?.isInspired() ?? false;
@@ -338,6 +407,7 @@ export class KingdomScene extends Phaser.Scene {
     this.raids?.clear();
     this.siegeEngines?.clear();
     this.siegeVfx?.clear();
+    this.monsters?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
@@ -346,6 +416,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
     this.game.events.off(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.off(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
+    this.game.events.off(KingdomEvents.DAY_ROLLED, this.onDayRolled);
   }
 
   private onHire = (payload: HireSubjectPayload) => {
@@ -468,6 +539,7 @@ export class KingdomScene extends Phaser.Scene {
     void this.layoutRepo.save({
       subjects: this.subjects.serialize(),
       buildings: this.buildings.serialize(),
+      monsters: this.monsters.serialize(),
       keepHp: keep.keepHp,
       keepMaxHp: keep.keepMaxHp,
       princeSpawnMs: timers.princeSpawnMs,
@@ -487,9 +559,27 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private onClearSelection = () => {
+    this.monsters?.select(null);
     this.publishSelection(this.subjects.select(null));
     this.publishBuildingSelection(this.buildings.select(null));
   };
+
+  private onDayRolled = () => {
+    this.monsters?.onDayRolled();
+    this.schedulePersist();
+  };
+
+  private zoomAtPointer(dy: number): void {
+    const cam = this.cameras.main;
+    const pointer = this.input.activePointer;
+    const before = cam.getWorldPoint(pointer.x, pointer.y);
+    const factor = dy > 0 ? 0.9 : 1.1;
+    const next = Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX);
+    cam.setZoom(next);
+    const after = cam.getWorldPoint(pointer.x, pointer.y);
+    cam.scrollX += before.x - after.x;
+    cam.scrollY += before.y - after.y;
+  }
 
   private publishSelection(
     snap: ReturnType<SubjectSystem['select']>
@@ -507,22 +597,31 @@ export class KingdomScene extends Phaser.Scene {
 
   private resolveHit(
     pointer: Phaser.Input.Pointer
-  ): { type: 'subject' | 'building'; id: string } | null {
+  ):
+    | { type: 'subject' | 'building' | 'monster'; id: string }
+    | null {
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
-    // Direct body hit on a person wins; otherwise buildings use footprints
-    // so houses stay clickable even when residents linger nearby.
     const subjectId = this.subjects.pickAt(world.x, world.y);
     if (subjectId) return { type: 'subject', id: subjectId };
+    const monsterId = this.monsters.pickAt(world.x, world.y);
+    if (monsterId) return { type: 'monster', id: monsterId };
     const buildingId = this.buildings.pickAt(world.x, world.y);
     if (buildingId) return { type: 'building', id: buildingId };
     return null;
   }
 }
 
-function buildMapData(): number[][] {
+function buildMapData(): {
+  data: number[][];
+  caves: CavePoint[];
+  forests: Point[];
+  mountains: Point[];
+} {
   const data: number[][] = [];
   const midCol = Math.floor(MAP_COLS / 2);
   const midRow = Math.floor(MAP_ROWS / 2);
+  const forests: Point[] = [];
+  const mountains: Point[] = [];
 
   for (let r = 0; r < MAP_ROWS; r++) {
     const row: number[] = [];
@@ -531,6 +630,35 @@ function buildMapData(): number[][] {
         Math.abs(c - midCol) <= 2 || Math.abs(r - midRow) <= 1;
       const nearKeep =
         Math.abs(c - midCol) <= 5 && Math.abs(r - midRow) <= 4;
+
+      // Lake (NW)
+      if (c >= 4 && c <= 14 && r >= 4 && r <= 12) {
+        row.push(TerrainTile.water);
+        continue;
+      }
+      // River from lake eastward then south
+      if (
+        (r === 8 && c >= 14 && c <= 28) ||
+        (c === 28 && r >= 8 && r <= 22)
+      ) {
+        row.push(TerrainTile.water);
+        continue;
+      }
+      // Forest (SW)
+      if (c >= 6 && c <= 22 && r >= 34 && r <= 46) {
+        row.push(TerrainTile.forest);
+        continue;
+      }
+      // Mountains (NE ridge)
+      if (c >= 58 && c <= 76 && r >= 2 && r <= 16) {
+        row.push(TerrainTile.mountain);
+        continue;
+      }
+      // Mountain fringe SE
+      if (c >= 64 && c <= 78 && r >= 38 && r <= 48) {
+        row.push(TerrainTile.mountain);
+        continue;
+      }
 
       if (onCross) {
         row.push(
@@ -546,5 +674,47 @@ function buildMapData(): number[][] {
     }
     data.push(row);
   }
-  return data;
+
+  forests.push({
+    x: 14 * TILE_SIZE,
+    y: 40 * TILE_SIZE,
+  });
+  mountains.push({
+    x: 68 * TILE_SIZE,
+    y: 8 * TILE_SIZE,
+  });
+  mountains.push({
+    x: 70 * TILE_SIZE,
+    y: 42 * TILE_SIZE,
+  });
+
+  // Caves at mountain fringe (walkable grass/forest adjacent to mountains)
+  const caves: CavePoint[] = [
+    { id: 'cave-0', x: 56 * TILE_SIZE + 8, y: 10 * TILE_SIZE + 8 },
+    { id: 'cave-1', x: 62 * TILE_SIZE + 8, y: 36 * TILE_SIZE + 8 },
+  ];
+  // Ensure cave tiles are walkable forest-ish
+  for (const cave of caves) {
+    const col = Math.floor(cave.x / TILE_SIZE);
+    const row = Math.floor(cave.y / TILE_SIZE);
+    if (data[row] && data[row]![col] !== undefined) {
+      data[row]![col] = TerrainTile.forest;
+      // clear neighbors of mountain so pathing reaches cave
+      for (const [dc, dr] of [
+        [0, 0],
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const rr = row + dr!;
+        const cc = col + dc!;
+        if (data[rr]?.[cc] === TerrainTile.mountain) {
+          data[rr]![cc] = TerrainTile.forest;
+        }
+      }
+    }
+  }
+
+  return { data, caves, forests, mountains };
 }

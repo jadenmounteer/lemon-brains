@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import {
   DIRECTIONS,
   ENEMY_ROLES,
+  MONSTER_ROLES,
   UNIT_ROLES,
   UnitFrame,
   idleAnimKey,
@@ -45,6 +46,9 @@ export function registerAnims(scene: Phaser.Scene): void {
     registerRole(scene, role);
   }
   for (const role of ENEMY_ROLES) {
+    registerRole(scene, role);
+  }
+  for (const role of MONSTER_ROLES) {
     registerRole(scene, role);
   }
 }

@@ -1,11 +1,14 @@
 import { LocalStorageAdapter, type StoragePort } from '@knowledge-quest/storage';
-import type { UnitRole } from '../game/art/assetManifest';
+import { UNIT_ROLES, type UnitRole } from '../game/art/assetManifest';
 import { BUILDING_MAX_HP, UNIT_MAX_HP } from '../game/combat/stats';
+import type { SavedMonster } from '../game/monsters/MonsterSystem';
 import { BUILD_CATALOG, type BuildKind } from '../marketplace/catalog';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
 
 const VALID_BUILD_KINDS = new Set<string>(BUILD_CATALOG.map((c) => c.kind));
+const VALID_MONSTER_KINDS = new Set(['troll', 'ogre', 'dragon']);
+const VALID_UNIT_ROLES = new Set<string>(UNIT_ROLES);
 
 export interface SavedBuilding {
   id: string;
@@ -33,6 +36,7 @@ export interface SavedSubject {
 export interface LayoutSave {
   subjects: SavedSubject[];
   buildings: SavedBuilding[];
+  monsters?: SavedMonster[];
   keepHp?: number;
   keepMaxHp?: number;
   princeSpawnMs?: number;
@@ -63,7 +67,12 @@ export class LayoutRepository {
         buildings: parsed.buildings
           .filter((b) => VALID_BUILD_KINDS.has(b.kind))
           .map(normalizeBuilding),
-        subjects: parsed.subjects.map(normalizeSubject),
+        subjects: parsed.subjects
+          .filter((s) => VALID_UNIT_ROLES.has(s.role))
+          .map(normalizeSubject),
+        monsters: Array.isArray(parsed.monsters)
+          ? parsed.monsters.filter((m) => VALID_MONSTER_KINDS.has(m.kind))
+          : [],
       };
     } catch {
       return null;
