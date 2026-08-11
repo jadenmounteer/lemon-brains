@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
+import type { CampKind } from './WarBalance';
 
 export type StrategyFocus = 'raid_fields' | 'weak_keep' | 'soft_breach';
 
@@ -116,6 +117,39 @@ export function planSiege(
     breachX: soft.x,
     breachY: soft.y,
   };
+}
+
+const CAMP_RAID_LINES: Record<CampKind, string[]> = {
+  goblin: [
+    'Tonight we strike the granary!',
+    'Burn their fields before dawn!',
+    'The keep sleeps — take what we can carry!',
+  ],
+  bandit: [
+    'Gold before sunrise, lads!',
+    'Hit the road and run!',
+    'Strike fast, strike rich!',
+  ],
+  giant: [
+    'Smash what stands in our way!',
+    'Time to remind them who is bigger!',
+  ],
+  thief: [
+    'In and out before the watch stirs.',
+    'Shadows favor us tonight.',
+  ],
+  gypsy: [
+    'A little "borrowing" tonight, friends.',
+    'Charm first, pockets after!',
+  ],
+  coven: ['The stars favor mischief tonight.'],
+  siege: ['For the crown! Take the keep!'],
+};
+
+/** Flavor order a camp's leader gives before sending a raiding party. */
+export function pickCampRaidLine(kind: CampKind): string {
+  const lines = CAMP_RAID_LINES[kind] ?? CAMP_RAID_LINES.bandit;
+  return lines[Math.floor(Math.random() * lines.length)]!;
 }
 
 /** Softest approach: from camp toward keep, prefer the side with fewer/weaker forts. */

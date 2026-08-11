@@ -89,3 +89,80 @@ export function pickMonsterName(
   const last = lasts[Math.floor(rand() * lasts.length)]!;
   return `${first} ${last}`;
 }
+
+const CAMP_LEADER_TITLES: Record<string, string> = {
+  bandit: 'Bandit Captain',
+  giant: 'Giant Chief',
+  goblin: 'Goblin Warchief',
+  thief: 'Thief Boss',
+  gypsy: 'Gypsy Baron',
+  coven: 'Coven Matriarch',
+  siege: 'General',
+};
+
+/** Rank-and-title used for a camp's named leader, keyed by camp kind. */
+export function campLeaderTitle(kind: string): string {
+  return CAMP_LEADER_TITLES[kind] ?? 'Leader';
+}
+
+const CAMP_MINION_FIRST = [
+  'Grix',
+  'Snarl',
+  'Bok',
+  'Rag',
+  'Fenn',
+  'Skarr',
+  'Nub',
+  'Grott',
+  'Thokk',
+  'Mudge',
+  'Crank',
+  'Vex',
+  'Rook',
+  'Sly',
+  'Doss',
+  'Grubb',
+];
+
+const CAMP_MINION_LAST = [
+  'the Rat',
+  'Onefang',
+  'Quickhand',
+  'Bonebreaker',
+  'the Grim',
+  'Muckfoot',
+  'Snakeye',
+  'Longknife',
+  'the Bold',
+  'Ashcloak',
+];
+
+/** Rank-and-file name for a living unit stationed at an enemy camp. */
+export function pickCampUnitName(seed: number): string {
+  const rand = mulberry32(seed);
+  const first =
+    CAMP_MINION_FIRST[Math.floor(rand() * CAMP_MINION_FIRST.length)]!;
+  const last = CAMP_MINION_LAST[Math.floor(rand() * CAMP_MINION_LAST.length)]!;
+  return `${first} ${last}`;
+}
+
+const CAMP_LEADER_FIRST = [
+  'Grukk',
+  'Vashna',
+  'Old Rand',
+  'Bram Ironhand',
+  'Skarl',
+  'Morga',
+  'Drask',
+  'Yennefer',
+  'Korrath',
+  'Wenna',
+];
+
+/** Named leader for an enemy camp, e.g. "Goblin Warchief Grukk". */
+export function pickCampLeaderName(kind: string, seed: number): string {
+  const rand = mulberry32(seed);
+  const first =
+    CAMP_LEADER_FIRST[Math.floor(rand() * CAMP_LEADER_FIRST.length)]!;
+  return `${campLeaderTitle(kind)} ${first}`;
+}

@@ -77,6 +77,21 @@ export function BuildingInspectorPanel({
           )}
         </>
       )}
+      <h3 className="inspector-subhead">Who works here</h3>
+      {building.workers && building.workers.length > 0 ? (
+        <ul className="schedule-list">
+          {building.workers.map((w) => (
+            <li key={w.id}>
+              {w.name}{' '}
+              <span className="muted">
+                · {w.jobLabel ?? w.roleLabel}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">No one works here yet.</p>
+      )}
     </section>
   );
 }
@@ -117,6 +132,12 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
       return 'Burial ground';
     case 'gallows':
       return 'Justice';
+    case 'road':
+      return 'Road';
+    case 'bridge':
+      return 'Crossing';
+    case 'dock':
+      return 'Harbor';
     case 'keep':
       return 'Seat of power';
   }

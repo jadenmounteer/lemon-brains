@@ -4,6 +4,7 @@ import type { BuildingSystem } from '../buildings/BuildingSystem';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { RaidSystem } from '../raids/RaidSystem';
 import { KingdomEvents } from '../subjects/events';
+import type { FestivalKind } from './festivalRequirements';
 
 export type VenueKind = 'festival' | 'wedding' | 'joust' | 'funeral';
 
@@ -29,7 +30,8 @@ const DANGER_R = 70;
 /** Temporary animated event props with burn/flee under attack. */
 export class EventVenueSystem {
   private venues: ActiveVenue[] = [];
-  private joustCooldownMs = 120_000;
+  private festivalAnchor: { kind: FestivalKind; x: number; y: number } | null =
+    null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -38,12 +40,23 @@ export class EventVenueSystem {
     private readonly raids: RaidSystem
   ) {}
 
+  /** Where the current/next festival tent should rise, from RoyaltySystem's pick. */
+  setFestivalAnchor(
+    pick: { kind: FestivalKind; x: number; y: number } | null
+  ): void {
+    this.festivalAnchor = pick;
+  }
+
   update(deltaMs: number, opts: {
     festivalActive: boolean;
     weddingActive: boolean;
     peacetime: boolean;
   }): void {
-    this.joustCooldownMs -= deltaMs;
+    // Festival/joust venues are triggered explicitly by RoyaltySystem's
+    // unified, eligibility-gated festival timer (see startFestivalAt /
+    // startJoustAt below), so only weddings are spawned reactively here.
+    // `opts.festivalActive` is kept for callers that still pass it, but a
+    // stray true value won't double-spawn thanks to the guard.
     if (
       opts.festivalActive &&
       !this.venues.some((v) => v.kind === 'festival')
@@ -55,15 +68,6 @@ export class EventVenueSystem {
       !this.venues.some((v) => v.kind === 'wedding')
     ) {
       this.spawn('wedding');
-    }
-    if (
-      opts.peacetime &&
-      this.joustCooldownMs <= 0 &&
-      this.subjects.countRole('knight') >= 2 &&
-      !this.venues.some((v) => v.kind === 'joust')
-    ) {
-      this.spawn('joust');
-      this.joustCooldownMs = 240_000;
     }
 
     for (const v of [...this.venues]) {
@@ -87,6 +91,16 @@ export class EventVenueSystem {
     this.spawn('funeral', nearX, nearY);
   }
 
+  startFestivalAt(x: number, y: number): void {
+    if (this.venues.some((v) => v.kind === 'festival')) return;
+    this.spawn('festival', x, y);
+  }
+
+  startJoustAt(x: number, y: number): void {
+    if (this.venues.some((v) => v.kind === 'joust')) return;
+    this.spawn('joust', x, y);
+  }
+
   private spawn(kind: VenueKind, x?: number, y?: number): void {
     const anchor = this.anchorFor(kind);
     if (!anchor && x == null) return;
@@ -107,16 +121,17 @@ export class EventVenueSystem {
       remainingMs: kind === 'funeral' ? 35_000 : 45_000,
       guardIds: [],
     });
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message:
-        kind === 'festival'
-          ? 'Festival tents rise by the market!'
-          : kind === 'wedding'
+    if (kind !== 'festival') {
+      // Festival toasts are kind-specific and already sent by RoyaltySystem.
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message:
+          kind === 'wedding'
             ? 'A wedding arch blooms by the cathedral!'
             : kind === 'joust'
-              ? 'Jousting lists open by the field!'
+              ? 'Jousting lists open by the barracks!'
               : 'A funeral gathers at the cemetery.',
-    });
+      });
+    }
     // Cap attendance: nearby subjects get happiness
     for (const s of this.subjects.listManaged()) {
       const d = Phaser.Math.Distance.Between(s.sprite.x, s.sprite.y, px, py);
@@ -131,9 +146,14 @@ export class EventVenueSystem {
     }
     if (kind === 'joust') {
       const king = this.subjects.firstByRole('king');
+      const queen = this.subjects.firstByRole('queen');
       if (king) {
         this.subjects.nudgeToward(king.data.id, px, py, 40);
         this.subjects.appendLifeLog(king.data.id, 'Attended the joust', 'joust');
+      }
+      if (queen) {
+        this.subjects.nudgeToward(queen.data.id, px + 10, py, 40);
+        this.subjects.appendLifeLog(queen.data.id, 'Attended the joust', 'joust');
       }
     }
   }
@@ -142,6 +162,9 @@ export class EventVenueSystem {
     kind: VenueKind
   ): { x: number; y: number } | null {
     if (kind === 'festival') {
+      if (this.festivalAnchor) {
+        return { x: this.festivalAnchor.x, y: this.festivalAnchor.y };
+      }
       const market = this.buildings
         .serialize()
         .find((b) => b.kind === 'market' || b.kind === 'house');
@@ -152,8 +175,12 @@ export class EventVenueSystem {
       return this.buildings.getCathedralPoint?.() ?? null;
     }
     if (kind === 'joust') {
-      const field = this.buildings.serialize().find((b) => b.kind === 'field');
-      return field ? { x: field.x, y: field.y } : this.buildings.getKeepPoint();
+      const barracks = this.buildings
+        .serialize()
+        .find((b) => b.kind === 'barracks');
+      return barracks
+        ? { x: barracks.x, y: barracks.y }
+        : this.buildings.getKeepPoint();
     }
     if (kind === 'funeral') {
       const cem = this.buildings.serialize().find((b) => b.kind === 'cemetery');

@@ -2,6 +2,7 @@ import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import type { LifeLogEntry } from '../thoughts/lifeLog';
 import type { CivilianJob } from '../jobs/capacities';
+import type { CampKind } from '../war/WarBalance';
 
 export type SubjectRole = UnitRole;
 export type SubjectGender = 'male' | 'female';
@@ -26,6 +27,7 @@ export interface BuildingResident {
   id: string;
   name: string;
   roleLabel: string;
+  jobLabel?: string;
 }
 
 export type InspectableBuildKind = BuildKind | 'keep';
@@ -42,10 +44,39 @@ export interface BuildingSnapshot {
   bedsUsed?: number;
   bedsCapacity?: number;
   residents?: BuildingResident[];
+  workers?: BuildingResident[];
   royalUsed?: number;
   royalCapacity?: number;
   influenceRadius?: number;
   capacityLines?: string[];
+}
+
+/** Named garrison entry for an encampment, shown in the camp inspector. */
+export interface CampRosterEntry {
+  id: string;
+  name: string;
+  role: string;
+  status: 'home' | 'away';
+  activity: string;
+}
+
+/** Snapshot sent across the Phaser → React bridge for encampments */
+export interface CampSnapshot {
+  id: string;
+  kind: CampKind;
+  x: number;
+  y: number;
+  label: string;
+  leaderName: string | null;
+  leaderHome: boolean;
+  /** True while the camp has no leader after one fell in battle — raids paused. */
+  demoralized?: boolean;
+  garrison: number;
+  away: number;
+  supply?: number;
+  maxSupply?: number;
+  canArrest: boolean;
+  roster: CampRosterEntry[];
 }
 
 export type ZoneId =
@@ -197,6 +228,7 @@ export interface SubjectSnapshot {
   ageYears?: number;
   body?: BodyCondition;
   jobLabel?: string;
+  workplaceLabel?: string;
   thought?: string;
   goalLabel?: string;
   backstory?: string;

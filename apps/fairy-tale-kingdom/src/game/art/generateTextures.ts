@@ -234,6 +234,10 @@ function drawUnitFrame(
     drawBishopFrame(ctx, originX, facing, walkStep);
     return;
   }
+  if (role === 'goblin') {
+    drawGoblinFrame(ctx, originX, facing, walkStep);
+    return;
+  }
 
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
@@ -307,11 +311,6 @@ function drawUnitFrame(
   } else if (role === 'bandit' || role === 'gypsy') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
-  } else if (role === 'goblin') {
-    fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.forestDark);
-    fillRect(ctx, originX + 12, 11 + baseY, 2, 4, palette.wood);
-    pixel(ctx, originX + 4, 5 + baseY, palette.ink);
-    pixel(ctx, originX + 11, 5 + baseY, palette.ink);
   } else if (role === 'giant') {
     fillRect(ctx, originX + 4, 2 + baseY + tall, 8, 3, palette.woodDark);
   } else if (role === 'general') {
@@ -331,6 +330,58 @@ function drawUnitFrame(
   } else {
     pixel(ctx, originX + 7, 6 + baseY + tall, palette.ink);
     pixel(ctx, originX + 9, 6 + baseY + tall, palette.ink);
+  }
+}
+
+/** Little goblin: small green body, big ears, beady eyes, fangs, crude dagger. */
+function drawGoblinFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob + 3; // shorter stature
+  const skin = 0x4a9a48;
+  const skinDark = palette.clothGoblin;
+  const rag = 0x5a4a2a;
+
+  fillRect(ctx, originX + 5, 21, 6, 1, palette.ink);
+  fillRect(ctx, originX + 5 - leg, 17 + y, 2, 4, skinDark);
+  fillRect(ctx, originX + 9 + leg, 17 + y, 2, 4, skinDark);
+  // tiny rag tunic
+  fillRect(ctx, originX + 5, 12 + y, 6, 6, rag);
+  fillRect(ctx, originX + 6, 13 + y, 4, 4, skin);
+  // arms
+  if (facing === 'left') {
+    fillRect(ctx, originX + 2, 13 + y, 2, 5, skin);
+    fillRect(ctx, originX + 1, 14 + y, 2, 5, palette.woodDark); // dagger
+  } else if (facing === 'right') {
+    fillRect(ctx, originX + 12, 13 + y, 2, 5, skin);
+    fillRect(ctx, originX + 13, 14 + y, 2, 5, palette.woodDark);
+  } else {
+    fillRect(ctx, originX + 3, 13 + y, 2, 5, skin);
+    fillRect(ctx, originX + 11, 13 + y, 2, 5, skin);
+    fillRect(ctx, originX + 12, 15 + y, 2, 4, palette.woodDark);
+  }
+  // oversized head
+  fillRect(ctx, originX + 5, 5 + y, 6, 7, skin);
+  // pointed ears
+  fillRect(ctx, originX + 2, 6 + y, 3, 4, skin);
+  fillRect(ctx, originX + 11, 6 + y, 3, 4, skin);
+  pixel(ctx, originX + 2, 6 + y, skinDark);
+  pixel(ctx, originX + 13, 6 + y, skinDark);
+  // hooked nose
+  fillRect(ctx, originX + 7, 9 + y, 2, 2, skinDark);
+  if (facing !== 'up') {
+    // beady yellow eyes
+    pixel(ctx, originX + 6, 8 + y, palette.gold);
+    pixel(ctx, originX + 9, 8 + y, palette.gold);
+    // tiny fangs
+    pixel(ctx, originX + 6, 12 + y, palette.cream);
+    pixel(ctx, originX + 9, 12 + y, palette.cream);
+    fillRect(ctx, originX + 6, 11 + y, 4, 1, palette.ink);
   }
 }
 
@@ -1242,6 +1293,93 @@ function drawGallows(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawRoad(scene: Phaser.Scene) {
+  const w = 16;
+  const h = 16;
+  const tex = createCanvas(scene, PROP_KEYS.road, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 0, 0, w, h, palette.dirt);
+  fillRect(ctx, 0, 0, w, 1, palette.dirtDark);
+  fillRect(ctx, 0, h - 1, w, 1, palette.dirtDark);
+  pixel(ctx, 4, 5, palette.dirtDark);
+  pixel(ctx, 11, 10, palette.dirtDark);
+  tex.refresh();
+}
+
+function drawBridge(scene: Phaser.Scene) {
+  const w = 48;
+  const h = 20;
+  const tex = createCanvas(scene, PROP_KEYS.bridge, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 8, 44, 8, palette.wood);
+  fillRect(ctx, 2, 8, 44, 1, palette.ink);
+  fillRect(ctx, 2, 7, 44, 1, palette.woodDark);
+  fillRect(ctx, 4, 4, 2, 12, palette.woodDark);
+  fillRect(ctx, 42, 4, 2, 12, palette.woodDark);
+  for (let x = 6; x < 44; x += 4) fillRect(ctx, x, 10, 2, 1, palette.woodDark);
+  tex.refresh();
+
+  const texV = createCanvas(scene, PROP_KEYS.bridgeV, 20, 48);
+  const cv = texV.getContext();
+  fillRect(cv, 6, 2, 8, 44, palette.wood);
+  fillRect(cv, 6, 2, 1, 44, palette.ink);
+  fillRect(cv, 4, 4, 12, 2, palette.woodDark);
+  fillRect(cv, 4, 42, 12, 2, palette.woodDark);
+  texV.refresh();
+}
+
+function drawDock(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 28;
+  const tex = createCanvas(scene, PROP_KEYS.dock, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 0, 18, 40, 10, palette.water);
+  fillRect(ctx, 4, 10, 32, 12, palette.wood);
+  fillRect(ctx, 4, 10, 32, 1, palette.ink);
+  fillRect(ctx, 8, 6, 3, 8, palette.woodDark);
+  fillRect(ctx, 28, 6, 3, 8, palette.woodDark);
+  tex.refresh();
+}
+
+function drawVampireCastle(scene: Phaser.Scene) {
+  const w = 56;
+  const h = 48;
+  const tex = createCanvas(scene, PROP_KEYS.vampireCastle, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 8, 16, 40, 28, palette.stoneDark);
+  fillRect(ctx, 8, 8, 12, 12, palette.stoneDark);
+  fillRect(ctx, 36, 8, 12, 12, palette.stoneDark);
+  fillRect(ctx, 22, 28, 12, 16, palette.ink);
+  fillRect(ctx, 12, 20, 6, 6, 0x4a1020);
+  fillRect(ctx, 38, 20, 6, 6, 0x4a1020);
+  tex.refresh();
+}
+
+function drawFishingBoat(scene: Phaser.Scene) {
+  const w = 28;
+  const h = 16;
+  const tex = createCanvas(scene, PROP_KEYS.fishingBoat, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 8, 24, 6, palette.woodDark);
+  fillRect(ctx, 4, 6, 20, 4, palette.wood);
+  fillRect(ctx, 14, 2, 2, 8, palette.woodDark);
+  fillRect(ctx, 16, 3, 6, 4, palette.cream);
+  tex.refresh();
+}
+
+function drawWarship(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 22;
+  const tex = createCanvas(scene, PROP_KEYS.warship, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 12, 36, 8, palette.woodDark);
+  fillRect(ctx, 4, 8, 32, 6, palette.wood);
+  fillRect(ctx, 12, 2, 3, 12, palette.woodDark);
+  fillRect(ctx, 16, 3, 10, 8, palette.clothGuard);
+  fillRect(ctx, 30, 10, 6, 3, palette.metal);
+  tex.refresh();
+}
+
 function drawCarriage(scene: Phaser.Scene) {
   const w = 32;
   const h = 24;
@@ -1257,22 +1395,62 @@ function drawCarriage(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+/** Small campfire glow, anchored at its base (x, y). */
+function drawFirePit(ctx: Ctx, x: number, y: number) {
+  fillRect(ctx, x - 3, y, 7, 2, palette.stoneDark);
+  fillRect(ctx, x - 2, y - 5, 5, 6, 0xff6622);
+  fillRect(ctx, x - 1, y - 8, 3, 4, 0xffcc44);
+}
+
+/** Palisade post, anchored at its base (x, y), growing upward `h` px. */
+function drawFencePost(ctx: Ctx, x: number, y: number, h: number) {
+  fillRect(ctx, x, y - h, 2, h, palette.woodDark);
+  fillRect(ctx, x, y - h, 2, 1, palette.wood);
+}
+
+/** A-frame tent at (x, y) top-left, sized w × h, with a doorway + pole. */
+function drawTent(ctx: Ctx, x: number, y: number, w: number, h: number, cloth: number) {
+  fillRect(ctx, x, y, w, h, cloth);
+  fillRect(ctx, x, y, w, 1, palette.ink);
+  fillRect(ctx, x + Math.floor(w / 2) - 1, y - 6, 2, 6, palette.wood);
+  const doorW = Math.max(3, Math.floor(w * 0.28));
+  fillRect(
+    ctx,
+    x + Math.floor((w - doorW) / 2),
+    y + h - 5,
+    doorW,
+    5,
+    0x0a0608
+  );
+}
+
+/** Covered wagon at (x, y) top-left, wheels included. */
+function drawWagon(ctx: Ctx, x: number, y: number) {
+  fillRect(ctx, x, y, 18, 9, palette.wood);
+  fillRect(ctx, x, y, 18, 1, palette.woodDark);
+  fillRect(ctx, x + 2, y - 5, 14, 6, palette.clothPeasant);
+  fillRect(ctx, x + 2, y - 5, 14, 1, palette.ink);
+  fillRect(ctx, x + 1, y + 8, 5, 5, palette.ink);
+  fillRect(ctx, x + 12, y + 8, 5, 5, palette.ink);
+  pixel(ctx, x + 3, y + 10, palette.stone);
+  pixel(ctx, x + 14, y + 10, palette.stone);
+}
+
 function drawCampVariant(
   scene: Phaser.Scene,
   key: string,
   tentColor: number,
   accent: number
 ) {
-  const w = 40;
-  const h = 28;
+  const w = 52;
+  const h = 36;
   const tex = createCanvas(scene, key, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 14, 28, 12, palette.dirt);
-  fillRect(ctx, 10, 6, 20, 14, tentColor);
-  fillRect(ctx, 10, 6, 20, 1, palette.ink);
-  fillRect(ctx, 18, 2, 2, 8, palette.wood);
-  fillRect(ctx, 8, 18, 6, 6, palette.woodDark);
-  fillRect(ctx, 26, 18, 6, 6, accent);
+  fillRect(ctx, 4, 18, 44, 16, palette.dirt);
+  for (let i = 0; i < 5; i++) drawFencePost(ctx, 4 + i * 10, 34, 8);
+  drawTent(ctx, 8, 8, 22, 16, tentColor);
+  drawTent(ctx, 32, 12, 14, 12, accent);
+  drawFirePit(ctx, 42, 30);
   tex.refresh();
 }
 
@@ -1325,43 +1503,84 @@ function drawVenueProps(scene: Phaser.Scene) {
 }
 
 function drawBanditCamp(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 28;
+  const w = 56;
+  const h = 40;
   const tex = createCanvas(scene, PROP_KEYS.banditCamp, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 14, 28, 12, palette.dirt);
-  fillRect(ctx, 10, 6, 20, 14, palette.clothBandit);
-  fillRect(ctx, 10, 6, 20, 1, palette.ink);
-  fillRect(ctx, 18, 2, 2, 8, palette.wood);
-  fillRect(ctx, 8, 18, 6, 6, palette.woodDark);
-  fillRect(ctx, 26, 18, 6, 6, 0x3a2a1a);
+  fillRect(ctx, 4, 22, 48, 16, palette.dirt);
+  for (let i = 0; i < 6; i++) drawFencePost(ctx, 4 + i * 9, 38, 8);
+  drawTent(ctx, 6, 12, 20, 16, palette.clothBandit);
+  drawTent(ctx, 30, 16, 16, 12, 0x3a2a1a);
+  drawFirePit(ctx, 44, 34);
+  fillRect(ctx, 48, 6, 2, 12, palette.wood);
+  fillRect(ctx, 46, 4, 6, 4, palette.clothBandit);
+  tex.refresh();
+}
+
+/** Crude spiked palisade + skull totem, ramshackle tents in goblin green. */
+function drawGoblinCamp(scene: Phaser.Scene) {
+  const w = 54;
+  const h = 38;
+  const tex = createCanvas(scene, PROP_KEYS.goblinCamp, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 20, 46, 16, palette.dirt);
+  for (let i = 0; i < 6; i++) drawFencePost(ctx, 4 + i * 9, 36, 10);
+  // skull atop the tallest post, warning off intruders
+  fillRect(ctx, 6, 22, 4, 4, palette.cream);
+  drawTent(ctx, 8, 10, 18, 14, palette.clothGoblin);
+  drawTent(ctx, 28, 14, 14, 10, 0x2a5a28);
+  drawFirePit(ctx, 42, 32);
+  fillRect(ctx, 46, 8, 2, 10, palette.wood);
+  fillRect(ctx, 44, 6, 6, 3, palette.clothGoblin);
+  tex.refresh();
+}
+
+/** Sparse, oversized camp: a bonfire, a hide lean-to, and a huge log seat. */
+function drawGiantCamp(scene: Phaser.Scene) {
+  const w = 60;
+  const h = 42;
+  const tex = createCanvas(scene, PROP_KEYS.giantCamp, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 24, 52, 16, palette.dirt);
+  fillRect(ctx, 6, 34, 22, 6, palette.woodDark); // felled-log seat
+  fillRect(ctx, 6, 34, 22, 1, palette.wood);
+  drawTent(ctx, 30, 10, 22, 18, palette.clothGiant);
+  fillRect(ctx, 34, 4, 4, 8, palette.woodDark); // crude bone/pole marker
+  fillRect(ctx, 33, 2, 6, 3, palette.cream);
+  drawFirePit(ctx, 12, 38);
   tex.refresh();
 }
 
 function drawThiefDen(scene: Phaser.Scene) {
-  const w = 36;
-  const h = 24;
+  const w = 52;
+  const h = 36;
   const tex = createCanvas(scene, PROP_KEYS.thiefDen, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 10, 28, 12, palette.ink);
-  fillRect(ctx, 8, 6, 20, 10, palette.stoneDark);
-  fillRect(ctx, 14, 12, 8, 8, 0x0a0608);
-  fillRect(ctx, 22, 4, 3, 6, palette.wood);
+  fillRect(ctx, 4, 18, 44, 16, palette.ink);
+  fillRect(ctx, 8, 8, 28, 14, palette.stoneDark);
+  fillRect(ctx, 8, 8, 28, 1, 0x0a0608);
+  fillRect(ctx, 16, 14, 10, 8, 0x0a0608);
+  fillRect(ctx, 38, 4, 3, 8, palette.wood);
+  fillRect(ctx, 40, 22, 8, 8, palette.woodDark);
+  fillRect(ctx, 42, 24, 3, 3, palette.stone);
+  drawFirePit(ctx, 12, 32);
   tex.refresh();
 }
 
 function drawSiegeCamp(scene: Phaser.Scene) {
-  const w = 48;
-  const h = 32;
+  const w = 88;
+  const h = 52;
   const tex = createCanvas(scene, PROP_KEYS.siegeCamp, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 16, 40, 14, palette.dirt);
-  fillRect(ctx, 8, 8, 18, 14, palette.clothEnemyArmy);
-  fillRect(ctx, 8, 8, 18, 1, palette.ink);
-  fillRect(ctx, 28, 10, 14, 12, palette.stone);
-  fillRect(ctx, 32, 4, 2, 10, palette.metal);
-  fillRect(ctx, 14, 2, 2, 8, palette.wood);
-  fillRect(ctx, 36, 18, 8, 6, palette.woodDark);
+  fillRect(ctx, 4, 28, 80, 20, palette.dirt);
+  for (let i = 0; i < 9; i++) drawFencePost(ctx, 4 + i * 9, 48, 8);
+  drawTent(ctx, 8, 14, 24, 18, palette.clothEnemyArmy);
+  drawTent(ctx, 34, 18, 18, 14, palette.clothGeneral);
+  drawWagon(ctx, 54, 30);
+  drawWagon(ctx, 68, 22);
+  fillRect(ctx, 44, 6, 2, 12, palette.metal);
+  fillRect(ctx, 40, 2, 10, 6, palette.clothEnemyArmy);
+  drawFirePit(ctx, 20, 44);
   tex.refresh();
 }
 
@@ -1402,8 +1621,14 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.market,
     PROP_KEYS.cemetery,
     PROP_KEYS.gallows,
+    PROP_KEYS.road,
+    PROP_KEYS.bridge,
+    PROP_KEYS.bridgeV,
+    PROP_KEYS.dock,
     PROP_KEYS.carriage,
     PROP_KEYS.banditCamp,
+    PROP_KEYS.goblinCamp,
+    PROP_KEYS.giantCamp,
     PROP_KEYS.thiefDen,
     PROP_KEYS.siegeCamp,
     PROP_KEYS.gypsyCamp,
@@ -1465,8 +1690,16 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawMarket(scene);
   drawCemetery(scene);
   drawGallows(scene);
+  drawRoad(scene);
+  drawBridge(scene);
+  drawDock(scene);
+  drawVampireCastle(scene);
+  drawFishingBoat(scene);
+  drawWarship(scene);
   drawCarriage(scene);
   drawBanditCamp(scene);
+  drawGoblinCamp(scene);
+  drawGiantCamp(scene);
   drawThiefDen(scene);
   drawSiegeCamp(scene);
   drawGypsyCamp(scene);

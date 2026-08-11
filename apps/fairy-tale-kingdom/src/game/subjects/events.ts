@@ -2,6 +2,7 @@ import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import type {
   BuildingSnapshot,
+  CampSnapshot,
   DaySnapshot,
   KingdomStats,
   SubjectSnapshot,
@@ -33,10 +34,15 @@ export const KingdomEvents = {
   SET_DAYS_PLAYED: 'kingdom:set-days-played',
   CAREER_HIRE: 'kingdom:career-hire',
   EXECUTE_CAPTIVE: 'kingdom:execute-captive',
+  CAMP_SELECTED: 'kingdom:camp-selected',
+  DESTROY_CAMP: 'kingdom:destroy-camp',
+  ARREST_CAMP: 'kingdom:arrest-camp',
+  FOCUS_CAMP: 'kingdom:focus-camp',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
 export type BuildingSelectedPayload = BuildingSnapshot | null;
+export type CampSelectedPayload = CampSnapshot | null;
 export type DayTickPayload = DaySnapshot;
 
 export interface GoldStolenPayload {
@@ -116,4 +122,18 @@ export interface SetDaysPlayedPayload {
 export interface CareerHirePayload {
   subjectId: string;
   targetRole: UnitRole;
+}
+
+export interface DestroyCampPayload {
+  campId: string;
+}
+
+export interface ArrestCampPayload {
+  campId: string;
+}
+
+export interface FocusCampPayload {
+  campId: string;
+  /** Roster unit id the player clicked, when known. */
+  unitId?: string;
 }

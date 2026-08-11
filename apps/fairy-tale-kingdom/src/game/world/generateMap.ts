@@ -55,7 +55,7 @@ export function generateKingdomMap(
     }
   }
 
-  // Keep clearing
+  // Keep clearing (no starter roads — player places them)
   for (let r = midRow - 5; r <= midRow + 5; r++) {
     for (let c = midCol - 6; c <= midCol + 6; c++) {
       if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
@@ -63,27 +63,24 @@ export function generateKingdomMap(
     }
   }
 
-  // Cross roads through keep
-  for (let c = 0; c < cols; c++) {
-    for (let dr = -1; dr <= 1; dr++) {
-      const r = midRow + dr;
-      if (r < 0 || r >= rows) continue;
-      data[r]![c] =
-        Math.abs(dr) === 1 ? TerrainTile.dirtEdge : TerrainTile.dirt;
-    }
-  }
+  // Coastal ocean band for docks / harbors
+  const coastDepth = Math.max(3, Math.floor(Math.min(cols, rows) * 0.04));
   for (let r = 0; r < rows; r++) {
-    for (let dc = -2; dc <= 2; dc++) {
-      const c = midCol + dc;
-      if (c < 0 || c >= cols) continue;
-      if (Math.abs(r - midRow) <= 1) continue;
-      data[r]![c] =
-        Math.abs(dc) === 2 ? TerrainTile.dirtEdge : TerrainTile.dirt;
+    for (let c = 0; c < cols; c++) {
+      const edge =
+        r < coastDepth ||
+        r >= rows - coastDepth ||
+        c < coastDepth ||
+        c >= cols - coastDepth;
+      if (!edge) continue;
+      // Leave keep clearing alone
+      if (Math.abs(r - midRow) <= 6 && Math.abs(c - midCol) <= 7) continue;
+      data[r]![c] = TerrainTile.water;
     }
   }
 
-  // Lakes
-  const lakeCount = 1 + Math.floor(rand() * 2);
+  // Lakes (scaled for larger maps)
+  const lakeCount = 2 + Math.floor(rand() * 3);
   for (let i = 0; i < lakeCount; i++) {
     paintBlob(
       data,
@@ -93,8 +90,8 @@ export function generateKingdomMap(
       midRow,
       rand,
       TerrainTile.water,
+      6 + Math.floor(rand() * 7),
       5 + Math.floor(rand() * 5),
-      4 + Math.floor(rand() * 4),
       0.35
     );
   }
@@ -103,7 +100,7 @@ export function generateKingdomMap(
   paintRiver(data, cols, rows, midCol, midRow, rand);
 
   // Forests
-  const forestCount = 2 + Math.floor(rand() * 2);
+  const forestCount = 4 + Math.floor(rand() * 3);
   for (let i = 0; i < forestCount; i++) {
     const spot = paintBlob(
       data,
@@ -113,15 +110,15 @@ export function generateKingdomMap(
       midRow,
       rand,
       TerrainTile.forest,
-      6 + Math.floor(rand() * 6),
-      5 + Math.floor(rand() * 5),
+      8 + Math.floor(rand() * 8),
+      7 + Math.floor(rand() * 6),
       0.28
     );
     if (spot) forests.push(tileCenter(spot.c, spot.r));
   }
 
   // Mountain ridges
-  const mountainCount = 2 + Math.floor(rand() * 2);
+  const mountainCount = 3 + Math.floor(rand() * 3);
   for (let i = 0; i < mountainCount; i++) {
     const spot = paintBlob(
       data,
@@ -131,25 +128,18 @@ export function generateKingdomMap(
       midRow,
       rand,
       TerrainTile.mountain,
-      5 + Math.floor(rand() * 7),
-      4 + Math.floor(rand() * 5),
+      7 + Math.floor(rand() * 8),
+      5 + Math.floor(rand() * 6),
       0.32
     );
     if (spot) mountains.push(tileCenter(spot.c, spot.r));
   }
 
-  // Re-assert keep + roads so biomes don't swallow the seat of power
+  // Re-assert keep clearing so biomes don't swallow the seat of power
   for (let r = midRow - 4; r <= midRow + 4; r++) {
     for (let c = midCol - 5; c <= midCol + 5; c++) {
       if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
-      if (Math.abs(c - midCol) <= 2 || Math.abs(r - midRow) <= 1) {
-        data[r]![c] =
-          Math.abs(c - midCol) === 2 || Math.abs(r - midRow) === 1
-            ? TerrainTile.dirtEdge
-            : TerrainTile.dirt;
-      } else {
-        data[r]![c] = TerrainTile.grassAlt;
-      }
+      data[r]![c] = TerrainTile.grassAlt;
     }
   }
 

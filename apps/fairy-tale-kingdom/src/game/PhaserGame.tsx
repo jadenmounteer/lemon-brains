@@ -16,6 +16,7 @@ import {
 } from './subjects/events';
 import type {
   BuildingSnapshot,
+  CampSnapshot,
   DaySnapshot,
   KingdomStats,
   SubjectSnapshot,
@@ -40,8 +41,12 @@ interface PhaserGameProps {
     targetRole: UnitRole;
   } | null;
   executeRequest?: { seq: number; id: string } | null;
+  destroyCampRequest?: { seq: number; campId: string } | null;
+  arrestCampRequest?: { seq: number; campId: string } | null;
+  focusCampRequest?: { seq: number; campId: string; unitId?: string } | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
+  onCampSelected: (camp: CampSnapshot | null) => void;
   onDayTick: (day: DaySnapshot) => void;
   onDayRolled: () => void;
   onGoldStolen: (payload: GoldStolenPayload) => void;
@@ -68,8 +73,12 @@ export function PhaserGame({
   commandRequest,
   careerHireRequest,
   executeRequest,
+  destroyCampRequest,
+  arrestCampRequest,
+  focusCampRequest,
   onSubjectSelected,
   onBuildingSelected,
+  onCampSelected,
   onDayTick,
   onDayRolled,
   onGoldStolen,
@@ -88,6 +97,7 @@ export function PhaserGame({
   const gameRef = useRef<Phaser.Game | null>(null);
   const onSelectRef = useRef(onSubjectSelected);
   const onBuildingRef = useRef(onBuildingSelected);
+  const onCampRef = useRef(onCampSelected);
   const onDayRef = useRef(onDayTick);
   const onRolledRef = useRef(onDayRolled);
   const onStolenRef = useRef(onGoldStolen);
@@ -103,6 +113,7 @@ export function PhaserGame({
 
   onSelectRef.current = onSubjectSelected;
   onBuildingRef.current = onBuildingSelected;
+  onCampRef.current = onCampSelected;
   onDayRef.current = onDayTick;
   onRolledRef.current = onDayRolled;
   onStolenRef.current = onGoldStolen;
@@ -134,6 +145,9 @@ export function PhaserGame({
     };
     const handleBuilding = (snap: BuildingSnapshot | null) => {
       onBuildingRef.current(snap);
+    };
+    const handleCamp = (snap: CampSnapshot | null) => {
+      onCampRef.current(snap);
     };
     const handleDay = (day: DaySnapshot) => {
       onDayRef.current(day);
@@ -174,6 +188,7 @@ export function PhaserGame({
 
     game.events.on(KingdomEvents.SUBJECT_SELECTED, handleSelect);
     game.events.on(KingdomEvents.BUILDING_SELECTED, handleBuilding);
+    game.events.on(KingdomEvents.CAMP_SELECTED, handleCamp);
     game.events.on(KingdomEvents.DAY_TICK, handleDay);
     game.events.on(KingdomEvents.DAY_ROLLED, handleRolled);
     game.events.on(KingdomEvents.GOLD_STOLEN, handleStolen);
@@ -190,6 +205,7 @@ export function PhaserGame({
     return () => {
       game.events.off(KingdomEvents.SUBJECT_SELECTED, handleSelect);
       game.events.off(KingdomEvents.BUILDING_SELECTED, handleBuilding);
+      game.events.off(KingdomEvents.CAMP_SELECTED, handleCamp);
       game.events.off(KingdomEvents.DAY_TICK, handleDay);
       game.events.off(KingdomEvents.DAY_ROLLED, handleRolled);
       game.events.off(KingdomEvents.GOLD_STOLEN, handleStolen);
@@ -274,6 +290,28 @@ export function PhaserGame({
       id: executeRequest.id,
     });
   }, [executeRequest]);
+
+  useEffect(() => {
+    if (!destroyCampRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.DESTROY_CAMP, {
+      campId: destroyCampRequest.campId,
+    });
+  }, [destroyCampRequest]);
+
+  useEffect(() => {
+    if (!arrestCampRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.ARREST_CAMP, {
+      campId: arrestCampRequest.campId,
+    });
+  }, [arrestCampRequest]);
+
+  useEffect(() => {
+    if (!focusCampRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.FOCUS_CAMP, {
+      campId: focusCampRequest.campId,
+      unitId: focusCampRequest.unitId,
+    });
+  }, [focusCampRequest]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

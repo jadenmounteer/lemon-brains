@@ -24,9 +24,12 @@ import { ThiefSystem } from '../thieves/ThiefSystem';
 import { EncampmentSystem } from '../war/EncampmentSystem';
 import {
   KingdomEvents,
+  type ArrestCampPayload,
   type BeginPlacePayload,
   type CareerHirePayload,
   type CommandDetachmentPayload,
+  type DestroyCampPayload,
+  type FocusCampPayload,
   type HireSubjectPayload,
   type PayRansomPayload,
   type SetDaysPlayedPayload,
@@ -40,14 +43,22 @@ import { ThoughtSystem } from '../thoughts/ThoughtSystem';
 import { FamilySystem } from '../family/FamilySystem';
 import { WitchSystem } from '../witches/WitchSystem';
 import { EventVenueSystem } from '../events/EventVenueSystem';
+import { FestivalFunSystem } from '../events/FestivalFunSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
+import { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+import { SecuritySystem } from '../security/SecuritySystem';
+import { MilitaryPatrolSystem } from '../security/MilitaryPatrolSystem';
+import { UndeadSystem } from '../undead/UndeadSystem';
+import { NavalSystem } from '../naval/NavalSystem';
 import {
   freshMapSeed,
   generateKingdomMap,
 } from '../world/generateMap';
 
-const MAP_COLS = 100;
-const MAP_ROWS = 64;
+const MAP_COLS = 200;
+const MAP_ROWS = 128;
+export const CURRENT_MAP_COLS = MAP_COLS;
+export const CURRENT_MAP_ROWS = MAP_ROWS;
 const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
@@ -80,6 +91,12 @@ export class KingdomScene extends Phaser.Scene {
   private witches!: WitchSystem;
   private venues!: EventVenueSystem;
   private justice!: JusticeSystem; // used via executeCaptive
+  private bubbles!: SpeechBubbleSystem;
+  private festivalFun!: FestivalFunSystem;
+  private security!: SecuritySystem;
+  private militaryPatrol!: MilitaryPatrolSystem;
+  private undead!: UndeadSystem;
+  private naval!: NavalSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private mapData: number[][] = [];
   private mapSeed = 0;
@@ -116,12 +133,11 @@ export class KingdomScene extends Phaser.Scene {
     )!;
     map.createLayer(0, tileset, 0, 0)!.setDepth(0);
 
-    // Align keep + fort to the procedural road cross (tile centers)
+    // Align keep to map center clearing
     const pathCx =
       Math.floor(MAP_COLS / 2) * TILE_SIZE + TILE_SIZE / 2;
     const pathCy =
       Math.floor(MAP_ROWS / 2) * TILE_SIZE + TILE_SIZE / 2;
-    // Wall / drawbridge just north of keep, centered on the vertical road
     const wallY =
       Math.round((pathCy - 28 - TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE +
       TILE_SIZE / 2;
@@ -166,6 +182,7 @@ export class KingdomScene extends Phaser.Scene {
     , () => this.schedulePersist());
     this.buildings.setKeepSprite(keepSprite);
     this.buildings.setPathGrid(this.pathGrid);
+    this.buildings.setMapData(this.mapData);
     this.buildings.setVfx(this.siegeVfx);
     this.subjects.setBuildings(this.buildings);
     this.subjects.setPathGrid(this.pathGrid);
@@ -267,11 +284,46 @@ export class KingdomScene extends Phaser.Scene {
         });
       }
     );
+    this.bubbles = new SpeechBubbleSystem(this);
+    this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
+    this.security = new SecuritySystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.bubbles
+    );
+    this.militaryPatrol = new MilitaryPatrolSystem(this.subjects, this.bubbles);
+    this.undead = new UndeadSystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.security
+    );
+    this.naval = new NavalSystem(
+      this,
+      this.buildings,
+      this.subjects,
+      this.hunger
+    );
+    this.royalty.setOnFestivalStart((pick) => {
+      this.festivalFun.start(pick.x, pick.y);
+      this.venues.setFestivalAnchor?.(pick);
+      if (pick.kind === 'joust') {
+        this.venues.startJoustAt?.(pick.x, pick.y);
+      } else {
+        this.venues.startFestivalAt?.(pick.x, pick.y);
+      }
+    });
 
     this.monsters.setBuildings(this.buildings);
     this.monsters.setSubjects(this.subjects);
 
-    if (saved && saved.buildings.length > 0) {
+    const mapMismatch =
+      !saved ||
+      saved.mapCols !== MAP_COLS ||
+      saved.mapRows !== MAP_ROWS;
+
+    if (saved && saved.buildings.length > 0 && !mapMismatch) {
       this.buildings.restore(
         saved.buildings,
         saved.keepHp,
@@ -279,9 +331,8 @@ export class KingdomScene extends Phaser.Scene {
       );
       if (saved.subjects.length > 0) {
         this.subjects.restore(saved.subjects);
-      } else {
-        this.subjects.spawnSeed();
       }
+      // else: sparse — no seed subjects
       if (typeof saved.clockHour === 'number') {
         this.subjects.setClockHour(saved.clockHour);
       }
@@ -297,15 +348,17 @@ export class KingdomScene extends Phaser.Scene {
       }
       if (saved.encampments && saved.encampments.length > 0) {
         this.encampments.restore(saved.encampments);
+      } else {
+        this.encampments.seedStarterCamps(2);
       }
-      // Migrate older saves that lacked mapSeed
       if (typeof saved.mapSeed !== 'number') {
         this.persistLayout();
       }
     } else {
+      // New kingdom or map-size migrate: keep only, no units, seed camps
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
-      this.subjects.spawnSeed();
       this.monsters.seedIfEmpty();
+      this.encampments.seedStarterCamps(2);
       this.persistLayout();
     }
 
@@ -324,7 +377,7 @@ export class KingdomScene extends Phaser.Scene {
     this.applyNightOverlay();
 
     this.add
-      .text(12, 12, 'Drag to look · scroll to zoom · click a subject, monster, or building', {
+      .text(12, 12, 'Drag to look · scroll to zoom · click a subject, monster, camp, or building', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -412,6 +465,7 @@ export class KingdomScene extends Phaser.Scene {
       if (hit?.type === 'subject') {
         this.monsters.select(null);
         this.publishBuildingSelection(this.buildings.select(null));
+        this.publishCampSelection(this.encampments.select(null));
         this.clearInfluenceCircle();
         this.publishSelection(this.subjects.select(hit.id));
         this.beginFollowSubject(hit.id);
@@ -420,12 +474,22 @@ export class KingdomScene extends Phaser.Scene {
         this.clearInfluenceCircle();
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
+        this.publishCampSelection(this.encampments.select(null));
         this.publishSelection(this.monsters.select(hit.id));
+      } else if (hit?.type === 'camp') {
+        this.clearFollowCam();
+        this.clearInfluenceCircle();
+        this.monsters.select(null);
+        this.publishSelection(this.subjects.select(null));
+        this.publishBuildingSelection(this.buildings.select(null));
+        this.publishCampSelection(this.encampments.select(hit.id));
       } else if (hit?.type === 'building') {
         this.clearFollowCam();
         this.publishSelection(this.subjects.select(null));
+        this.publishCampSelection(this.encampments.select(null));
         const residents = this.subjects.residentsOf(hit.id);
-        const snap = this.buildings.select(hit.id, residents);
+        const workers = this.subjects.workersOf(hit.id);
+        const snap = this.buildings.select(hit.id, residents, workers);
         this.publishBuildingSelection(snap);
         this.updateInfluenceCircle(snap);
       } else {
@@ -434,6 +498,7 @@ export class KingdomScene extends Phaser.Scene {
         this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
+        this.publishCampSelection(this.encampments.select(null));
       }
     });
 
@@ -450,6 +515,16 @@ export class KingdomScene extends Phaser.Scene {
         this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
+        this.publishCampSelection(this.encampments.select(null));
+      }
+    });
+
+    this.input.keyboard?.on('keydown-R', () => {
+      if (this.buildings.isPlacing() && this.buildings.placingKind() === 'bridge') {
+        this.buildings.rotatePlacement();
+        const pointer = this.input.activePointer;
+        const world = cam.getWorldPoint(pointer.x, pointer.y);
+        this.buildings.updateGhost(world.x, world.y);
       }
     });
 
@@ -465,6 +540,9 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.on(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.on(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
+    this.game.events.on(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
+    this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
+    this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -493,9 +571,17 @@ export class KingdomScene extends Phaser.Scene {
         if (this.buildings.getSelectedId()) {
           const id = this.buildings.getSelectedId()!;
           const residents = this.subjects.residentsOf(id);
-          const snap = this.buildings.refreshSelectedSnapshot(residents);
+          const workers = this.subjects.workersOf(id);
+          const snap = this.buildings.refreshSelectedSnapshot(
+            residents,
+            workers
+          );
           if (snap) this.publishBuildingSelection(snap);
           else this.publishBuildingSelection(null);
+        }
+        if (this.registry.get('selectedCampId')) {
+          const snap = this.encampments.refreshSelectedSnapshot();
+          this.publishCampSelection(snap);
         }
       },
     });
@@ -532,10 +618,32 @@ export class KingdomScene extends Phaser.Scene {
     this.family?.updatePlay(delta);
     this.witches?.update(delta);
     this.venues?.update(delta, {
-      festivalActive: this.royalty?.isFestivalActive() ?? false,
+      festivalActive: false, // Royalty + FestivalFun own festival venues
       weddingActive: false,
       peacetime: !(this.raids?.hasActiveRaiders() ?? false),
     });
+    this.bubbles?.update(delta);
+    this.festivalFun?.update(delta);
+    if (!this.royalty?.isFestivalActive()) {
+      this.festivalFun?.stop();
+    }
+    this.security?.update(delta);
+    this.militaryPatrol?.update(
+      delta,
+      this.raids?.hasActiveRaiders() ?? false,
+      this.security?.isActive() ?? false
+    );
+    this.undead?.update(delta, Boolean(isNight));
+    this.naval?.update(delta);
+    if (this.raids?.hasActiveRaiders() && !this.security?.isActive()) {
+      const keep = this.buildings.getActiveKeepPoint();
+      this.security?.begin('raid', keep.x, keep.y, 180);
+    } else if (
+      !this.raids?.hasActiveRaiders() &&
+      this.security?.activeKind() === 'raid'
+    ) {
+      this.security?.clear();
+    }
     this.buildings?.updateInteriors(this.subjects.unitBodies());
     this.applyNightOverlay();
     this.updateFollowCam(delta);
@@ -548,6 +656,8 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters?.clear();
     this.thieves?.clear();
     this.encampments?.clear();
+    this.venues?.clear();
+    this.bubbles?.clearAll();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
@@ -561,6 +671,9 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.off(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.off(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
+    this.game.events.off(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
+    this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
+    this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
   }
 
   private onHire = (payload: HireSubjectPayload) => {
@@ -710,6 +823,8 @@ export class KingdomScene extends Phaser.Scene {
       monsters: this.monsters.serialize(),
       encampments: this.encampments.serialize(),
       mapSeed: this.mapSeed,
+      mapCols: MAP_COLS,
+      mapRows: MAP_ROWS,
       keepHp: keep.keepHp,
       keepMaxHp: keep.keepMaxHp,
       princeSpawnMs: timers.princeSpawnMs,
@@ -747,6 +862,7 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters?.select(null);
     this.publishSelection(this.subjects.select(null));
     this.publishBuildingSelection(this.buildings.select(null));
+    this.publishCampSelection(this.encampments?.select(null) ?? null);
   };
 
   private onCareerHire = (payload: CareerHirePayload) => {
@@ -807,14 +923,17 @@ export class KingdomScene extends Phaser.Scene {
     snap: ReturnType<BuildingSystem['select']>
   ): void {
     this.clearInfluenceCircle();
-    if (!snap || snap.kind !== 'keep' || !snap.influenceRadius) return;
-    const pts = this.buildings.listKeepPoints();
-    const pt = pts.find((p) => p.id === snap.id);
+    if (!snap || !snap.influenceRadius) return;
+    if (snap.kind !== 'keep' && snap.kind !== 'barracks' && snap.kind !== 'dungeon') {
+      return;
+    }
+    const pt = this.buildings.getInfluenceOriginPoint(snap.id);
     if (!pt) return;
+    const color = snap.kind === 'keep' ? 0xc4a35a : 0xb5453f;
     this.influenceGfx = this.add.graphics().setDepth(6);
-    this.influenceGfx.lineStyle(1, 0xc4a35a, 0.55);
+    this.influenceGfx.lineStyle(1, color, 0.55);
     this.influenceGfx.strokeCircle(pt.x, pt.y, snap.influenceRadius);
-    this.influenceGfx.fillStyle(0xc4a35a, 0.06);
+    this.influenceGfx.fillStyle(color, 0.06);
     this.influenceGfx.fillCircle(pt.x, pt.y, snap.influenceRadius);
   }
 
@@ -860,6 +979,27 @@ export class KingdomScene extends Phaser.Scene {
     this.emitStats();
   };
 
+  private onDestroyCamp = (payload: DestroyCampPayload) => {
+    this.encampments?.requestDestroy(payload.campId);
+    this.emitStats();
+  };
+
+  private onArrestCamp = (payload: ArrestCampPayload) => {
+    if (this.encampments?.requestArrest(payload.campId)) {
+      this.publishCampSelection(this.encampments.refreshSelectedSnapshot());
+    }
+    this.emitStats();
+  };
+
+  private onFocusCamp = (payload: FocusCampPayload) => {
+    const pt = this.encampments?.getCampPoint(payload.campId);
+    if (!pt) return;
+    this.clearFollowCam();
+    const cam = this.cameras.main;
+    cam.pan(pt.x, pt.y, 450, 'Sine.easeInOut');
+    cam.zoomTo(FOLLOW_ZOOM, 450);
+  };
+
   private zoomAtPointer(dy: number): void {
     const cam = this.cameras.main;
     const pointer = this.input.activePointer;
@@ -886,16 +1026,25 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.BUILDING_SELECTED, snap);
   }
 
+  private publishCampSelection(
+    snap: ReturnType<EncampmentSystem['select']>
+  ): void {
+    this.registry.set('selectedCampId', snap?.id ?? null);
+    this.game.events.emit(KingdomEvents.CAMP_SELECTED, snap);
+  }
+
   private resolveHit(
     pointer: Phaser.Input.Pointer
   ):
-    | { type: 'subject' | 'building' | 'monster'; id: string }
+    | { type: 'subject' | 'building' | 'monster' | 'camp'; id: string }
     | null {
     const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
     const subjectId = this.subjects.pickAt(world.x, world.y);
     if (subjectId) return { type: 'subject', id: subjectId };
     const monsterId = this.monsters.pickAt(world.x, world.y);
     if (monsterId) return { type: 'monster', id: monsterId };
+    const campId = this.encampments.pickAt(world.x, world.y);
+    if (campId) return { type: 'camp', id: campId };
     const buildingId = this.buildings.pickAt(world.x, world.y);
     if (buildingId) return { type: 'building', id: buildingId };
     return null;

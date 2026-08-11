@@ -19,7 +19,10 @@ export type BuildKind =
   | 'bakery'
   | 'market'
   | 'cemetery'
-  | 'gallows';
+  | 'gallows'
+  | 'road'
+  | 'bridge'
+  | 'dock';
 
 export const BEDS_PER_HOUSE = 3;
 export const FIELDS_PER_GRANARY = 2;
@@ -284,6 +287,25 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     cost: 50,
   },
   {
+    kind: 'road',
+    name: 'Road',
+    blurb: 'Dirt path for patrols and travel. Place freely on grass.',
+    cost: 4,
+  },
+  {
+    kind: 'bridge',
+    name: 'Bridge',
+    blurb:
+      'Wooden span over rivers. Press R while placing to rotate. Lets units and ground monsters cross.',
+    cost: 25,
+  },
+  {
+    kind: 'dock',
+    name: 'Dock',
+    blurb: 'Coastal pier for fishing boats. Place next to ocean water.',
+    cost: 45,
+  },
+  {
     kind: 'gallows',
     name: 'Gallows',
     blurb: 'Execute captives with an executioner. Place near dungeon.',
@@ -307,7 +329,7 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'manor',
     name: 'Manor',
-    blurb: 'Fine home with 2 beds. Requires King & Queen. Burnable.',
+    blurb: 'Fine home with 6 beds. Requires King & Queen. Burnable.',
     cost: 70,
     requiresRoyalty: true,
   },

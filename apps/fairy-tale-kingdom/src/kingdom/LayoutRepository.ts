@@ -40,6 +40,8 @@ export interface SavedBuilding {
   maxHp: number;
   /** Stairs only — wall they snap to */
   attachedWallId?: string;
+  /** Degrees — bridges use 0 or 90 */
+  rotation?: number;
 }
 
 export interface SavedSubject {
@@ -96,6 +98,9 @@ export interface LayoutSave {
   encampments?: SavedEncampment[];
   /** Seed for procedural terrain (lakes, forests, mountains, caves). */
   mapSeed?: number;
+  /** Map dimensions — mismatch triggers soft layout reset */
+  mapCols?: number;
+  mapRows?: number;
   keepHp?: number;
   keepMaxHp?: number;
   princeSpawnMs?: number;
@@ -149,6 +154,10 @@ export class LayoutRepository {
           : [],
         mapSeed:
           typeof parsed.mapSeed === 'number' ? parsed.mapSeed >>> 0 : undefined,
+        mapCols:
+          typeof parsed.mapCols === 'number' ? parsed.mapCols : undefined,
+        mapRows:
+          typeof parsed.mapRows === 'number' ? parsed.mapRows : undefined,
         clockHour:
           typeof parsed.clockHour === 'number' ? parsed.clockHour : undefined,
         royaltyState:

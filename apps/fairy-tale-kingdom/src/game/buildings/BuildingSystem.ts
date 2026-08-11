@@ -1,5 +1,12 @@
 import Phaser from 'phaser';
-import { PROP_KEYS, TILE_SIZE, wallTextureKey, HEARTH_FIRE_ANIM } from '../art/assetManifest';
+import {
+  PROP_KEYS,
+  TILE_SIZE,
+  TerrainTile,
+  wallTextureKey,
+  HEARTH_FIRE_ANIM,
+  isTerrainBlocked,
+} from '../art/assetManifest';
 import type { SavedBuilding } from '../../kingdom/LayoutRepository';
 import {
   BEDS_PER_HOUSE,
@@ -48,6 +55,8 @@ export interface BuildingRecord {
   labelIndex: number;
   attachedWallId?: string;
   closed?: boolean;
+  /** Degrees — bridges use 0 or 90 */
+  rotation?: number;
 }
 
 export interface Aabb {
@@ -76,6 +85,9 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   market: { w: 44, h: 30 },
   cemetery: { w: 48, h: 34 },
   gallows: { w: 28, h: 38 },
+  road: { w: 16, h: 16 },
+  bridge: { w: 48, h: 20 },
+  dock: { w: 40, h: 28 },
   keep: { w: 80, h: 64 },
 };
 
@@ -97,11 +109,13 @@ export class BuildingSystem {
   private buildings: BuildingRecord[] = [];
   private nextId = 0;
   private placeKind: BuildKind | null = null;
+  private placeRotation: 0 | 90 = 0;
   private ghost: Phaser.GameObjects.Image | null = null;
   private ghostValid = false;
   private ghostWallId: string | null = null;
   private raidActive = false;
   private pathGrid: PathGrid | null = null;
+  private mapData: number[][] | null = null;
   private keepHp: number;
   private keepMaxHp: number;
   private keepSprite: Phaser.GameObjects.Image | null = null;
@@ -135,6 +149,11 @@ export class BuildingSystem {
     this.rebuildPathGrid();
   }
 
+  /** Terrain tile grid used to validate road/bridge/dock placement. */
+  setMapData(mapData: number[][]): void {
+    this.mapData = mapData;
+  }
+
   setKeepSprite(sprite: Phaser.GameObjects.Image): void {
     this.keepSprite = sprite;
     this.makeInteractive(sprite, KEEP_ID);
@@ -152,16 +171,18 @@ export class BuildingSystem {
 
   select(
     id: string | null,
-    residents: BuildingResident[] = []
+    residents: BuildingResident[] = [],
+    workers: BuildingResident[] = []
   ): BuildingSnapshot | null {
     this.selectedId = id;
     this.applySelectionVisuals();
     if (!id) return null;
-    return this.toSnapshot(id, residents);
+    return this.toSnapshot(id, residents, workers);
   }
 
   refreshSelectedSnapshot(
-    residents: BuildingResident[] = []
+    residents: BuildingResident[] = [],
+    workers: BuildingResident[] = []
   ): BuildingSnapshot | null {
     if (!this.selectedId) return null;
     if (this.selectedId !== KEEP_ID && !this.getById(this.selectedId)) {
@@ -169,28 +190,11 @@ export class BuildingSystem {
       this.applySelectionVisuals();
       return null;
     }
-    return this.toSnapshot(this.selectedId, residents);
+    return this.toSnapshot(this.selectedId, residents, workers);
   }
 
   seedStarters(_worldW: number, _worldH: number): void {
-    const cx = fortSnap(this.keep.x);
-    const cy = this.keep.y;
-    // Compact village ring around the road cross / keep
-    this.addBuilding('house', snapCoord(cx - 56), snapCoord(cy + 12), 'house-0');
-    this.addBuilding('house', snapCoord(cx + 56), snapCoord(cy + 12), 'house-1');
-    this.addBuilding('granary', snapCoord(cx - 40), snapCoord(cy + 52), 'granary-0');
-    this.addBuilding('field', snapCoord(cx + 24), snapCoord(cy + 56), 'field-0');
-    this.addBuilding('field', snapCoord(cx + 56), snapCoord(cy + 56), 'field-1');
-    // Drawbridge centered on the vertical path, wall snug north of keep
-    const row = fortSnap(cy - 32);
-    for (let i = -3; i <= 3; i++) {
-      const x = cx + i * FORT_TILE;
-      if (i === 0) {
-        this.addBuilding('drawbridge', x, row);
-      } else {
-        this.addBuilding('wall', x, row);
-      }
-    }
+    // Sparse founding: keep only (already present). Player builds the rest.
     this.refreshWallTextures();
     this.rebuildPathGrid();
   }
@@ -218,6 +222,7 @@ export class BuildingSystem {
         hp: b.hp,
         maxHp: b.maxHp,
         attachedWallId: b.attachedWallId,
+        rotation: b.rotation,
       });
     }
     this.snapOrphanDrawbridges();
@@ -236,6 +241,7 @@ export class BuildingSystem {
       hp: b.hp,
       maxHp: b.maxHp,
       attachedWallId: b.attachedWallId,
+      rotation: b.rotation,
     }));
   }
 
@@ -303,6 +309,13 @@ export class BuildingSystem {
   }
 
   influenceContains(keepId: string, x: number, y: number): boolean {
+    const b = this.getById(keepId);
+    if (b && (b.kind === 'barracks' || b.kind === 'dungeon')) {
+      return (
+        Phaser.Math.Distance.Between(b.x, b.y, x, y) <=
+        this.getMilitaryInfluenceRadius()
+      );
+    }
     const pt = this.getKeepTargetPoint(keepId) ??
       (keepId === KEEP_ID && this.keepHp > 0
         ? { x: this.keep.x, y: this.keep.y }
@@ -314,12 +327,42 @@ export class BuildingSystem {
     );
   }
 
+  getMilitaryInfluenceRadius(): number {
+    return Math.round(this.getInfluenceRadius() * 0.85);
+  }
+
+  /** World point an influence circle should be drawn around for `id` (keep, barracks, dungeon). */
+  getInfluenceOriginPoint(id: string): Point | null {
+    const b = this.getById(id);
+    if (b) return { x: b.x, y: b.y };
+    if (id === KEEP_ID && this.keepHp > 0) return { x: this.keep.x, y: this.keep.y };
+    return null;
+  }
+
   listKeepPoints(): { id: string; x: number; y: number }[] {
     return this.listKeepTargets().map((k) => ({
       id: k.id,
       x: k.x,
       y: k.y,
     }));
+  }
+
+  /** Road tile centers — useful for patrol routing, prefers streets over open ground. */
+  listRoadPoints(): Point[] {
+    return this.buildings
+      .filter((b) => b.kind === 'road' || b.kind === 'bridge')
+      .map((b) => ({ x: b.x, y: b.y }));
+  }
+
+  /** Buildings whose center lies within `radius` of `x,y` (for influence-sphere lookups). */
+  listInspectableBuildingsInSphere(
+    x: number,
+    y: number,
+    radius: number
+  ): { id: string; kind: BuildKind; x: number; y: number }[] {
+    return this.buildings
+      .filter((b) => Phaser.Math.Distance.Between(b.x, b.y, x, y) <= radius)
+      .map((b) => ({ id: b.id, kind: b.kind, x: b.x, y: b.y }));
   }
 
   getCathedralPoint(): Point | null {
@@ -330,6 +373,11 @@ export class BuildingSystem {
   getDungeonPoint(): Point | null {
     const d = this.buildings.find((b) => b.kind === 'dungeon');
     return d ? { x: d.x, y: d.y } : null;
+  }
+
+  getBarracksPoint(): Point | null {
+    const b = this.buildings.find((b) => b.kind === 'barracks');
+    return b ? { x: b.x, y: b.y } : null;
   }
 
   getGallowsPoint(): Point | null {
@@ -770,6 +818,25 @@ export class BuildingSystem {
     if (!this.pathGrid) return;
     this.pathGrid.clear();
     for (const b of this.buildings) {
+      if (b.kind === 'bridge') {
+        // Walkable span over water
+        const cells =
+          (b.rotation ?? 0) === 90
+            ? [
+                [b.x, b.y - 16],
+                [b.x, b.y],
+                [b.x, b.y + 16],
+              ]
+            : [
+                [b.x - 16, b.y],
+                [b.x, b.y],
+                [b.x + 16, b.y],
+              ];
+        for (const [cx, cy] of cells) {
+          this.pathGrid.clearTerrainAtWorld(cx!, cy!);
+        }
+        continue;
+      }
       if (isBlockingKind(b.kind, Boolean(b.closed))) {
         this.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
       }
@@ -779,6 +846,7 @@ export class BuildingSystem {
   beginPlace(kind: BuildKind): void {
     this.cancelPlace();
     this.placeKind = kind;
+    this.placeRotation = 0;
     const tex = textureFor(kind, false, 0);
     this.ghost = this.scene.add
       .image(this.keep.x, this.keep.y + 80, tex)
@@ -789,6 +857,7 @@ export class BuildingSystem {
 
   cancelPlace(): void {
     this.placeKind = null;
+    this.placeRotation = 0;
     this.ghost?.destroy();
     this.ghost = null;
     this.ghostValid = false;
@@ -801,6 +870,19 @@ export class BuildingSystem {
 
   placingKind(): BuildKind | null {
     return this.placeKind;
+  }
+
+  getPlaceRotation(): 0 | 90 {
+    return this.placeRotation;
+  }
+
+  /** Cycle 0/90 rotation while placing a bridge (only bridges support rotation). */
+  rotatePlacement(): void {
+    if (this.placeKind !== 'bridge' || !this.ghost) return;
+    this.placeRotation = this.placeRotation === 0 ? 90 : 0;
+    this.ghost.setTexture(
+      this.placeRotation === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge
+    );
   }
 
   updateGhost(worldX: number, worldY: number): void {
@@ -835,6 +917,22 @@ export class BuildingSystem {
       this.ghostValid = this.canPlaceAt('wall', x, y);
       const mask = this.previewWallMask(x, y);
       this.ghost.setTexture(wallTextureKey(mask));
+    } else if (this.placeKind === 'bridge') {
+      const x = snapCoord(worldX);
+      const y = snapCoord(worldY);
+      this.ghost.setPosition(x, y);
+      this.ghostWallId = null;
+      this.ghost.setTexture(
+        this.placeRotation === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge
+      );
+      this.ghostValid = this.canPlaceAt('bridge', x, y, null, this.placeRotation);
+    } else if (this.placeKind === 'road' || this.placeKind === 'dock') {
+      // Roads/docks snap to the full terrain-tile grid so they line up with the map.
+      const x = fortSnap(worldX);
+      const y = fortSnap(worldY);
+      this.ghost.setPosition(x, y);
+      this.ghostWallId = null;
+      this.ghostValid = this.canPlaceAt(this.placeKind, x, y);
     } else {
       const x = snapCoord(worldX);
       const y = snapCoord(worldY);
@@ -851,8 +949,9 @@ export class BuildingSystem {
     const x = this.ghost.x;
     const y = this.ghost.y;
     const wallId = this.ghostWallId ?? undefined;
+    const rotation = kind === 'bridge' ? this.placeRotation : undefined;
     this.cancelPlace();
-    this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId });
+    this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId, rotation });
     this.recomputeHouseLabels();
     this.refreshWallTextures();
     this.applyDrawbridgeState();
@@ -1054,7 +1153,8 @@ export class BuildingSystem {
 
   private toSnapshot(
     id: string,
-    residents: BuildingResident[]
+    residents: BuildingResident[],
+    workers: BuildingResident[] = []
   ): BuildingSnapshot | null {
     if (id === KEEP_ID) {
       return {
@@ -1068,6 +1168,7 @@ export class BuildingSystem {
         royalCapacity: ROYAL_SLOTS_PER_KEEP,
         royalUsed: residents.length,
         residents,
+        workers,
         capacityLines: capacityLinesFor('keep'),
       };
     }
@@ -1082,6 +1183,7 @@ export class BuildingSystem {
       blurb: catalog?.blurb ?? '',
       hp: b.hp,
       maxHp: b.maxHp,
+      workers,
     };
     if (b.kind === 'drawbridge') {
       snap.statusLabel = b.closed ? 'Closed (raid)' : 'Open';
@@ -1099,6 +1201,9 @@ export class BuildingSystem {
       snap.royalCapacity = ROYAL_SLOTS_PER_KEEP;
       snap.royalUsed = residents.length;
       snap.residents = residents;
+    }
+    if (b.kind === 'barracks' || b.kind === 'dungeon') {
+      snap.influenceRadius = this.getMilitaryInfluenceRadius();
     }
     const lines = capacityLinesFor(b.kind);
     if (lines) snap.capacityLines = lines;
@@ -1143,7 +1248,12 @@ export class BuildingSystem {
     x: number,
     y: number,
     forcedId?: string,
-    opts?: { hp?: number; maxHp?: number; attachedWallId?: string }
+    opts?: {
+      hp?: number;
+      maxHp?: number;
+      attachedWallId?: string;
+      rotation?: number;
+    }
   ): BuildingRecord {
     const id = forcedId ?? `${kind}-${this.nextId++}`;
     const match = /^.*?(\d+)$/.exec(id);
@@ -1155,8 +1265,13 @@ export class BuildingSystem {
     const closed = kind === 'drawbridge' ? this.raidActive : undefined;
     const px = isFortKind(kind) ? fortSnap(x) : x;
     const py = isFortKind(kind) ? fortSnap(y) : y;
+    const rotation = kind === 'bridge' ? opts?.rotation ?? 0 : undefined;
+    const tex =
+      kind === 'bridge' && rotation === 90
+        ? PROP_KEYS.bridgeV
+        : textureFor(kind, Boolean(closed), 0);
     const sprite = this.scene.add
-      .image(px, py, textureFor(kind, Boolean(closed), 0))
+      .image(px, py, tex)
       .setDepth(kind === 'wall' || kind === 'stairs' || kind === 'watchtower' ? 9 : 8)
       .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85);
     this.makeInteractive(sprite, id);
@@ -1186,6 +1301,7 @@ export class BuildingSystem {
       labelIndex: 0,
       attachedWallId: opts?.attachedWallId,
       closed,
+      rotation,
     };
     this.buildings.push(record);
     this.tintByHp(record);
@@ -1395,23 +1511,89 @@ export class BuildingSystem {
     };
   }
 
+  private tileAt(worldX: number, worldY: number): number | null {
+    if (!this.mapData) return null;
+    const r = Math.floor(worldY / TILE_SIZE);
+    const c = Math.floor(worldX / TILE_SIZE);
+    return this.mapData[r]?.[c] ?? null;
+  }
+
+  /** Every sampled tile under the footprint must be walkable land. */
+  private roadTerrainOk(box: Aabb): boolean {
+    if (!this.mapData) return true;
+    for (let wy = box.top + TILE_SIZE / 2; wy < box.bottom; wy += TILE_SIZE) {
+      for (let wx = box.left + TILE_SIZE / 2; wx < box.right; wx += TILE_SIZE) {
+        const t = this.tileAt(wx, wy);
+        if (t !== null && isTerrainBlocked(t)) return false;
+      }
+    }
+    return true;
+  }
+
+  /** Span must cross water in the middle with land at both ends (mirrors rebuildPathGrid). */
+  private bridgeTerrainOk(x: number, y: number, rotation: 0 | 90): boolean {
+    if (!this.mapData) return true;
+    const pts: [number, number][] =
+      rotation === 90
+        ? [
+            [x, y - 16],
+            [x, y],
+            [x, y + 16],
+          ]
+        : [
+            [x - 16, y],
+            [x, y],
+            [x + 16, y],
+          ];
+    const tiles = pts.map(([px, py]) => this.tileAt(px, py));
+    if (tiles.some((t) => t === null)) return false;
+    const [a, mid, b] = tiles as number[];
+    return (
+      mid === TerrainTile.water &&
+      a !== TerrainTile.water &&
+      !isTerrainBlocked(a!) &&
+      b !== TerrainTile.water &&
+      !isTerrainBlocked(b!)
+    );
+  }
+
+  /** Must sit on/near the coast — some water tile bordering the footprint. */
+  private dockTerrainOk(box: Aabb): boolean {
+    if (!this.mapData) return true;
+    for (let wy = box.top - TILE_SIZE; wy < box.bottom + TILE_SIZE; wy += TILE_SIZE) {
+      for (let wx = box.left - TILE_SIZE; wx < box.right + TILE_SIZE; wx += TILE_SIZE) {
+        if (this.tileAt(wx, wy) === TerrainTile.water) return true;
+      }
+    }
+    return false;
+  }
+
   private canPlaceAt(
     kind: BuildKind,
     x: number,
     y: number,
-    wallId?: string | null
+    wallId?: string | null,
+    rotation: 0 | 90 = 0
   ): boolean {
     if (kind === 'field' && !this.canPlaceField()) return false;
     if (kind === 'stairs' && !wallId) return false;
     if (kind === 'drawbridge' && !this.hasOrthogonalWall(x, y)) return false;
     if (isFortKind(kind) && this.fortOccupied(x, y)) return false;
-    const candidate = footprintAabb(kind, x, y);
+    const candidate =
+      kind === 'bridge' ? bridgeAabb(x, y, rotation) : footprintAabb(kind, x, y);
+    if (kind === 'road' && !this.roadTerrainOk(candidate)) return false;
+    if (kind === 'bridge' && !this.bridgeTerrainOk(x, y, rotation)) return false;
+    if (kind === 'dock' && !this.dockTerrainOk(candidate)) return false;
     if (this.keepHp > 0) {
       const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
       if (intersects(candidate, keepBox)) return false;
     }
     for (const b of this.buildings) {
-      if (intersects(candidate, footprintAabb(b.kind, b.x, b.y))) return false;
+      const bBox =
+        b.kind === 'bridge'
+          ? bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0))
+          : footprintAabb(b.kind, b.x, b.y);
+      if (intersects(candidate, bBox)) return false;
     }
     for (const unit of this.getUnitBodies()) {
       if (intersects(candidate, unit)) return false;
@@ -1467,6 +1649,12 @@ function textureFor(kind: BuildKind, closed: boolean, wallMask: number): string 
       return PROP_KEYS.cemetery;
     case 'gallows':
       return PROP_KEYS.gallows;
+    case 'road':
+      return PROP_KEYS.road;
+    case 'bridge':
+      return PROP_KEYS.bridge;
+    case 'dock':
+      return PROP_KEYS.dock;
     case 'keep':
       return PROP_KEYS.keep;
   }
@@ -1523,6 +1711,19 @@ export function footprintAabb(
     left: x - w / 2,
     right: x + w / 2,
     top: y - h,
+    bottom: y,
+  };
+}
+
+/** Bridge footprint swaps width/height when rotated 90° to span the other axis. */
+function bridgeAabb(x: number, y: number, rotation: 0 | 90): Aabb {
+  const { w, h } = FOOTPRINT.bridge;
+  const bw = rotation === 90 ? h : w;
+  const bh = rotation === 90 ? w : h;
+  return {
+    left: x - bw / 2,
+    right: x + bw / 2,
+    top: y - bh,
     bottom: y,
   };
 }

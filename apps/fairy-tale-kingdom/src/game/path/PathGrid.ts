@@ -38,6 +38,18 @@ export class PathGrid {
     this.blocked[i] = true;
   }
 
+  /** Make a previously blocked terrain cell walkable (bridges over water). */
+  clearTerrainCell(col: number, row: number): void {
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return;
+    const i = row * this.cols + col;
+    this.terrainBlocked[i] = false;
+    this.blocked[i] = false;
+  }
+
+  clearTerrainAtWorld(x: number, y: number): void {
+    this.clearTerrainCell(Math.floor(x / this.tile), Math.floor(y / this.tile));
+  }
+
   applyTerrainFromMap(mapData: number[][], isBlockedTile: (t: number) => boolean): void {
     this.terrainBlocked.fill(false);
     for (let r = 0; r < mapData.length && r < this.rows; r++) {

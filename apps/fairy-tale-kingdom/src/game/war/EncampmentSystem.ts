@@ -4,10 +4,15 @@ import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { Phase12Balance } from '../economy/phase12Balance';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
+import { pickName } from '../subjects/names';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
+import type { CampRosterEntry, CampSnapshot } from '../subjects/types';
 import { KingdomEvents } from '../subjects/events';
 import { randomPointInZone, type WorldBounds } from '../subjects/zones';
+import { pickCampRaidLine, planSiege } from './GeneralStrategy';
 import { WarBalance, type CampKind } from './WarBalance';
+
+export type { CampSnapshot };
 
 export interface SavedEncampment {
   id: string;
@@ -19,6 +24,9 @@ export interface SavedEncampment {
   supply?: number;
   maxSupply?: number;
   generalName?: string;
+  leaderHome?: boolean;
+  roster?: CampRosterEntry[];
+  demoralizedMs?: number;
 }
 
 interface CampRecord {
@@ -40,6 +48,15 @@ interface CampRecord {
   supplyFill?: Phaser.GameObjects.Rectangle;
   generalName?: string;
   supplyToastShown: boolean;
+  /** Named living garrison, kept in lockstep with garrison/away counts */
+  roster: CampRosterEntry[];
+  /** Whether the camp leader is currently at home (vs. out with a raid/siege) */
+  leaderHome: boolean;
+  /** How many of the away roster still belong to the leader's current party */
+  leaderPartySize: number;
+  /** ms remaining leaderless after a leader falls — no new raids until a successor rises */
+  demoralizedMs: number;
+  activityMs: number;
 }
 
 const CAMP_LABEL: Record<CampKind, string> = {
@@ -61,9 +78,94 @@ const ENEMY_GENERAL_NAMES = [
   'Marshal Riven',
 ];
 
+/** Title prefixed to a picked first/last name for each camp kind's leader */
+const LEADER_TITLE: Record<CampKind, string> = {
+  bandit: 'Chief',
+  giant: 'Warlord',
+  goblin: 'Warboss',
+  thief: 'Boss',
+  siege: '',
+  gypsy: 'Baroness',
+  coven: 'Matron',
+};
+
+/** Rank-and-file role label shown in the camp roster */
+const ROSTER_ROLE: Record<CampKind, string> = {
+  bandit: 'Raider',
+  giant: 'Brute',
+  goblin: 'Skirmisher',
+  thief: 'Cutpurse',
+  siege: 'Soldier',
+  gypsy: 'Wanderer',
+  coven: 'Acolyte',
+};
+
+/** Rotating flavor activities for idle (home) roster units during daylight */
+const HOME_ACTIVITIES: Record<CampKind, string[]> = {
+  bandit: [
+    'Sharpening a blade by the fire',
+    'Drinking by the fire',
+    'Mending a cloak',
+    'Counting stolen coin',
+    'Patrolling the perimeter',
+  ],
+  giant: [
+    'Gnawing a bone by the fire',
+    'Napping in the sun',
+    'Sharpening a club',
+    'Patrolling the perimeter',
+    'Grumbling',
+  ],
+  goblin: [
+    'Squabbling over scraps',
+    'Sharpening spears by the fire',
+    'Gnawing on scraps',
+    'Patrolling the perimeter',
+    'Cackling',
+  ],
+  thief: [
+    'Casing the road',
+    'Cleaning lockpicks by the fire',
+    'Counting coin',
+    'Patrolling the perimeter',
+    'Lurking in shadow',
+  ],
+  siege: [
+    'Drilling formation',
+    'Sharpening pikes by the fire',
+    'Repairing a wagon wheel',
+    'Patrolling the perimeter',
+    'Standing watch',
+  ],
+  gypsy: [
+    'Playing a fiddle',
+    'Telling fortunes by the fire',
+    'Mending a wagon',
+    'Dancing by the fire',
+  ],
+  coven: [
+    'Brewing a potion',
+    'Muttering a hex over the cauldron',
+    'Reading an old tome',
+    'Tending a ritual circle',
+  ],
+};
+
+/** Night-time flavor activities — mostly sleep, with a wakeful sentry or two */
+const NIGHT_ACTIVITIES: Record<CampKind, string[]> = {
+  bandit: ['Sleeping off a raid', 'Sleeping by the fire', 'Standing night watch'],
+  giant: ['Snoring loudly', 'Sleeping by the fire', 'Standing night watch'],
+  goblin: ['Curled up asleep', 'Sleeping by the fire', 'Standing night watch'],
+  thief: ['Casing the road', 'Lurking in shadow', 'Patrolling the perimeter'],
+  siege: ['Sleeping in the wagon', 'Standing night watch', 'Sharpening pikes by torchlight'],
+  gypsy: ['Sleeping by the fire', 'Telling fortunes by moonlight'],
+  coven: ['Chanting a midnight ritual', 'Tending a ritual circle', 'Reading an old tome'],
+};
+
 export class EncampmentSystem {
   private camps: CampRecord[] = [];
   private nextId = 1;
+  private nextUnitSeq = 1;
   private campSpawnMs = 25_000;
   private siegeWaveMs = 90_000;
   private buildings: BuildingSystem | null = null;
@@ -71,6 +173,7 @@ export class EncampmentSystem {
   private raids: RaidSystem | null = null;
   private onChanged: (() => void) | null = null;
   private daysPlayed = 0;
+  private selectedId: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -96,6 +199,48 @@ export class EncampmentSystem {
 
   setOnChanged(cb: () => void): void {
     this.onChanged = cb;
+  }
+
+  /** Seed 1–2 fringe camps for a new / migrated kingdom. */
+  seedStarterCamps(count = 2): void {
+    const n = Math.max(1, Math.min(3, count));
+    for (let i = 0; i < n; i++) {
+      const kinds = WarBalance.campKindsWeighted(this.daysPlayed);
+      const kind = kinds[Math.floor(Math.random() * kinds.length)]!;
+      const pos = this.pickFringePoint();
+      if (!pos) continue;
+      if (
+        Phaser.Math.Distance.Between(pos.x, pos.y, this.keep.x, this.keep.y) <
+        this.keepClearance()
+      ) {
+        continue;
+      }
+      let tooClose = false;
+      for (const c of this.camps) {
+        if (Phaser.Math.Distance.Between(pos.x, pos.y, c.x, c.y) < this.campClearance()) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (tooClose) continue;
+      this.createCamp(kind, pos.x, pos.y, {
+        garrison: 1 + Math.floor(Math.random() * 2),
+        raidCooldownMs: 25_000 + Math.random() * 80_000,
+      });
+    }
+    this.onChanged?.();
+  }
+
+  private keepClearance(): number {
+    return Math.max(180, Math.min(this.world.width, this.world.height) * 0.12);
+  }
+
+  private campClearance(): number {
+    return Math.max(80, Math.min(this.world.width, this.world.height) * 0.05);
+  }
+
+  private population(): number {
+    return this.subjects?.count() ?? 0;
   }
 
   setDaysPlayed(days: number): void {
@@ -136,6 +281,181 @@ export class EncampmentSystem {
     return c ? { x: c.x, y: c.y } : null;
   }
 
+  /** World-space pick against each camp's sprite bounds (click-to-inspect). */
+  pickAt(worldX: number, worldY: number): string | null {
+    for (const c of this.camps) {
+      const b = c.sprite.getBounds();
+      if (Phaser.Geom.Rectangle.Contains(b, worldX, worldY)) {
+        return c.id;
+      }
+    }
+    return null;
+  }
+
+  getSelectedId(): string | null {
+    return this.selectedId;
+  }
+
+  select(id: string | null): CampSnapshot | null {
+    this.selectedId = id;
+    if (!id) return null;
+    const camp = this.camps.find((c) => c.id === id);
+    return camp ? this.toSnapshot(camp) : null;
+  }
+
+  refreshSelectedSnapshot(): CampSnapshot | null {
+    if (!this.selectedId) return null;
+    const camp = this.camps.find((c) => c.id === this.selectedId);
+    if (!camp) {
+      this.selectedId = null;
+      return null;
+    }
+    return this.toSnapshot(camp);
+  }
+
+  /** Whether a dungeon + nearby guard/archer can arrest a raider from this camp. */
+  canArrest(campId: string): boolean {
+    if (!this.subjects || !this.buildings?.hasDungeon()) return false;
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp || camp.garrison <= 0) return false;
+    return Boolean(
+      this.subjects.nearestMilitary(camp.x, camp.y, WarBalance.campArrestRange)
+    );
+  }
+
+  /** Player-ordered militia assault: mobilizes free guards/archers kingdom-wide. */
+  requestDestroy(campId: string): boolean {
+    if (!this.subjects) return false;
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp) return false;
+    const assigned = this.subjects.assignAssault(camp.id, 99, 'militia');
+    if (assigned === 0) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No free guards or archers to send.',
+      });
+      return false;
+    }
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${assigned} troops march on the ${CAMP_LABEL[camp.kind]}!`,
+    });
+    return true;
+  }
+
+  /** Arrest one idle raider from a camp — needs a dungeon + a nearby guard/archer. */
+  requestArrest(campId: string): boolean {
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp || !this.canArrest(campId)) return false;
+    const guard = this.subjects!.nearestMilitary(
+      camp.x,
+      camp.y,
+      WarBalance.campArrestRange
+    );
+    if (!guard) return false;
+    camp.garrison -= 1;
+    this.syncRoster(camp);
+    const bounty = Phase12Balance.arrestBountyGold;
+    this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
+      amount: bounty,
+      kind: camp.kind,
+    });
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${guard.data.name} arrests a raider from the ${CAMP_LABEL[camp.kind]} — recovered ${bounty} gold!`,
+    });
+    this.tryRemoveEmpty(camp);
+    this.onChanged?.();
+    return true;
+  }
+
+  private toSnapshot(camp: CampRecord): CampSnapshot {
+    return {
+      id: camp.id,
+      kind: camp.kind,
+      x: camp.x,
+      y: camp.y,
+      label: CAMP_LABEL[camp.kind],
+      leaderName: camp.generalName ?? null,
+      leaderHome: camp.leaderHome,
+      demoralized: camp.demoralizedMs > 0,
+      garrison: camp.garrison,
+      away: camp.away,
+      supply: camp.kind === 'siege' ? camp.supply : undefined,
+      maxSupply: camp.kind === 'siege' ? camp.maxSupply : undefined,
+      canArrest: this.canArrest(camp.id),
+      roster: camp.roster.map((u) => ({ ...u })),
+    };
+  }
+
+  private generateLeaderName(kind: CampKind): string {
+    if (kind === 'siege') {
+      return ENEMY_GENERAL_NAMES[
+        Math.floor(Math.random() * ENEMY_GENERAL_NAMES.length)
+      ]!;
+    }
+    const title = LEADER_TITLE[kind];
+    const name = pickName(Math.floor(Math.random() * 1_000_000));
+    return `${title} ${name}`;
+  }
+
+  private makeRosterUnit(camp: CampRecord, status: CampRosterEntry['status']): CampRosterEntry {
+    const id = `${camp.id}-u${this.nextUnitSeq++}`;
+    const name = pickName(Math.floor(Math.random() * 1_000_000));
+    const acts = HOME_ACTIVITIES[camp.kind];
+    const activity =
+      status === 'home'
+        ? acts[Math.floor(Math.random() * acts.length)]!
+        : camp.kind === 'siege'
+          ? 'Marching on the keep'
+          : 'Out raiding';
+    return { id, name, role: ROSTER_ROLE[camp.kind], status, activity };
+  }
+
+  /** Keep named roster entries in lockstep with garrison/away counts. */
+  private syncRoster(camp: CampRecord): void {
+    const home = camp.roster.filter((u) => u.status === 'home');
+    const away = camp.roster.filter((u) => u.status === 'away');
+    while (home.length < camp.garrison) {
+      const u = this.makeRosterUnit(camp, 'home');
+      camp.roster.push(u);
+      home.push(u);
+    }
+    while (home.length > camp.garrison) {
+      const u = home.pop()!;
+      const idx = camp.roster.indexOf(u);
+      if (idx >= 0) camp.roster.splice(idx, 1);
+    }
+    while (away.length < camp.away) {
+      const u = this.makeRosterUnit(camp, 'away');
+      camp.roster.push(u);
+      away.push(u);
+    }
+    while (away.length > camp.away) {
+      const u = away.pop()!;
+      const idx = camp.roster.indexOf(u);
+      if (idx >= 0) camp.roster.splice(idx, 1);
+    }
+  }
+
+  /** Rotate flavor activities for idle roster units (camp-life labels). */
+  private tickRosterActivity(camp: CampRecord, deltaMs: number, isNight: boolean): void {
+    camp.activityMs -= deltaMs;
+    if (camp.activityMs > 0) return;
+    camp.activityMs = 7_000 + Math.random() * 8_000;
+    const acts = isNight ? NIGHT_ACTIVITIES[camp.kind] : HOME_ACTIVITIES[camp.kind];
+    for (const u of camp.roster) {
+      if (u.status !== 'home') continue;
+      if (Math.random() < 0.5) {
+        u.activity = acts[Math.floor(Math.random() * acts.length)]!;
+      }
+    }
+  }
+
+  /** Marks the leader's raid party as home once all of it has returned/died. */
+  private settleLeaderParty(camp: CampRecord): void {
+    if (camp.leaderPartySize <= 0) return;
+    camp.leaderPartySize -= 1;
+    if (camp.leaderPartySize <= 0) camp.leaderHome = true;
+  }
+
   serialize(): SavedEncampment[] {
     return this.camps.map((c) => ({
       id: c.id,
@@ -147,6 +467,9 @@ export class EncampmentSystem {
       supply: c.kind === 'siege' ? c.supply : undefined,
       maxSupply: c.kind === 'siege' ? c.maxSupply : undefined,
       generalName: c.generalName,
+      leaderHome: c.leaderHome,
+      roster: c.roster.map((u) => ({ ...u })),
+      demoralizedMs: c.demoralizedMs > 0 ? c.demoralizedMs : undefined,
     }));
   }
 
@@ -160,6 +483,9 @@ export class EncampmentSystem {
         supply: s.supply,
         maxSupply: s.maxSupply,
         generalName: s.generalName,
+        leaderHome: s.leaderHome,
+        roster: s.roster,
+        demoralizedMs: s.demoralizedMs,
         quiet: true,
       });
     }
@@ -168,6 +494,7 @@ export class EncampmentSystem {
   clear(): void {
     for (const c of this.camps) this.destroyVisuals(c);
     this.camps = [];
+    this.selectedId = null;
   }
 
   /** Called when a raider returns home after looting. */
@@ -179,17 +506,31 @@ export class EncampmentSystem {
       WarBalance.garrisonCap(camp.kind, this.daysPlayed),
       camp.garrison + 1
     );
+    this.settleLeaderParty(camp);
+    this.syncRoster(camp);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `Raiders return to the ${CAMP_LABEL[camp.kind]}.`,
     });
     this.onChanged?.();
   }
 
-  /** Called when a camp-linked raider dies away from home. */
-  onRaiderLost(campId: string): void {
+  /** Called when a camp-linked raider dies (or is arrested) away from home. */
+  onRaiderLost(campId: string, wasGeneral = false): void {
     const camp = this.camps.find((c) => c.id === campId);
     if (!camp) return;
     camp.away = Math.max(0, camp.away - 1);
+    this.settleLeaderParty(camp);
+    if (wasGeneral && camp.generalName && camp.kind !== 'siege') {
+      const fallen = camp.generalName;
+      camp.generalName = undefined;
+      camp.leaderHome = false;
+      camp.leaderPartySize = 0;
+      camp.demoralizedMs = WarBalance.demoralizedRecoverMs(this.daysPlayed);
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${fallen} has fallen! The ${CAMP_LABEL[camp.kind]} reels without a leader...`,
+      });
+    }
+    this.syncRoster(camp);
     this.tryRemoveEmpty(camp);
     this.onChanged?.();
   }
@@ -256,6 +597,7 @@ export class EncampmentSystem {
       camp.garrison -= 1;
       dmg -= 8;
     }
+    this.syncRoster(camp);
     if (camp.garrison <= 0 && camp.away <= 0) {
       this.removeCamp(camp, true);
       return true;
@@ -284,12 +626,28 @@ export class EncampmentSystem {
     }
 
     for (const camp of [...this.camps]) {
+      this.tickRosterActivity(camp, deltaMs, isNight);
       this.tickCamp(camp, deltaMs, isNight);
+    }
+  }
+
+  /** Ticks down leaderlessness and installs a successor once the camp recovers. */
+  private tickDemoralization(camp: CampRecord, deltaMs: number): void {
+    if (camp.demoralizedMs <= 0) return;
+    camp.demoralizedMs = Math.max(0, camp.demoralizedMs - deltaMs);
+    if (camp.demoralizedMs <= 0 && !camp.generalName && camp.garrison > 0) {
+      camp.generalName = this.generateLeaderName(camp.kind);
+      camp.leaderHome = true;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${camp.generalName} rises to lead the ${CAMP_LABEL[camp.kind]}!`,
+      });
+      this.onChanged?.();
     }
   }
 
   private tickCamp(camp: CampRecord, deltaMs: number, isNight: boolean): void {
     const cap = WarBalance.garrisonCap(camp.kind, this.daysPlayed);
+    this.tickDemoralization(camp, deltaMs);
 
     if (camp.kind === 'siege') {
       this.tickSiegeCamp(camp, deltaMs);
@@ -312,6 +670,7 @@ export class EncampmentSystem {
       if (camp.spawnMs <= 0) {
         camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
         camp.garrison += 1;
+        this.syncRoster(camp);
         this.onChanged?.();
       }
     }
@@ -336,17 +695,22 @@ export class EncampmentSystem {
       }
     }
 
-    // Raid when strong enough
+    // Raid when strong enough — staggered per-camp with random jitter
     camp.raidCooldownMs = Math.max(0, camp.raidCooldownMs - deltaMs);
     const thresh = WarBalance.raidThreshold(camp.kind, this.daysPlayed);
     const canRaid =
-      camp.kind === 'thief' ? isNight : true;
+      (camp.kind === 'thief' ? isNight : true) && camp.demoralizedMs <= 0;
+    const pressure = WarBalance.earlyPressureFactor(
+      this.daysPlayed,
+      this.population()
+    );
     if (
       canRaid &&
       camp.raidCooldownMs <= 0 &&
       camp.garrison >= thresh &&
       this.raids &&
-      !this.raids.isArmySiege()
+      !this.raids.isArmySiege() &&
+      Math.random() < pressure
     ) {
       const size = WarBalance.raidPartySize(
         camp.kind,
@@ -354,7 +718,9 @@ export class EncampmentSystem {
         camp.garrison
       );
       this.launchParty(camp, size, false);
-      camp.raidCooldownMs = 40_000 + Math.random() * 20_000;
+      // Wide independent jitter so camps don't sync-attack
+      camp.raidCooldownMs =
+        50_000 + Math.random() * 90_000 + (1 - pressure) * 60_000;
     }
   }
 
@@ -366,6 +732,7 @@ export class EncampmentSystem {
       if (camp.spawnMs <= 0) {
         camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
         camp.garrison += 1;
+        this.syncRoster(camp);
         this.onChanged?.();
       }
     }
@@ -404,6 +771,7 @@ export class EncampmentSystem {
     if (camp.spawnMs > 0) return;
     camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
     camp.garrison += 1;
+    this.syncRoster(camp);
     // Stub: witches spawn into SubjectSystem when that API lands
     this.onChanged?.();
   }
@@ -430,6 +798,7 @@ export class EncampmentSystem {
       if (camp.supply >= cost) {
         camp.supply -= cost;
         camp.away += 1;
+        this.syncRoster(camp);
         this.raids.launchCampRaiders({
           kind: 'enemy_army',
           x: camp.x + Phaser.Math.Between(-16, 16),
@@ -456,6 +825,18 @@ export class EncampmentSystem {
     if (send <= 0) return;
     camp.garrison -= send;
     camp.away += send;
+    this.syncRoster(camp);
+
+    // The leader joins a real raid (not proximity aggro) when they're home.
+    const leaderLeads =
+      !aggroOnly &&
+      camp.kind !== 'siege' &&
+      camp.leaderHome &&
+      Boolean(camp.generalName);
+    if (leaderLeads) {
+      camp.leaderHome = false;
+      camp.leaderPartySize = send;
+    }
 
     const raidKind =
       camp.kind === 'thief'
@@ -478,6 +859,7 @@ export class EncampmentSystem {
       homeY: camp.y,
       stealKind: camp.kind === 'thief' ? 'thief' : camp.kind === 'goblin' ? 'goblin' : undefined,
       aggroOnly,
+      hasGeneral: leaderLeads,
       label:
         camp.kind === 'thief'
           ? 'Thieves'
@@ -489,9 +871,18 @@ export class EncampmentSystem {
     });
 
     if (!aggroOnly) {
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: `${CAMP_LABEL[camp.kind]} launches a raid!`,
-      });
+      // A leader-led raid consults the same battlefield logic enemy generals
+      // use for sieges, so the toast reflects a smart choice of target.
+      const plan =
+        leaderLeads && this.buildings
+          ? planSiege(this.buildings, { x: camp.x, y: camp.y }, camp.generalName)
+          : null;
+      const message =
+        plan?.orderLabel ??
+        (leaderLeads
+          ? `${camp.generalName} orders: "${pickCampRaidLine(camp.kind)}"`
+          : `${CAMP_LABEL[camp.kind]} launches a raid!`);
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, { message });
     }
     this.onChanged?.();
   }
@@ -506,11 +897,17 @@ export class EncampmentSystem {
     if (!pos) return;
 
     // Keep clear of keep and existing camps
-    if (Phaser.Math.Distance.Between(pos.x, pos.y, this.keep.x, this.keep.y) < 180) {
+    if (
+      Phaser.Math.Distance.Between(pos.x, pos.y, this.keep.x, this.keep.y) <
+      this.keepClearance()
+    ) {
       return;
     }
     for (const c of this.camps) {
-      if (Phaser.Math.Distance.Between(pos.x, pos.y, c.x, c.y) < 80) return;
+      if (
+        Phaser.Math.Distance.Between(pos.x, pos.y, c.x, c.y) < this.campClearance()
+      )
+        return;
     }
 
     this.createCamp(kind, pos.x, pos.y, { garrison: 1 });
@@ -521,8 +918,17 @@ export class EncampmentSystem {
 
   private trySpawnSiegeWave(): void {
     if (this.daysPlayed < 2) return;
-    if (this.camps.some((c) => c.kind === 'siege')) return;
+    const siegeCount = this.camps.filter((c) => c.kind === 'siege').length;
+    if (siegeCount >= WarBalance.maxSiegeCamps(this.daysPlayed)) return;
     if (this.raids?.isArmySiege()) return;
+    const pressure = WarBalance.earlyPressureFactor(
+      this.daysPlayed,
+      this.population()
+    );
+    if (Math.random() > pressure) {
+      this.siegeWaveMs = 30_000 + Math.random() * 40_000;
+      return;
+    }
 
     const edge = this.pickEdgePoint();
     const supply = WarBalance.siegeMaxSupply(this.daysPlayed);
@@ -536,6 +942,7 @@ export class EncampmentSystem {
       supply,
       maxSupply: supply,
       generalName,
+      raidCooldownMs: 20_000 + Math.random() * 60_000,
     });
     if (!camp || !this.raids) return;
 
@@ -605,7 +1012,11 @@ export class EncampmentSystem {
       supply?: number;
       maxSupply?: number;
       generalName?: string;
+      leaderHome?: boolean;
+      roster?: CampRosterEntry[];
+      demoralizedMs?: number;
       quiet?: boolean;
+      raidCooldownMs?: number;
     }
   ): CampRecord | null {
     const id = opts?.id ?? `camp-${this.nextId++}`;
@@ -621,7 +1032,11 @@ export class EncampmentSystem {
             ? PROP_KEYS.gypsyCamp
             : kind === 'coven'
               ? PROP_KEYS.covenCamp
-              : PROP_KEYS.banditCamp;
+              : kind === 'goblin'
+                ? PROP_KEYS.goblinCamp
+                : kind === 'giant'
+                  ? PROP_KEYS.giantCamp
+                  : PROP_KEYS.banditCamp;
 
     const sprite = this.scene.add.image(x, y, tex);
     sprite.setDepth(8);
@@ -629,31 +1044,41 @@ export class EncampmentSystem {
 
     const maxSupply = opts?.maxSupply ?? (kind === 'siege' ? WarBalance.siegeMaxSupply(this.daysPlayed) : 0);
     const supply = opts?.supply ?? maxSupply;
+    const garrison = opts?.garrison ?? 1;
+    const away = opts?.away ?? 0;
 
     const camp: CampRecord = {
       id,
       kind,
       x,
       y,
-      garrison: opts?.garrison ?? 1,
-      away: opts?.away ?? 0,
+      garrison,
+      away,
       spawnMs: WarBalance.garrisonSpawnMs(kind, this.daysPlayed),
-      raidCooldownMs: 20_000,
+      raidCooldownMs: opts?.raidCooldownMs ?? 20_000 + Math.random() * 40_000,
       supply,
       maxSupply,
       reinforceMs: WarBalance.siegeReinforceMs(this.daysPlayed),
       sprite,
-      generalName: opts?.generalName,
+      generalName: opts?.generalName ?? this.generateLeaderName(kind),
       supplyToastShown: supply <= 0,
+      roster: opts?.roster ? opts.roster.map((u) => ({ ...u })) : [],
+      leaderHome: opts?.leaderHome ?? garrison > 0,
+      leaderPartySize: 0,
+      demoralizedMs: opts?.demoralizedMs ?? 0,
+      activityMs: 4_000 + Math.random() * 4_000,
     };
 
+    if (!opts?.roster) this.syncRoster(camp);
+
     if (kind === 'siege') {
+      const barY = y - sprite.displayHeight - 6;
       camp.supplyBg = this.scene.add
-        .rectangle(x, y - 28, 28, 4, 0x1a1010, 0.85)
+        .rectangle(x, barY, 28, 4, 0x1a1010, 0.85)
         .setDepth(30)
         .setOrigin(0.5, 0.5);
       camp.supplyFill = this.scene.add
-        .rectangle(x - 13, y - 28, 26, 3, 0xc4a35a, 1)
+        .rectangle(x - 13, barY, 26, 3, 0xc4a35a, 1)
         .setDepth(31)
         .setOrigin(0, 0.5);
       this.refreshSupplyBar(camp);
@@ -684,6 +1109,7 @@ export class EncampmentSystem {
   private removeCamp(camp: CampRecord, toast: boolean): void {
     this.destroyVisuals(camp);
     this.camps = this.camps.filter((c) => c !== camp);
+    if (this.selectedId === camp.id) this.selectedId = null;
     if (toast) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `The ${CAMP_LABEL[camp.kind]} is destroyed!`,

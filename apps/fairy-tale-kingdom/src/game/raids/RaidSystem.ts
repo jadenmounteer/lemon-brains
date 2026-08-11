@@ -99,6 +99,8 @@ export interface LaunchCampRaidersOpts {
   aggroOnly?: boolean;
   label?: string;
   isReinforce?: boolean;
+  /** The camp's leader is riding with this party — tag one raider as the general */
+  hasGeneral?: boolean;
 }
 
 export interface BeginSiegeFromCampOpts {
@@ -198,6 +200,7 @@ export class RaidSystem {
         homeY: opts.homeY,
         stealKind: opts.stealKind ?? null,
         aggroOnly: Boolean(opts.aggroOnly),
+        isGeneral: Boolean(opts.hasGeneral) && i === 0,
       });
     }
   }
@@ -587,7 +590,7 @@ export class RaidSystem {
     sprite.play(idleAnimKey(kind));
 
     const maxHp = home?.isGeneral
-      ? Math.floor(RAIDER_MAX_HP[kind] * 1.5)
+      ? Math.floor(RAIDER_MAX_HP[kind] * WarBalance.leaderHpMult)
       : RAIDER_MAX_HP[kind];
     const invest = this.investPoint(index, total);
     const fieldRaid = home?.siegeRole === 'field_raid';
@@ -1112,7 +1115,7 @@ export class RaidSystem {
     );
     raider.sprite.destroy();
     this.raiders = this.raiders.filter((r) => r !== raider);
-    if (campId) this.encampments?.onRaiderLost(campId);
+    if (campId) this.encampments?.onRaiderLost(campId, raider.isGeneral);
     this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
       amount: recovered,
       kind: kindLabel,
@@ -1273,7 +1276,7 @@ export class RaidSystem {
       onComplete: () => {
         raider.sprite.destroy();
         this.raiders = this.raiders.filter((r) => r !== raider);
-        if (campId) this.encampments?.onRaiderLost(campId);
+        if (campId) this.encampments?.onRaiderLost(campId, raider.isGeneral);
         if (!this.hasActiveRaiders()) {
           this.endWave();
         }

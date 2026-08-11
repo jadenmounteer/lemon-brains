@@ -222,6 +222,23 @@ a {
   margin: 0.2rem 0;
 }
 
+.camp-roster-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline dotted;
+  cursor: pointer;
+}
+
+.camp-roster-link:hover {
+  text-decoration: underline solid;
+  opacity: 0.85;
+}
+
 .question-tools {
   display: flex;
   gap: 0.35rem;
@@ -481,4 +498,151 @@ a {
 .place-banner p {
   margin: 0;
   font-size: 0.85rem;
+}
+
+/* Playing manual — parchment scroll + glossary */
+.manual-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(12, 18, 14, 0.72);
+}
+
+.manual-shell {
+  display: flex;
+  gap: 0;
+  width: min(960px, 100%);
+  height: min(85vh, 720px);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.manual-glossary {
+  width: 180px;
+  flex-shrink: 0;
+  padding: 1rem 0.75rem;
+  background: #2a2118;
+  border-right: 1px solid #5a4630;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.manual-glossary h2 {
+  margin: 0 0 0.35rem;
+  font-family: Georgia, "Palatino Linotype", serif;
+  font-size: 1rem;
+  color: #e8dcc0;
+}
+
+.manual-gloss-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #c4b49a;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.4rem;
+  border-radius: 4px;
+}
+
+.manual-gloss-link:hover,
+.manual-gloss-link.active {
+  background: rgba(212, 168, 75, 0.18);
+  color: #f6e2a8;
+}
+
+.manual-scroll-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #3a2e22;
+}
+
+.manual-scroll-cap {
+  height: 18px;
+  background: linear-gradient(180deg, #6b5340 0%, #4a3a2a 100%);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.manual-scroll-cap.bottom {
+  background: linear-gradient(0deg, #6b5340 0%, #4a3a2a 100%);
+}
+
+.manual-scroll {
+  flex: 1;
+  overflow: auto;
+  padding: 1.25rem 1.5rem 2rem;
+  background:
+    radial-gradient(ellipse at 20% 10%, rgba(255, 240, 200, 0.35), transparent 50%),
+    linear-gradient(180deg, #e8d9b8 0%, #d4c19a 45%, #cbb890 100%);
+  color: #2a2118;
+  font-family: Georgia, "Palatino Linotype", "Times New Roman", serif;
+  user-select: text;
+}
+
+.manual-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.manual-lede {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  opacity: 0.85;
+}
+
+.manual-scroll section {
+  margin-bottom: 1.5rem;
+  scroll-margin-top: 0.5rem;
+}
+
+.manual-scroll h2 {
+  margin: 0 0 0.4rem;
+  font-size: 1.2rem;
+  border-bottom: 1px solid rgba(42, 33, 24, 0.25);
+  padding-bottom: 0.25rem;
+}
+
+.manual-scroll p {
+  margin: 0 0 0.65rem;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.manual-list {
+  margin: 0 0 0.75rem;
+  padding-left: 1.2rem;
+  line-height: 1.45;
+}
+
+.manual-list li {
+  margin-bottom: 0.55rem;
+}
+
+.manual-scroll .muted {
+  color: #5a4a38;
+  opacity: 1;
+}
+
+@media (max-width: 720px) {
+  .manual-shell {
+    flex-direction: column;
+    height: min(90vh, 800px);
+  }
+  .manual-glossary {
+    width: 100%;
+    max-height: 140px;
+    overflow: auto;
+    border-right: none;
+    border-bottom: 1px solid #5a4630;
+  }
 }

@@ -269,15 +269,16 @@ export class MonsterSystem {
   onDayRolled(): void {
     this.dayCount += 1;
     this.spawnAccumDays += 1;
-    const maxMonsters = Math.min(8, 3 + Math.floor(this.daysPlayed / 4));
+    const maxMonsters = Math.min(14, 4 + Math.floor(this.daysPlayed / 3));
     if (this.monsters.length >= maxMonsters) return;
     // Spawn more often as days rise (every 2 days early → every day late)
-    const interval = this.daysPlayed >= 10 ? 1 : 2;
+    const interval = this.daysPlayed >= 8 ? 1 : 2;
     if (this.spawnAccumDays < interval) return;
     this.spawnAccumDays = 0;
     const hasDragon = this.monsters.some((m) => m.kind === 'dragon');
     let kind: MonsterKind = Math.random() < 0.45 ? 'ogre' : 'troll';
-    if (!hasDragon && (this.dayCount >= 3 || this.daysPlayed >= 3) && Math.random() < 0.55) {
+    // Earlier / more frequent dragons
+    if (!hasDragon && (this.dayCount >= 2 || this.daysPlayed >= 2) && Math.random() < 0.65) {
       kind = 'dragon';
     }
     // Extra spawn chance on long-lived kingdoms
@@ -289,9 +290,9 @@ export class MonsterSystem {
           : `${m.name} the ${kind} stalks the kingdom!`,
     });
     if (
-      this.daysPlayed >= 12 &&
+      this.daysPlayed >= 8 &&
       this.monsters.length < maxMonsters &&
-      Math.random() < 0.35
+      Math.random() < 0.45
     ) {
       const extra = this.spawnMonster(Math.random() < 0.5 ? 'ogre' : 'troll');
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -531,7 +532,8 @@ export class MonsterSystem {
   ): void {
     let x = Phaser.Math.Clamp(tx, 32, this.world.width - 32);
     let y = Phaser.Math.Clamp(ty, 32, this.world.height - 32);
-    if (this.pathGrid) {
+    // Dragons fly — ignore terrain/path blocks (water, mountains, walls).
+    if (this.pathGrid && m.kind !== 'dragon') {
       const path = this.pathGrid.findPath(
         { x: m.sprite.x, y: m.sprite.y },
         { x, y }

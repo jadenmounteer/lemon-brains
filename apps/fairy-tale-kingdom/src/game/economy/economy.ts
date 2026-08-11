@@ -40,4 +40,4 @@ export const RANSOM_COST: Record<string, number> = {
   physician: 25,
 };
 
-export const BEDS_PER_MANOR = 2;
+export const BEDS_PER_MANOR = 6;

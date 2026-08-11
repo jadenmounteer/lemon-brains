@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { PlayingManualPanel } from './PlayingManualPanel';
 
 interface KingdomMenuProps {
   kingdomName: string;
@@ -17,6 +18,7 @@ export function KingdomMenu({
 }: KingdomMenuProps) {
   const [open, setOpen] = useState(forceOpen);
   const [showNewForm, setShowNewForm] = useState(forceOpen);
+  const [showManual, setShowManual] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -62,16 +64,28 @@ export function KingdomMenu({
           <p className="menu-kingdom-name">{kingdomName || 'Unnamed kingdom'}</p>
           <p className="muted">Day {daysPlayed}</p>
           {!showNewForm ? (
-            <button
-              type="button"
-              className="menu-action"
-              onClick={() => {
-                setShowNewForm(true);
-                setName('');
-              }}
-            >
-              Start new kingdom
-            </button>
+            <>
+              <button
+                type="button"
+                className="menu-action"
+                onClick={() => {
+                  setShowManual(true);
+                  setOpen(false);
+                }}
+              >
+                Playing manual
+              </button>
+              <button
+                type="button"
+                className="menu-action"
+                onClick={() => {
+                  setShowNewForm(true);
+                  setName('');
+                }}
+              >
+                Start new kingdom
+              </button>
+            </>
           ) : (
             <form
               className="new-kingdom-form"
@@ -118,6 +132,9 @@ export function KingdomMenu({
             </form>
           )}
         </div>
+      )}
+      {showManual && (
+        <PlayingManualPanel onClose={() => setShowManual(false)} />
       )}
     </div>
   );

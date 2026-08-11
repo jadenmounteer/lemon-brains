@@ -98,6 +98,8 @@ export const PROP_KEYS = {
   infirmary: 'prop-infirmary',
   dungeon: 'prop-dungeon',
   banditCamp: 'prop-bandit-camp',
+  goblinCamp: 'prop-goblin-camp',
+  giantCamp: 'prop-giant-camp',
   thiefDen: 'prop-thief-den',
   siegeCamp: 'prop-siege-camp',
   gypsyCamp: 'prop-gypsy-camp',
@@ -111,6 +113,13 @@ export const PROP_KEYS = {
   venueWedding: 'prop-venue-wedding',
   venueJoust: 'prop-venue-joust',
   venueFuneral: 'prop-venue-funeral',
+  road: 'prop-road',
+  bridge: 'prop-bridge',
+  bridgeV: 'prop-bridge-v',
+  dock: 'prop-dock',
+  fishingBoat: 'prop-fishing-boat',
+  warship: 'prop-warship',
+  vampireCastle: 'prop-vampire-castle',
   /** Interior underlays (shown when roof hidden) */
   houseInterior: 'prop-house-interior',
   keepInterior: 'prop-keep-interior',
@@ -214,6 +223,18 @@ export function isMilitaryRole(role: UnitRole): boolean {
     role === 'knight' ||
     role === 'general' ||
     role === 'witch_hunter'
+  );
+}
+
+/** Military roles that patrol within their home sphere (dungeon/barracks). */
+export function isSpherePatrolRole(role: UnitRole): boolean {
+  return (
+    role === 'guard' ||
+    role === 'soldier' ||
+    role === 'archer' ||
+    role === 'elite_guard' ||
+    role === 'elite_archer' ||
+    role === 'knight'
   );
 }
 

@@ -38,9 +38,12 @@ export const BUILDING_ROLE_CAPACITY: Partial<
   gallows: {
     executioner: 1,
   },
+  dock: {
+    peasant: 3,
+  },
 };
 
-export type CivilianJob = 'farmer' | 'baker' | 'merchant';
+export type CivilianJob = 'farmer' | 'baker' | 'merchant' | 'fisherman';
 
 export function civilianJobForBuilding(
   kind: BuildKind
@@ -48,6 +51,7 @@ export function civilianJobForBuilding(
   if (kind === 'field') return 'farmer';
   if (kind === 'bakery') return 'baker';
   if (kind === 'market') return 'merchant';
+  if (kind === 'dock') return 'fisherman';
   return null;
 }
 

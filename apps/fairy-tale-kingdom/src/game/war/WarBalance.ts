@@ -24,7 +24,20 @@ export const WarBalance = {
 
   maxCamps(days: number): number {
     const d = dayScale(days);
-    return Math.min(14, 3 + Math.floor(d / 3));
+    return Math.min(28, 5 + Math.floor(d / 2));
+  },
+
+  /** How many concurrent siege camps are allowed */
+  maxSiegeCamps(days: number): number {
+    const d = dayScale(days);
+    return Math.min(5, 1 + Math.floor(d / 8));
+  },
+
+  /** Early-game softener for raid/siege pressure (0–1) */
+  earlyPressureFactor(days: number, population: number): number {
+    if (days >= 5 && population >= 8) return 1;
+    if (days < 5) return 0.35 + days * 0.1;
+    return 0.55 + Math.min(0.45, population * 0.05);
   },
 
   /** Idle garrison size before a raid launches */
@@ -132,6 +145,21 @@ export const WarBalance = {
   },
 
   aggroRadius: 96,
+
+  /** Range for guards to arrest a whole camp (needs a dungeon) */
+  campArrestRange: 140,
+
+  /** Gold bounty per home unit recovered when a camp is arrested */
+  campArrestBountyPerUnit: 3,
+
+  /** HP multiplier for a camp's named leader vs rank-and-file */
+  leaderHpMult: 1.6,
+
+  /** ms a camp goes leaderless (no raids) after its leader falls */
+  demoralizedRecoverMs(days: number): number {
+    const d = dayScale(days);
+    return Math.max(40_000, 90_000 - d * 1_500);
+  },
 
   campKindsWeighted(days: number): CampKind[] {
     const d = dayScale(days);

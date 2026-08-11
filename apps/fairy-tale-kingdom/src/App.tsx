@@ -11,11 +11,14 @@ import type {
 } from './game/subjects/events';
 import type {
   BuildingSnapshot,
+  CampRosterEntry,
+  CampSnapshot,
   DaySnapshot,
   KingdomStats,
   SubjectSnapshot,
 } from './game/subjects/types';
 import { BuildingInspectorPanel } from './buildings/BuildingInspectorPanel';
+import { CampInspectorPanel } from './war/CampInspectorPanel';
 import {
   CaptivesRepository,
   type CaptiveRecord,
@@ -92,6 +95,7 @@ export default function App() {
   const [selected, setSelected] = useState<SubjectSnapshot | null>(null);
   const [selectedBuilding, setSelectedBuilding] =
     useState<BuildingSnapshot | null>(null);
+  const [selectedCamp, setSelectedCamp] = useState<CampSnapshot | null>(null);
   const [day, setDay] = useState<DaySnapshot>({
     dayPhase: 'Night',
     hour: 0,
@@ -139,6 +143,19 @@ export default function App() {
     seq: number;
     id: string;
   } | null>(null);
+  const [destroyCampRequest, setDestroyCampRequest] = useState<{
+    seq: number;
+    campId: string;
+  } | null>(null);
+  const [arrestCampRequest, setArrestCampRequest] = useState<{
+    seq: number;
+    campId: string;
+  } | null>(null);
+  const [focusCampRequest, setFocusCampRequest] = useState<{
+    seq: number;
+    campId: string;
+    unitId?: string;
+  } | null>(null);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
@@ -148,6 +165,7 @@ export default function App() {
     showRansom ||
     selected !== null ||
     selectedBuilding !== null ||
+    selectedCamp !== null ||
     (stats.careerTodos?.length ?? 0) > 0;
 
   const flash = useCallback((message: string) => {
@@ -171,6 +189,7 @@ export default function App() {
       setNamingAfterLoss(false);
       setSelected(null);
       setSelectedBuilding(null);
+      setSelectedCamp(null);
       setPlaceMode({ active: false, kind: null });
       setPendingPlaceCost(null);
       setShowRansom(false);
@@ -426,8 +445,12 @@ export default function App() {
             commandRequest={commandRequest}
             careerHireRequest={careerHireRequest}
             executeRequest={executeRequest}
+            destroyCampRequest={destroyCampRequest}
+            arrestCampRequest={arrestCampRequest}
+            focusCampRequest={focusCampRequest}
             onSubjectSelected={setSelected}
             onBuildingSelected={setSelectedBuilding}
+            onCampSelected={setSelectedCamp}
             onDayTick={setDay}
             onDayRolled={() => {
               void incrementDay();
@@ -534,6 +557,37 @@ export default function App() {
                 onClose={() => {
                   setSelectedBuilding(null);
                   setDeselectToken((n) => n + 1);
+                }}
+              />
+            )}
+            {selectedCamp && (
+              <CampInspectorPanel
+                camp={selectedCamp}
+                onArrest={() => {
+                  setArrestCampRequest({
+                    seq: Date.now(),
+                    campId: selectedCamp.id,
+                  });
+                }}
+                onDestroy={() => {
+                  setDestroyCampRequest({
+                    seq: Date.now(),
+                    campId: selectedCamp.id,
+                  });
+                }}
+                onClose={() => {
+                  setSelectedCamp(null);
+                  setDeselectToken((n) => n + 1);
+                }}
+                onSelectUnit={(unit: CampRosterEntry) => {
+                  setFocusCampRequest({
+                    seq: Date.now(),
+                    campId: selectedCamp.id,
+                    unitId: unit.id,
+                  });
+                  if (unit.status === 'away') {
+                    flash(`${unit.name} is out raiding — not home right now`);
+                  }
                 }}
               />
             )}

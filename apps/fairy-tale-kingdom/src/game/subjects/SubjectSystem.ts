@@ -40,7 +40,7 @@ import type {
   SubjectInterrupt,
   SubjectSnapshot,
 } from './types';
-import { randomPointInZone, type WorldBounds } from './zones';
+import { randomPointInZone, type Point, type WorldBounds } from './zones';
 
 export type ManagedSubject = {
   data: Subject;
@@ -49,6 +49,18 @@ export type ManagedSubject = {
   fleeCooldownMs: number;
   interrupt: SubjectInterrupt | null;
 };
+
+/** Civic buildings patrols pause at while cycling their inspection route. */
+const PATROL_INSPECTION_KINDS: BuildKind[] = [
+  'market',
+  'cathedral',
+  'infirmary',
+  'tavern',
+  'bakery',
+  'granary',
+  'cemetery',
+  'gallows',
+];
 
 /** Three residents per starter house (house-0 then house-1). */
 const SEED_ROLES: UnitRole[] = [
@@ -75,6 +87,7 @@ export class SubjectSystem {
   private fgmCanTransform = false;
   private onChanged: (() => void) | null = null;
   private daysPlayed = 0;
+  private patrolInspectionIdx = new Map<string, number>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -1051,6 +1064,18 @@ export class SubjectSystem {
         id: s.data.id,
         name: s.data.name,
         roleLabel: roleLabel(s.data.role),
+        jobLabel: jobDisplayLabel(s),
+      }));
+  }
+
+  workersOf(buildingId: string): BuildingResident[] {
+    return this.subjects
+      .filter((s) => s.data.workplaceId === buildingId)
+      .map((s) => ({
+        id: s.data.id,
+        name: s.data.name,
+        roleLabel: roleLabel(s.data.role),
+        jobLabel: jobDisplayLabel(s),
       }));
   }
 
@@ -1771,8 +1796,76 @@ export class SubjectSystem {
     managed.data.zone = slot.zone;
 
     const home = this.buildings?.getHousePoint(managed.data.houseId) ?? null;
-    const target = randomPointInZone(slot.zone, this.world, home);
+    const fallback = randomPointInZone(slot.zone, this.world, home);
+    const target =
+      slot.activity === 'patrol'
+        ? this.pickPatrolTarget(managed, fallback)
+        : fallback;
     this.nudgeToward(managed.data.id, target.x, target.y, 40);
+  }
+
+  private static readonly MILITARY_PATROL_ROLES = new Set([
+    'guard',
+    'soldier',
+    'archer',
+    'elite_guard',
+    'elite_archer',
+    'knight',
+  ]);
+
+  /**
+   * Guards patrol around the dungeon, soldiers/archers/knights/elites around the barracks
+   * (the keep is the fallback for either if that building doesn't exist yet). They stay
+   * within that influence sphere, preferring roads/bridges and cycling through nearby civic
+   * buildings as inspection stops.
+   */
+  private pickPatrolTarget(managed: ManagedSubject, fallback: Point): Point {
+    if (!this.buildings) return fallback;
+    if (!SubjectSystem.MILITARY_PATROL_ROLES.has(managed.data.role)) return fallback;
+    const workplaceId = managed.data.workplaceId;
+    const origin =
+      (workplaceId ? this.buildings.getById(workplaceId) : null) ??
+      (managed.data.role === 'guard'
+        ? this.buildings.getDungeonPoint()
+        : this.buildings.getBarracksPoint()) ??
+      this.buildings.getActiveKeepPoint();
+    if (!origin) return fallback;
+    const radius = this.buildings.getMilitaryInfluenceRadius();
+
+    if (Math.random() < 0.3) {
+      const posts = this.buildings
+        .listInspectableBuildingsInSphere(origin.x, origin.y, radius)
+        .filter((b) => PATROL_INSPECTION_KINDS.includes(b.kind));
+      if (posts.length) {
+        const idx = this.patrolInspectionIdx.get(managed.data.id) ?? 0;
+        const post = posts[idx % posts.length]!;
+        this.patrolInspectionIdx.set(managed.data.id, idx + 1);
+        return { x: post.x, y: post.y };
+      }
+    }
+
+    const roadPts = this.buildings
+      .listRoadPoints()
+      .filter(
+        (p) => Phaser.Math.Distance.Between(origin.x, origin.y, p.x, p.y) <= radius
+      );
+    if (roadPts.length) {
+      return roadPts[Math.floor(Math.random() * roadPts.length)]!;
+    }
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * radius;
+    return {
+      x: Phaser.Math.Clamp(
+        origin.x + Math.cos(angle) * dist,
+        32,
+        this.world.width - 32
+      ),
+      y: Phaser.Math.Clamp(
+        origin.y + Math.sin(angle) * dist,
+        32,
+        this.world.height - 32
+      ),
+    };
   }
 
   private toSnapshot(managed: ManagedSubject): SubjectSnapshot {
@@ -1827,9 +1920,31 @@ export class SubjectSystem {
         ? `Expecting (${managed.data.pregnantDaysLeft ?? '?'} days)`
         : undefined,
       spouseLabel: spouse?.data.name,
-      jobLabel: managed.data.job,
+      jobLabel: jobDisplayLabel(managed),
+      workplaceLabel: managed.data.workplaceId
+        ? (this.buildings?.displayNameForId(managed.data.workplaceId) ??
+          'a workplace')
+        : 'No assigned workplace',
     };
   }
+}
+
+function jobDisplayLabel(managed: ManagedSubject): string {
+  if (managed.data.job) {
+    switch (managed.data.job) {
+      case 'farmer':
+        return 'Farmer';
+      case 'baker':
+        return 'Baker';
+      case 'merchant':
+        return 'Merchant';
+      case 'fisherman':
+        return 'Fisherman';
+      default:
+        return managed.data.job;
+    }
+  }
+  return roleLabel(managed.data.role);
 }
 
 function facingFromDelta(dx: number, dy: number): Direction {
