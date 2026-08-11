@@ -136,6 +136,72 @@ export class PathGrid {
     return this.bfs(start, goal);
   }
 
+  /**
+   * If `from` sits in a small land pocket (mountain/river bowl), return the
+   * nearest walkable cell on a larger landmass. Does not teleport past walls —
+   * search crosses blocked terrain only to leave the pocket.
+   */
+  escapeLandPocket(from: Point, maxPocketCells = 140): Point | null {
+    let start = this.worldToGrid(from.x, from.y);
+    if (this.isBlocked(start.col, start.row)) {
+      const alt = this.nearestOpen(start);
+      if (!alt) return null;
+      start = alt;
+    }
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    const pocket = new Set<string>();
+    const pq: GridPos[] = [start];
+    pocket.add(`${start.col},${start.row}`);
+    while (pq.length) {
+      if (pocket.size > maxPocketCells) {
+        // Large connected land — not an isolated bowl (walls may still block).
+        return null;
+      }
+      const cur = pq.shift()!;
+      for (const [dc, dr] of dirs) {
+        const n = { col: cur.col + dc!, row: cur.row + dr! };
+        const key = `${n.col},${n.row}`;
+        if (pocket.has(key)) continue;
+        if (n.col < 0 || n.row < 0 || n.col >= this.cols || n.row >= this.rows) {
+          continue;
+        }
+        if (this.isBlocked(n.col, n.row)) continue;
+        pocket.add(key);
+        pq.push(n);
+      }
+    }
+
+    const seen = new Set<string>(pocket);
+    const q: GridPos[] = [];
+    for (const key of pocket) {
+      const [c, r] = key.split(',').map(Number) as [number, number];
+      q.push({ col: c, row: r });
+    }
+    while (q.length) {
+      const cur = q.shift()!;
+      for (const [dc, dr] of dirs) {
+        const n = { col: cur.col + dc!, row: cur.row + dr! };
+        const key = `${n.col},${n.row}`;
+        if (seen.has(key)) continue;
+        if (n.col < 0 || n.row < 0 || n.col >= this.cols || n.row >= this.rows) {
+          continue;
+        }
+        seen.add(key);
+        if (!this.isBlocked(n.col, n.row) && !pocket.has(key)) {
+          return this.gridToWorld(n.col, n.row);
+        }
+        // Cross mountains/water while searching for the rim of the pocket
+        q.push(n);
+      }
+    }
+    return null;
+  }
+
   private nearestOpen(pos: GridPos): GridPos | null {
     if (!this.isBlocked(pos.col, pos.row)) return pos;
     const q: GridPos[] = [pos];

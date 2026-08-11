@@ -1223,10 +1223,23 @@ export class RaidSystem {
       raider.pathIndex = 0;
       return;
     }
-    const path = this.pathGrid.findPath(
-      { x: raider.sprite.x, y: raider.sprite.y },
-      { x: this.keep.x, y: this.keep.y + 20 }
-    );
+    const goal = { x: this.keep.x, y: this.keep.y + 20 };
+    let from = { x: raider.sprite.x, y: raider.sprite.y };
+    let path = this.pathGrid.findPath(from, goal);
+    // Camps in mountain bowls have no land corridor — slip out onto the rim,
+    // then path (still respects walls; does not warp into the fort).
+    if (!path || path.length === 0) {
+      const exit = this.pathGrid.escapeLandPocket(from);
+      if (
+        exit &&
+        Math.hypot(exit.x - from.x, exit.y - from.y) > 4
+      ) {
+        raider.sprite.setPosition(exit.x, exit.y);
+        raider.sprite.setDepth(25 + exit.y * 0.01);
+        from = exit;
+        path = this.pathGrid.findPath(from, goal);
+      }
+    }
     raider.path = path ?? [];
     raider.pathIndex = 0;
   }

@@ -184,6 +184,7 @@ export class EncampmentSystem {
   private buildings: BuildingSystem | null = null;
   private subjects: SubjectSystem | null = null;
   private raids: RaidSystem | null = null;
+  private pathGrid: PathGrid | null = null;
   private onChanged: (() => void) | null = null;
   private daysPlayed = 0;
   private selectedId: string | null = null;
@@ -207,8 +208,8 @@ export class EncampmentSystem {
     this.raids = r;
   }
 
-  setPathGrid(_g: PathGrid): void {
-    // Reserved for future path-aware camp placement
+  setPathGrid(g: PathGrid): void {
+    this.pathGrid = g;
   }
 
   setMapData(mapData: number[][]): void {
@@ -1177,8 +1178,9 @@ export class EncampmentSystem {
   }
 
   private pickFringePoint(): { x: number; y: number } | null {
-    for (let attempt = 0; attempt < 48; attempt++) {
-      const zone = Math.random() < 0.5 ? 'forest' : 'mountain';
+    // Prefer forest fringe — mountain pockets often have no land path to the keep.
+    for (let attempt = 0; attempt < 72; attempt++) {
+      const zone = Math.random() < 0.75 ? 'forest' : 'mountain';
       const p = randomPointInZone(zone, this.world, null);
       // Push toward map edge a bit
       const cx = this.world.width / 2;
@@ -1191,9 +1193,19 @@ export class EncampmentSystem {
         y: Phaser.Math.Clamp(p.y + (dy / len) * 40, 40, this.world.height - 40),
       };
       const land = this.snapToLand(pos.x, pos.y);
-      if (land) return land;
+      if (land && this.canRaidFrom(land.x, land.y)) return land;
     }
     return null;
+  }
+
+  /** True if a raid party can path from this camp to the keep over land. */
+  private canRaidFrom(x: number, y: number): boolean {
+    if (!this.pathGrid) return true;
+    const path = this.pathGrid.findPath(
+      { x, y },
+      { x: this.keep.x, y: this.keep.y + 20 }
+    );
+    return Boolean(path && path.length > 0);
   }
 
   private pickEdgePoint(): { x: number; y: number } {
