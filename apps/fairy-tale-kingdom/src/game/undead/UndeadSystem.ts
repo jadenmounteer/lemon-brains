@@ -382,24 +382,31 @@ export class UndeadSystem {
 
   private spawnVampireCastle(): void {
     const keep = this.buildings.getActiveKeepPoint();
-    const cx = keep.x + (Math.random() < 0.5 ? -1 : 1) * (280 + Math.random() * 200);
-    const cy = keep.y + (Math.random() < 0.5 ? -1 : 1) * (200 + Math.random() * 160);
-    const id = `vamp-castle-${this.nextId++}`;
-    const sprite = this.scene.add
-      .image(cx, cy, PROP_KEYS.vampireCastle)
-      .setDepth(8)
-      .setOrigin(0.5, 1);
-    this.castles.push({
-      id,
-      x: cx,
-      y: cy,
-      hp: 40,
-      sprite,
-      lifeMs: 180_000 + Math.random() * 120_000,
-    });
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: 'A vampire castle appears on the fringe!',
-    });
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const cx =
+        keep.x + (Math.random() < 0.5 ? -1 : 1) * (280 + Math.random() * 200);
+      const cy =
+        keep.y + (Math.random() < 0.5 ? -1 : 1) * (200 + Math.random() * 160);
+      if (!this.buildings.isLandAt(cx, cy - 8)) continue;
+      if (!this.buildings.isLandAt(cx, cy - 20)) continue;
+      const id = `vamp-castle-${this.nextId++}`;
+      const sprite = this.scene.add
+        .image(cx, cy, PROP_KEYS.vampireCastle)
+        .setDepth(8)
+        .setOrigin(0.5, 1);
+      this.castles.push({
+        id,
+        x: cx,
+        y: cy,
+        hp: 40,
+        sprite,
+        lifeMs: 180_000 + Math.random() * 120_000,
+      });
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'A vampire castle appears on the fringe!',
+      });
+      return;
+    }
   }
 
   private tryVampireBite(): void {

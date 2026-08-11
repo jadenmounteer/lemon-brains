@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PROP_KEYS } from '../art/assetManifest';
+import { PROP_KEYS, TILE_SIZE, isTerrainBlocked } from '../art/assetManifest';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { Phase12Balance } from '../economy/phase12Balance';
 import type { PathGrid } from '../path/PathGrid';
@@ -174,6 +174,7 @@ export class EncampmentSystem {
   private onChanged: (() => void) | null = null;
   private daysPlayed = 0;
   private selectedId: string | null = null;
+  private mapData: number[][] | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -195,6 +196,10 @@ export class EncampmentSystem {
 
   setPathGrid(_g: PathGrid): void {
     // Reserved for future path-aware camp placement
+  }
+
+  setMapData(mapData: number[][]): void {
+    this.mapData = mapData;
   }
 
   setOnChanged(cb: () => void): void {
@@ -960,45 +965,136 @@ export class EncampmentSystem {
   }
 
   private pickFringePoint(): { x: number; y: number } | null {
-    const zone = Math.random() < 0.5 ? 'forest' : 'mountain';
-    const p = randomPointInZone(zone, this.world, null);
-    // Push toward map edge a bit
-    const cx = this.world.width / 2;
-    const cy = this.world.height / 2;
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    const len = Math.hypot(dx, dy) || 1;
-    return {
-      x: Phaser.Math.Clamp(p.x + (dx / len) * 40, 40, this.world.width - 40),
-      y: Phaser.Math.Clamp(p.y + (dy / len) * 40, 40, this.world.height - 40),
-    };
+    for (let attempt = 0; attempt < 48; attempt++) {
+      const zone = Math.random() < 0.5 ? 'forest' : 'mountain';
+      const p = randomPointInZone(zone, this.world, null);
+      // Push toward map edge a bit
+      const cx = this.world.width / 2;
+      const cy = this.world.height / 2;
+      const dx = p.x - cx;
+      const dy = p.y - cy;
+      const len = Math.hypot(dx, dy) || 1;
+      const pos = {
+        x: Phaser.Math.Clamp(p.x + (dx / len) * 40, 40, this.world.width - 40),
+        y: Phaser.Math.Clamp(p.y + (dy / len) * 40, 40, this.world.height - 40),
+      };
+      const land = this.snapToLand(pos.x, pos.y);
+      if (land) return land;
+    }
+    return null;
   }
 
   private pickEdgePoint(): { x: number; y: number } {
     const pad = 36;
-    const side = Phaser.Math.Between(0, 3);
-    switch (side) {
-      case 0:
-        return {
-          x: Phaser.Math.Between(pad, this.world.width - pad),
-          y: pad,
-        };
-      case 1:
-        return {
-          x: Phaser.Math.Between(pad, this.world.width - pad),
-          y: this.world.height - pad,
-        };
-      case 2:
-        return {
-          x: pad,
-          y: Phaser.Math.Between(pad, this.world.height - pad),
-        };
-      default:
-        return {
-          x: this.world.width - pad,
-          y: Phaser.Math.Between(pad, this.world.height - pad),
-        };
+    for (let attempt = 0; attempt < 48; attempt++) {
+      const side = Phaser.Math.Between(0, 3);
+      let x = 0;
+      let y = 0;
+      switch (side) {
+        case 0:
+          x = Phaser.Math.Between(pad, this.world.width - pad);
+          y = pad;
+          break;
+        case 1:
+          x = Phaser.Math.Between(pad, this.world.width - pad);
+          y = this.world.height - pad;
+          break;
+        case 2:
+          x = pad;
+          y = Phaser.Math.Between(pad, this.world.height - pad);
+          break;
+        default:
+          x = this.world.width - pad;
+          y = Phaser.Math.Between(pad, this.world.height - pad);
+          break;
+      }
+      // Walk inland from the ocean fringe until we hit dry land.
+      const cx = this.world.width / 2;
+      const cy = this.world.height / 2;
+      for (let step = 0; step < 50; step++) {
+        if (this.isCampLandOk(x, y)) {
+          return { x, y };
+        }
+        x += Math.sign(cx - x) * TILE_SIZE;
+        y += Math.sign(cy - y) * TILE_SIZE;
+        x = Phaser.Math.Clamp(x, pad, this.world.width - pad);
+        y = Phaser.Math.Clamp(y, pad, this.world.height - pad);
+      }
     }
+    // Last resort: land near keep but outside clearance
+    const ang = Math.random() * Math.PI * 2;
+    const dist = this.keepClearance() + 40;
+    return (
+      this.snapToLand(
+        this.keep.x + Math.cos(ang) * dist,
+        this.keep.y + Math.sin(ang) * dist
+      ) ?? { x: this.keep.x + dist, y: this.keep.y }
+    );
+  }
+
+  /** Sample the camp footprint — origin is bottom-center of the sprite. */
+  private isCampLandOk(x: number, y: number): boolean {
+    if (!this.mapData && this.buildings) {
+      // Prefer BuildingSystem if map was only wired there
+      const samples: [number, number][] = [
+        [0, -8],
+        [0, -16],
+        [-16, -8],
+        [16, -8],
+        [0, -24],
+        [-12, -20],
+        [12, -20],
+      ];
+      return samples.every(([dx, dy]) => this.buildings!.isLandAt(x + dx, y + dy));
+    }
+    if (!this.mapData) return true;
+    const samples: [number, number][] = [
+      [0, -8],
+      [0, -16],
+      [-16, -8],
+      [16, -8],
+      [0, -24],
+      [-12, -20],
+      [12, -20],
+    ];
+    for (const [dx, dy] of samples) {
+      const t = this.tileAt(x + dx, y + dy);
+      if (t !== null && isTerrainBlocked(t)) return false;
+    }
+    return true;
+  }
+
+  private tileAt(worldX: number, worldY: number): number | null {
+    if (!this.mapData) return null;
+    const r = Math.floor(worldY / TILE_SIZE);
+    const c = Math.floor(worldX / TILE_SIZE);
+    return this.mapData[r]?.[c] ?? null;
+  }
+
+  /** Spiral out from a point until the camp footprint is on land. */
+  private snapToLand(
+    x: number,
+    y: number,
+    maxRadius = 24
+  ): { x: number; y: number } | null {
+    if (this.isCampLandOk(x, y)) return { x, y };
+    for (let radius = 1; radius <= maxRadius; radius++) {
+      for (let i = 0; i < 12; i++) {
+        const ang = (i / 12) * Math.PI * 2;
+        const nx = x + Math.cos(ang) * radius * TILE_SIZE;
+        const ny = y + Math.sin(ang) * radius * TILE_SIZE;
+        if (
+          nx < 40 ||
+          ny < 40 ||
+          nx > this.world.width - 40 ||
+          ny > this.world.height - 40
+        ) {
+          continue;
+        }
+        if (this.isCampLandOk(nx, ny)) return { x: nx, y: ny };
+      }
+    }
+    return null;
   }
 
   private createCamp(
@@ -1019,6 +1115,11 @@ export class EncampmentSystem {
       raidCooldownMs?: number;
     }
   ): CampRecord | null {
+    const land = this.snapToLand(x, y);
+    if (!land) return null;
+    x = land.x;
+    y = land.y;
+
     const id = opts?.id ?? `camp-${this.nextId++}`;
     const match = /^camp-(\d+)$/.exec(id);
     if (match) this.nextId = Math.max(this.nextId, Number(match[1]) + 1);

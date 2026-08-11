@@ -237,6 +237,7 @@ export class KingdomScene extends Phaser.Scene {
       { width: WORLD_WIDTH, height: WORLD_HEIGHT },
       { x: cx, y: cy }
     );
+    this.encampments.setMapData(this.mapData);
     this.encampments.setBuildings(this.buildings);
     this.encampments.setSubjects(this.subjects);
     this.encampments.setRaids(this.raids);

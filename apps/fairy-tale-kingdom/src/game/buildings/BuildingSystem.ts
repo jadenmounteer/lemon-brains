@@ -154,6 +154,13 @@ export class BuildingSystem {
     this.mapData = mapData;
   }
 
+  /** True when the world point sits on walkable land (not water/mountain). */
+  isLandAt(worldX: number, worldY: number): boolean {
+    const t = this.tileAt(worldX, worldY);
+    if (t === null) return true;
+    return !isTerrainBlocked(t);
+  }
+
   setKeepSprite(sprite: Phaser.GameObjects.Image): void {
     this.keepSprite = sprite;
     this.makeInteractive(sprite, KEEP_ID);
@@ -1527,7 +1534,7 @@ export class BuildingSystem {
   }
 
   /** Every sampled tile under the footprint must be walkable land. */
-  private roadTerrainOk(box: Aabb): boolean {
+  private landTerrainOk(box: Aabb): boolean {
     if (!this.mapData) return true;
     for (let wy = box.top + TILE_SIZE / 2; wy < box.bottom; wy += TILE_SIZE) {
       for (let wx = box.left + TILE_SIZE / 2; wx < box.right; wx += TILE_SIZE) {
@@ -1536,6 +1543,11 @@ export class BuildingSystem {
       }
     }
     return true;
+  }
+
+  /** Every sampled tile under the footprint must be walkable land. */
+  private roadTerrainOk(box: Aabb): boolean {
+    return this.landTerrainOk(box);
   }
 
   /** Span must cross water in the middle with land at both ends (mirrors rebuildPathGrid). */
@@ -1589,9 +1601,16 @@ export class BuildingSystem {
     if (isFortKind(kind) && this.fortOccupied(x, y)) return false;
     const candidate =
       kind === 'bridge' ? bridgeAabb(x, y, rotation) : footprintAabb(kind, x, y);
-    if (kind === 'road' && !this.roadTerrainOk(candidate)) return false;
-    if (kind === 'bridge' && !this.bridgeTerrainOk(x, y, rotation)) return false;
-    if (kind === 'dock' && !this.dockTerrainOk(candidate)) return false;
+    // Bridges need water; docks may sit on/beside water. Everything else must be dry land.
+    if (kind === 'bridge') {
+      if (!this.bridgeTerrainOk(x, y, rotation)) return false;
+    } else if (kind === 'dock') {
+      if (!this.dockTerrainOk(candidate)) return false;
+    } else if (kind === 'road') {
+      if (!this.roadTerrainOk(candidate)) return false;
+    } else if (!this.landTerrainOk(candidate)) {
+      return false;
+    }
     if (this.keepHp > 0) {
       const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
       if (intersects(candidate, keepBox)) return false;
