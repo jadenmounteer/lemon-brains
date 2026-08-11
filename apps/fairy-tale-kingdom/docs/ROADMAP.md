@@ -26,7 +26,7 @@ Long-term phased vision.
 
 12.5 playing manual accessible via the hamburger menu. Shows the npc images and building images, explains what everything does. Shows you the gameplay mechanics (how to slay monsters, get a princess, restore a prince who has been turned into a frog, etc.)
 
-- spooky mode.
+- spooky mode. Add cemetaries along with the cathedrals. Necromancers can spawn zombis in cemetaries. If a zombie bites a unit, they also turn into a zombie triggering a zombie outbreak. SOldiers attack zombies. Necromancers can be arrested (not attacked by gaurds) if you click on them and trigger a gaurd to arrest them and throw them in a dungeon. Need to have the dungeon to perform an arrest. dead npcs can sometimes turn into goes
 
 - oceans - build docks and spawn fishing boats to gather food. Pirates to attack docs. Warships to defend your fishing boats. Peasants can have jobs (farmers, fishermen, bakers, etc.). Peasants enter the boats to go fishing. guards enter the warships to use them.
 
