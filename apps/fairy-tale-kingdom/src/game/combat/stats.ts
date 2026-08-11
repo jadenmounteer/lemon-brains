@@ -30,12 +30,17 @@ export const CombatBalance = {
   raiderMelee: 6,
   raiderBreach: 10,
   raiderBurn: 8,
+  raiderSiege: 12,
   giantDamageMult: 1.5,
   guardRange: 28,
   archerRange: 90,
   pillageRadius: 48,
   aggroRadius: 110,
   fleeRadius: 70,
+  repairPerTick: 4,
+  repairRange: 36,
+  chatRange: 40,
+  chatDurationMs: 3000,
   tickMs: 400,
 } as const;
 

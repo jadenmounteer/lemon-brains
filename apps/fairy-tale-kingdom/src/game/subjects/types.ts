@@ -37,7 +37,19 @@ export type ActivityId =
   | 'train'
   | 'flee'
   | 'fight'
-  | 'climb';
+  | 'climb'
+  | 'repair'
+  | 'chat';
+
+export type InterruptKind = 'flee' | 'repair' | 'chat';
+
+export interface SubjectInterrupt {
+  kind: InterruptKind;
+  /** Building id or keep */
+  targetId?: string;
+  partnerId?: string;
+  remainingMs?: number;
+}
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 

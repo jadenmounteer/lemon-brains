@@ -17,6 +17,7 @@ import {
 } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
+import { TaskSystem } from '../subjects/TaskSystem';
 
 const MAP_COLS = 80;
 const MAP_ROWS = 50;
@@ -35,6 +36,7 @@ export class KingdomScene extends Phaser.Scene {
   private buildings!: BuildingSystem;
   private raids!: RaidSystem;
   private combat!: CombatSystem;
+  private tasks!: TaskSystem;
   private pathGrid!: PathGrid;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private layoutRepo = new LayoutRepository();
@@ -112,6 +114,7 @@ export class KingdomScene extends Phaser.Scene {
       this.buildings,
       this.raids
     );
+    this.tasks = new TaskSystem(this.subjects, this.buildings);
 
     const saved = this.layoutRepo.loadSync();
     if (saved && saved.buildings.length > 0) {
@@ -273,6 +276,7 @@ export class KingdomScene extends Phaser.Scene {
     this.subjects?.update(delta);
     this.raids?.update(delta);
     this.combat?.update(delta);
+    this.tasks?.update(delta, this.raids?.hasActiveRaiders() ?? false);
     this.applyNightOverlay();
   }
 

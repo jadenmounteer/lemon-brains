@@ -22,7 +22,7 @@ import { KingdomEvents } from '../subjects/events';
 export const KEEP_ID = 'keep';
 
 const KEEP_BLURB =
-  'Your seat of power. If a rival army reaches it, the kingdom falls.';
+  'Your seat of power. A rival army must destroy it (0 HP) to take the kingdom.';
 
 export interface BuildingRecord {
   id: string;
@@ -422,15 +422,83 @@ export class BuildingSystem {
 
   damageKeep(amount: number): boolean {
     this.keepHp = Math.max(0, this.keepHp - amount);
-    if (this.keepSprite) {
-      const ratio = this.keepHp / this.keepMaxHp;
-      this.keepSprite.setTint(ratio < 0.35 ? 0xff6666 : 0xffffff);
-    }
+    this.applyKeepTint();
+    this.onLayoutChanged?.();
     return this.keepHp <= 0;
   }
 
   getKeepHp(): number {
     return this.keepHp;
+  }
+
+  getKeepMaxHp(): number {
+    return this.keepMaxHp;
+  }
+
+  getKeepPoint(): Point {
+    return this.keep;
+  }
+
+  /** Repair building or keep; returns true if now at full HP. */
+  repair(id: string, amount: number): boolean {
+    if (id === KEEP_ID) {
+      this.keepHp = Math.min(this.keepMaxHp, this.keepHp + amount);
+      this.applyKeepTint();
+      this.onLayoutChanged?.();
+      return this.keepHp >= this.keepMaxHp;
+    }
+    const b = this.getById(id);
+    if (!b) return true;
+    b.hp = Math.min(b.maxHp, b.hp + amount);
+    this.tintByHp(b);
+    this.onLayoutChanged?.();
+    return b.hp >= b.maxHp;
+  }
+
+  /** Damaged structures needing repair (keep id = `keep`). */
+  listDamaged(): { id: string; x: number; y: number; label: string }[] {
+    const out: { id: string; x: number; y: number; label: string }[] = [];
+    if (this.keepHp < this.keepMaxHp) {
+      out.push({
+        id: KEEP_ID,
+        x: this.keep.x,
+        y: this.keep.y,
+        label: 'the keep',
+      });
+    }
+    for (const b of this.buildings) {
+      if (b.hp >= b.maxHp) continue;
+      out.push({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        label: this.displayName(b),
+      });
+    }
+    return out;
+  }
+
+  displayNameForId(id: string): string {
+    if (id === KEEP_ID) return 'the keep';
+    const b = this.getById(id);
+    return b ? this.displayName(b) : 'a building';
+  }
+
+  private displayName(b: BuildingRecord): string {
+    if (b.kind === 'house') return `House ${b.labelIndex}`;
+    return BUILD_CATALOG.find((c) => c.kind === b.kind)?.name ?? b.kind;
+  }
+
+  private applyKeepTint(): void {
+    if (!this.keepSprite) return;
+    if (this.selectedId === KEEP_ID) {
+      this.keepSprite.setTint(0xfff0c0);
+      return;
+    }
+    const ratio = this.keepHp / this.keepMaxHp;
+    if (ratio < 0.35) this.keepSprite.setTint(0xff6666);
+    else if (ratio < 1) this.keepSprite.setTint(0xffcc88);
+    else this.keepSprite.clearTint();
   }
 
   private destroyBuilding(b: BuildingRecord): void {
@@ -524,15 +592,7 @@ export class BuildingSystem {
   }
 
   private applySelectionVisuals(): void {
-    if (this.keepSprite) {
-      if (this.selectedId === KEEP_ID) {
-        this.keepSprite.setTint(0xfff0c0);
-      } else {
-        const ratio = this.keepHp / this.keepMaxHp;
-        this.keepSprite.setTint(ratio < 0.35 ? 0xff6666 : 0xffffff);
-        if (ratio >= 0.35) this.keepSprite.clearTint();
-      }
-    }
+    this.applyKeepTint();
     for (const b of this.buildings) {
       if (b.id === this.selectedId) {
         b.sprite.setTint(0xfff0c0);

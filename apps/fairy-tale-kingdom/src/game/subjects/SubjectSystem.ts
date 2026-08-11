@@ -18,7 +18,9 @@ import { pickName } from './names';
 import { roleLabel, scheduleSummary, slotAtHour } from './schedules';
 import type {
   BuildingResident,
+  InterruptKind,
   Subject,
+  SubjectInterrupt,
   SubjectSnapshot,
 } from './types';
 import { randomPointInZone, type WorldBounds } from './zones';
@@ -28,6 +30,7 @@ export type ManagedSubject = {
   sprite: Phaser.GameObjects.Sprite;
   moving: boolean;
   fleeCooldownMs: number;
+  interrupt: SubjectInterrupt | null;
 };
 
 /** Three residents per starter house (house-0 then house-1). */
@@ -65,7 +68,103 @@ export class SubjectSystem {
   }
 
   setRaidMode(active: boolean): void {
+    const was = this.raidMode;
     this.raidMode = active;
+    if (active && !was) {
+      this.cancelInterrupts(['repair', 'chat']);
+    }
+  }
+
+  hasInterrupt(id: string): boolean {
+    return Boolean(this.getById(id)?.interrupt);
+  }
+
+  withInterrupt(kind: InterruptKind): ManagedSubject[] {
+    return this.subjects.filter((s) => s.interrupt?.kind === kind);
+  }
+
+  listInterrupts(kind: InterruptKind): SubjectInterrupt[] {
+    return this.subjects
+      .filter((s) => s.interrupt?.kind === kind)
+      .map((s) => s.interrupt!);
+  }
+
+  clearInterrupt(id: string): void {
+    const managed = this.getById(id);
+    if (!managed?.interrupt) return;
+    managed.interrupt = null;
+  }
+
+  cancelInterrupts(kinds: InterruptKind[]): void {
+    for (const s of this.subjects) {
+      if (s.interrupt && kinds.includes(s.interrupt.kind)) {
+        s.interrupt = null;
+      }
+    }
+  }
+
+  clearFleeInterrupts(): void {
+    for (const s of this.subjects) {
+      if (s.interrupt?.kind === 'flee') {
+        s.interrupt = null;
+      }
+    }
+  }
+
+  /** Free peasant for repair (no interrupt, not on wall). */
+  closestFreePeasant(x: number, y: number): string | null {
+    let best: ManagedSubject | null = null;
+    let bestD = Infinity;
+    for (const s of this.subjects) {
+      if (s.data.role !== 'peasant') continue;
+      if (s.interrupt || s.data.onWall) continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best?.data.id ?? null;
+  }
+
+  beginRepair(subjectId: string, targetId: string, label: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed) return;
+    managed.interrupt = { kind: 'repair', targetId };
+    managed.data.activity = 'repair';
+    managed.data.activityLabel = `Repairing ${label}`;
+  }
+
+  listFreeForChat(): ManagedSubject[] {
+    return this.subjects.filter(
+      (s) => !s.interrupt && !s.data.onWall && !s.moving
+    );
+  }
+
+  beginChat(aId: string, bId: string, durationMs: number): void {
+    const a = this.getById(aId);
+    const b = this.getById(bId);
+    if (!a || !b) return;
+    a.interrupt = {
+      kind: 'chat',
+      partnerId: bId,
+      remainingMs: durationMs,
+    };
+    b.interrupt = {
+      kind: 'chat',
+      partnerId: aId,
+      remainingMs: durationMs,
+    };
+    a.data.activity = 'chat';
+    b.data.activity = 'chat';
+    a.data.activityLabel = `Talking with ${b.data.name}`;
+    b.data.activityLabel = `Talking with ${a.data.name}`;
+    this.scene.tweens.killTweensOf(a.sprite);
+    this.scene.tweens.killTweensOf(b.sprite);
+    a.moving = false;
+    b.moving = false;
+    a.sprite.play(idleAnimKey(a.data.role));
+    b.sprite.play(idleAnimKey(b.data.role));
   }
 
   spawnSeed(): void {
@@ -269,6 +368,7 @@ export class SubjectSystem {
 
     if (!this.raidMode) {
       for (const managed of this.subjects) {
+        if (managed.interrupt) continue;
         if (!managed.moving && Math.random() < deltaMs * 0.0004) {
           this.nudgeTowardSchedule(managed);
         }
@@ -295,6 +395,7 @@ export class SubjectSystem {
         );
         if (!threat) continue;
         managed.fleeCooldownMs = 700;
+        managed.interrupt = { kind: 'flee' };
         managed.data.activity = 'flee';
         managed.data.activityLabel = 'Fleeing raiders';
         const keep = {
@@ -490,6 +591,7 @@ export class SubjectSystem {
       sprite,
       moving: false,
       fleeCooldownMs: 0,
+      interrupt: null,
     };
     this.applyHpTint(managed);
     this.subjects.push(managed);
@@ -532,6 +634,7 @@ export class SubjectSystem {
   private syncActivities(): void {
     if (this.raidMode) return;
     for (const managed of this.subjects) {
+      if (managed.interrupt) continue;
       const slot = slotAtHour(managed.data.role, this.clock.hour);
       managed.data.activity = slot.activity;
       managed.data.activityLabel = slot.label;
@@ -541,6 +644,7 @@ export class SubjectSystem {
 
   private nudgeTowardSchedule(managed: ManagedSubject): void {
     if (!managed.sprite.active || managed.moving || managed.data.onWall) return;
+    if (managed.interrupt) return;
 
     const slot = slotAtHour(managed.data.role, this.clock.hour);
     managed.data.activity = slot.activity;

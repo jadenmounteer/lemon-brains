@@ -18,7 +18,13 @@ export interface KeepPoint {
 
 type RaidKind = EnemyRole;
 
-type RaiderState = 'pathing' | 'fighting' | 'breaching' | 'burning' | 'done';
+type RaiderState =
+  | 'pathing'
+  | 'fighting'
+  | 'breaching'
+  | 'burning'
+  | 'sieging'
+  | 'done';
 
 export interface ActiveRaider {
   kind: RaidKind;
@@ -64,6 +70,7 @@ export class RaidSystem {
   private subjects: SubjectSystem | null = null;
   private pathGrid: PathGrid | null = null;
   private onChanged: (() => void) | null = null;
+  private siegeToastShown = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -169,6 +176,7 @@ export class RaidSystem {
     });
 
     this.buildings?.setRaidActive(true);
+    this.siegeToastShown = false;
 
     const edge = this.randomEdgeSpawn();
     const camp = this.scene.add
@@ -220,16 +228,25 @@ export class RaidSystem {
     const think = raider.thinkAccumMs >= CombatBalance.tickMs;
     if (think) raider.thinkAccumMs = 0;
 
-    if (
+    const atKeep =
       Phaser.Math.Distance.Between(
         raider.sprite.x,
         raider.sprite.y,
         this.keep.x,
         this.keep.y
-      ) < KEEP_REACH_PX
-    ) {
+      ) < KEEP_REACH_PX;
+
+    if (atKeep) {
+      if (raider.kind === 'enemy_army') {
+        this.tickSiege(raider, think);
+        return;
+      }
       this.onReachedKeep(raider);
       return;
+    }
+
+    if (raider.state === 'sieging') {
+      raider.state = 'pathing';
     }
 
     if (think) {
@@ -445,13 +462,31 @@ export class RaidSystem {
     });
   }
 
+  private tickSiege(raider: ActiveRaider, think: boolean): void {
+    if (!raider.sprite.active || raider.state === 'done') return;
+    raider.state = 'sieging';
+    raider.targetSubjectId = null;
+    raider.targetBuildingId = null;
+    this.faceToward(raider, this.keep.x, this.keep.y);
+    raider.sprite.play(idleAnimKey(raider.kind), true);
+
+    if (!this.siegeToastShown) {
+      this.siegeToastShown = true;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'The keep is under siege!',
+      });
+    }
+
+    if (!think) return;
+    const destroyed = this.buildings?.damageKeep(CombatBalance.raiderSiege);
+    if (destroyed) {
+      this.triggerGameOver();
+    }
+  }
+
   private onReachedKeep(raider: ActiveRaider): void {
     if (!raider.sprite.active || raider.state === 'done') return;
-
-    if (raider.kind === 'enemy_army') {
-      this.triggerGameOver();
-      return;
-    }
+    if (raider.kind === 'enemy_army') return;
 
     let amount = STEAL_AMOUNTS[raider.kind];
     if (this.buildings?.hasTavern()) {
@@ -477,7 +512,7 @@ export class RaidSystem {
     }
     this.scene.game.events.emit(KingdomEvents.GAME_OVER, {
       reason:
-        'A rival kingdom’s army stormed your keep. Your kingdom has fallen.',
+        'A rival kingdom’s army destroyed your keep. Your kingdom has fallen.',
     });
   }
 

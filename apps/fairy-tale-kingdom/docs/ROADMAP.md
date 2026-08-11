@@ -11,34 +11,35 @@ Long-term phased vision.
 | 3.5   | Kingdom meta + danger lite | Named kingdom, days played, new-kingdom menu, raids (steal gold / army lose)                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | 4     | Marketplace and buildings  | Hire units into houses; place house/wall/tavern; building effects                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 5     | Combat and defenses        | HP, pathing/breach, drawbridge, stairs, pillage + flee, combat AI                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| 6     | Depth and polish           | Richer schedules, more roles, save polish, audio, UX                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 6     | Tasks, repair, keep siege  | Schedule interrupts; peasant repair; army must destroy keep; street chat                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | 7     | Economy and royalty        | Fields/food, sickness, royal units, upgrade buildings. Fairy god mother makes princesses. If you have a king and queen, you can buy better units/buildings. If you have a prince and princess, they make units more effective and production, combat for a short period if they wave to them. Royalty can be captured by enemies and held for ransom until you pay. Fairy god mothers can make peasants into new princesses. A prince appears if you have a king and queen after a short amount of time. |
 
-## Phase 0–4 (done)
+8 Medeival seiges. Trebucheis, catapults, archers, batter rams, enemy army seige strategies. Your kingdom uses realistic defense strategies as well. Rather than tower defense mode, they line up without the walls and then the enemy uses strategy to focus their efforts on the walls or storm through the gates and raid and pillage and take the keep.
 
-Foundation through marketplace: hire into beds, place buildings, layout persistence, steal/army lose.
+## Phase 0–5 (done)
 
-## Phase 5 — Combat and defenses (current)
+Foundation through combat: HP, pathing/breach, drawbridge, stairs, pillage, flee, building inspect, HUD pop.
+
+## Phase 6 — Tasks, repair, keep siege (current)
 
 Checklist:
 
-- [x] HP on buildings, subjects, raiders; destroy/remove at 0; keep HP tracked
-- [x] PathGrid pathfinding; walls / closed drawbridges block; breach then repath
-- [x] Drawbridge (50g) — open peacetime, auto-close during raids
-- [x] Stairs (20g) — snap to wall; friendlies climb; archers +50% range / +25% damage on wall
-- [x] Raiders pillage (kill units / burn house·tavern·stairs) en route
-- [x] Peasants flee; guards melee; archers ranged
-- [x] Edge camp markers; layout persists HP / onWall / attachedWallId
+- [x] Enemy army must siege keep to 0 HP to win (no instant touch-lose)
+- [x] Bandits/giants still steal gold on keep reach
+- [x] Interrupt priority: flee → combat → repair → chat → schedule
+- [x] Peasants repair damaged buildings and keep; cancel on raid
+- [x] Lightweight peacetime street chat between nearby free subjects
 
-## Phase 6 — next
+## Phase 7 — next
 
-Richer schedules, audio, UX polish.
+Economy (fields/food) and royalty systems.
 
 ## Non-goals (for now)
 
 - Manual combat orders
 - Enemies climbing stairs
-- Repair / demolish tools
+- Manual repair / demolish tools
+- Rebuild destroyed buildings from ashes
 - Multiplayer / auth
 
 ## Product north star
