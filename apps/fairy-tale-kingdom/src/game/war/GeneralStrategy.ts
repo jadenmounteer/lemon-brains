@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { KEEP_ID, type BuildingSystem } from '../buildings/BuildingSystem';
+import type { BuildingSystem } from '../buildings/BuildingSystem';
 
 export type StrategyFocus = 'raid_fields' | 'weak_keep' | 'soft_breach';
 
@@ -17,21 +17,41 @@ export interface SiegePlan {
   breachY: number;
 }
 
+export interface PlanSiegeOpts {
+  /** Skip keeps already taken this siege */
+  excludeKeepIds?: string[];
+  /** After fields burn / a keep falls — press remaining keeps, skip food raids */
+  preferKeepAssault?: boolean;
+  reason?: 'keep_fallen' | 'fields_cleared' | 'retarget';
+}
+
 /**
  * Smart enemy-general battlefield assessment.
  * Prefers burning exposed food, then the weakest keep, then the softest approach.
+ * Returns null when no keeps remain (kingdom already fallen).
  */
 export function planSiege(
   buildings: BuildingSystem,
   camp: { x: number; y: number },
-  generalName?: string
-): SiegePlan {
-  const keeps = buildings.listKeepTargets().map((k) => ({
-    ...k,
-    defenseScore: buildings.defenseScoreNear(k.x, k.y),
-  }));
-  const fields = buildings.fieldsOutsideWalls();
+  generalName?: string,
+  opts?: PlanSiegeOpts
+): SiegePlan | null {
+  const excluded = new Set(opts?.excludeKeepIds ?? []);
+  const keeps = buildings
+    .listKeepTargets()
+    .filter((k) => !excluded.has(k.id))
+    .map((k) => ({
+      ...k,
+      defenseScore: buildings.defenseScoreNear(k.x, k.y),
+    }));
+
+  if (keeps.length === 0) return null;
+
+  const fields = opts?.preferKeepAssault
+    ? []
+    : buildings.fieldsOutsideWalls();
   const who = generalName ?? 'The enemy general';
+  const reason = opts?.reason;
 
   const ranked = [...keeps].sort((a, b) => {
     const ra = a.hp / Math.max(1, a.maxHp);
@@ -40,16 +60,7 @@ export function planSiege(
     return a.defenseScore - b.defenseScore;
   });
 
-  const fallback = buildings.getActiveKeepPoint();
-  const target = ranked[0] ?? {
-    id: KEEP_ID,
-    x: fallback.x,
-    y: fallback.y,
-    hp: 1,
-    maxHp: 1,
-    defenseScore: 0,
-  };
-
+  const target = ranked[0]!;
   const soft = softestApproach(buildings, target, camp);
 
   if (fields.length >= 1) {
@@ -67,13 +78,25 @@ export function planSiege(
 
   const multiKeep = keeps.length > 1;
   const weakRatio = target.hp / Math.max(1, target.maxHp);
-  if (multiKeep || weakRatio < 0.85 || target.defenseScore < 8) {
+  const assaultKeep =
+    multiKeep ||
+    weakRatio < 0.85 ||
+    target.defenseScore < 8 ||
+    Boolean(opts?.preferKeepAssault);
+
+  if (assaultKeep) {
+    const orderLabel =
+      reason === 'keep_fallen'
+        ? `${who} redirects to the next keep!`
+        : reason === 'fields_cleared'
+          ? `${who} turns from the fields to the next keep!`
+          : `${who} marches on the weakest keep!`;
     return {
       focus: 'weak_keep',
       keepId: target.id,
       keepX: target.x,
       keepY: target.y,
-      orderLabel: `${who} marches on the weakest keep!`,
+      orderLabel,
       fieldIds: [],
       breachX: soft.x,
       breachY: soft.y,
@@ -85,7 +108,10 @@ export function planSiege(
     keepId: target.id,
     keepX: target.x,
     keepY: target.y,
-    orderLabel: `${who} strikes the least-defended approach!`,
+    orderLabel:
+      reason === 'keep_fallen'
+        ? `${who} finds a new approach on the remaining keep!`
+        : `${who} strikes the least-defended approach!`,
     fieldIds: [],
     breachX: soft.x,
     breachY: soft.y,

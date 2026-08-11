@@ -126,6 +126,9 @@ export class RaidSystem {
   private campPoint: KeepPoint | null = null;
   private siegePlan: SiegePlan | null = null;
   private generalName: string | null = null;
+  /** Keeps already taken during this continuous siege campaign */
+  private fallenKeepIds: string[] = [];
+  private replanCooldownMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -206,6 +209,8 @@ export class RaidSystem {
     this.routToastShown = false;
     this.siegeToastShown = false;
     this.generalName = opts.generalName ?? null;
+    this.fallenKeepIds = [];
+    this.replanCooldownMs = 0;
 
     // Smart general picks the battlefield plan before the host moves
     if (this.buildings && opts.generalName) {
@@ -214,12 +219,17 @@ export class RaidSystem {
         { x: opts.x, y: opts.y },
         opts.generalName
       );
-      this.keep.x = this.siegePlan.keepX;
-      this.keep.y = this.siegePlan.keepY;
-      this.engines?.setKeep({ x: this.siegePlan.keepX, y: this.siegePlan.keepY });
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: this.siegePlan.orderLabel,
-      });
+      if (this.siegePlan) {
+        this.keep.x = this.siegePlan.keepX;
+        this.keep.y = this.siegePlan.keepY;
+        this.engines?.setKeep({
+          x: this.siegePlan.keepX,
+          y: this.siegePlan.keepY,
+        });
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: this.siegePlan.orderLabel,
+        });
+      }
     } else {
       this.siegePlan = null;
       const active = this.buildings?.getActiveKeepPoint();
@@ -330,6 +340,9 @@ export class RaidSystem {
   update(deltaMs: number): void {
     if (this.gameOver) return;
 
+    this.replanCooldownMs = Math.max(0, this.replanCooldownMs - deltaMs);
+    this.evaluateSiegePlan();
+
     // Hold the smart general's chosen keep; otherwise track the active keep
     if (this.siegePlan && this.activeWaveKind === 'enemy_army') {
       const pt = this.buildings?.getKeepTargetPoint(this.siegePlan.keepId);
@@ -365,6 +378,124 @@ export class RaidSystem {
 
     if (!this.hasActiveRaiders() && this.siegePhase !== 'none') {
       this.endWave();
+    }
+  }
+
+  /**
+   * Mid-siege: if the target keep fell or the field raid succeeded,
+   * pick a new plan aimed at remaining keeps until the kingdom falls.
+   */
+  private evaluateSiegePlan(): void {
+    if (
+      !this.buildings ||
+      !this.generalName ||
+      this.activeWaveKind !== 'enemy_army' ||
+      this.siegePhase === 'none' ||
+      this.siegePhase === 'routing' ||
+      this.replanCooldownMs > 0
+    ) {
+      return;
+    }
+
+    const camp = this.campPoint ?? { x: this.keep.x, y: this.keep.y };
+    const keepsLeft = this.buildings.listKeepTargets();
+    if (keepsLeft.length === 0) return;
+
+    const plan = this.siegePlan;
+    let reason: 'keep_fallen' | 'fields_cleared' | null = null;
+
+    if (plan) {
+      const targetAlive = Boolean(
+        this.buildings.getKeepTargetPoint(plan.keepId)
+      );
+      if (!targetAlive) {
+        if (!this.fallenKeepIds.includes(plan.keepId)) {
+          this.fallenKeepIds.push(plan.keepId);
+        }
+        reason = 'keep_fallen';
+      } else if (plan.focus === 'raid_fields') {
+        const priorityLeft = plan.fieldIds.some((id) => {
+          const b = this.buildings?.getById(id);
+          return b && b.kind === 'field' && b.hp > 0;
+        });
+        const outerLeft = this.buildings.fieldsOutsideWalls().length > 0;
+        if (!priorityLeft && !outerLeft) {
+          reason = 'fields_cleared';
+        }
+      }
+    } else {
+      reason = 'keep_fallen';
+    }
+
+    if (!reason) return;
+
+    const next = planSiege(this.buildings, camp, this.generalName, {
+      excludeKeepIds: this.fallenKeepIds,
+      preferKeepAssault: true,
+      reason,
+    });
+    if (!next) return;
+
+    // Same keep + same focus → nothing useful changed
+    if (
+      plan &&
+      plan.keepId === next.keepId &&
+      plan.focus === next.focus &&
+      reason !== 'keep_fallen'
+    ) {
+      return;
+    }
+
+    this.applySiegePlan(next, reason === 'keep_fallen');
+  }
+
+  private applySiegePlan(plan: SiegePlan, keepFell: boolean): void {
+    this.siegePlan = plan;
+    this.keep.x = plan.keepX;
+    this.keep.y = plan.keepY;
+    this.engines?.setKeep({ x: plan.keepX, y: plan.keepY });
+    this.replanCooldownMs = 4000;
+    this.siegeToastShown = false;
+
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: plan.orderLabel,
+    });
+
+    // Field detachments rejoin the main push once food is done / keep fell
+    if (plan.focus !== 'raid_fields') {
+      for (const r of this.raiders) {
+        if (r.state === 'done' || !r.sprite.active) continue;
+        if (r.siegeRole === 'field_raid') {
+          r.siegeRole = 'main';
+          r.strategyFieldId = null;
+          r.targetBuildingId = null;
+        }
+      }
+    }
+
+    // Re-form invest line toward the new objective
+    const alive = this.raiders.filter(
+      (r) => r.state !== 'done' && r.sprite.active && r.kind === 'enemy_army'
+    );
+    alive.forEach((r, i) => {
+      const invest = this.investPoint(i, alive.length);
+      r.investX = invest.x;
+      r.investY = invest.y;
+      if (r.siegeRole === 'main') {
+        if (this.siegePhase === 'muster' || this.siegePhase === 'reduce') {
+          r.state = 'investing';
+        } else if (this.siegePhase === 'storm') {
+          r.state = 'pathing';
+          this.repath(r);
+        }
+      }
+    });
+
+    if (keepFell && this.siegePhase === 'storm') {
+      // Path may have changed after a keep drop — re-open reduce if blocked
+      if (!this.pathToKeepOpen()) {
+        this.siegePhase = 'reduce';
+      }
     }
   }
 
@@ -1111,6 +1242,8 @@ export class RaidSystem {
     this.activeWaveKind = null;
     this.siegePlan = null;
     this.generalName = null;
+    this.fallenKeepIds = [];
+    this.replanCooldownMs = 0;
     this.engines?.clear();
   }
 
