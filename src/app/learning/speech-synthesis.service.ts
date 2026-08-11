@@ -1,9 +1,26 @@
 import { Injectable } from '@angular/core';
 
+/** British / proper female voices that read closest to a Mary Poppins tone. */
+const PREFERRED_VOICE_PATTERN =
+  /google uk english female|kate|serena|martha|fiona|moira|karen|samantha/i;
+
 @Injectable({
   providedIn: 'root',
 })
 export class SpeechSynthesisService {
+  private cachedVoices: SpeechSynthesisVoice[] = [];
+
+  constructor() {
+    if (!this.isSupported()) {
+      return;
+    }
+
+    this.cachedVoices = window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      this.cachedVoices = window.speechSynthesis.getVoices();
+    });
+  }
+
   isSupported(): boolean {
     return (
       typeof window !== 'undefined' &&
@@ -21,14 +38,16 @@ export class SpeechSynthesisService {
     synthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text.trim());
-    utterance.rate = 0.85;
-    utterance.pitch = 1;
-    utterance.lang = 'en-US';
+    // Slightly slower + brighter for a proper British-nanny feel.
+    utterance.rate = 0.8;
+    utterance.pitch = 1.15;
+    utterance.lang = 'en-GB';
 
-    const voice = this.pickEnglishVoice(synthesis.getVoices());
+    const voice = this.pickPoppinsVoice(this.getVoices());
     if (voice) {
       try {
         utterance.voice = voice;
+        utterance.lang = voice.lang || 'en-GB';
       } catch {
         // Ignore invalid voice objects (common in test doubles).
       }
@@ -44,15 +63,32 @@ export class SpeechSynthesisService {
     window.speechSynthesis.cancel();
   }
 
-  private pickEnglishVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  private getVoices(): SpeechSynthesisVoice[] {
+    const live = window.speechSynthesis.getVoices();
+    if (live.length) {
+      this.cachedVoices = live;
+    }
+    return this.cachedVoices;
+  }
+
+  private pickPoppinsVoice(
+    voices: SpeechSynthesisVoice[]
+  ): SpeechSynthesisVoice | null {
     if (!voices.length) {
       return null;
     }
 
+    const british = voices.filter((voice) =>
+      /^en-GB\b/i.test(voice.lang)
+    );
+    const english = voices.filter((voice) => /^en\b/i.test(voice.lang));
+
     return (
-      voices.find((voice) => voice.lang === 'en-US' && /samantha|karen|moira|google/i.test(voice.name)) ??
-      voices.find((voice) => voice.lang.startsWith('en-US')) ??
-      voices.find((voice) => voice.lang.startsWith('en')) ??
+      british.find((voice) => PREFERRED_VOICE_PATTERN.test(voice.name)) ??
+      english.find((voice) => PREFERRED_VOICE_PATTERN.test(voice.name)) ??
+      british[0] ??
+      english.find((voice) => /female|woman|girl/i.test(voice.name)) ??
+      english[0] ??
       null
     );
   }
