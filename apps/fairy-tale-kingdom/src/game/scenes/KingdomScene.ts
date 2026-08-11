@@ -98,7 +98,9 @@ export class KingdomScene extends Phaser.Scene {
     map.createLayer(0, tileset, 0, 0)!.setDepth(0);
 
     const cx = WORLD_WIDTH / 2;
-    const cy = WORLD_HEIGHT / 2;
+    // Keep sits just south of the fort wall / drawbridge
+    const wallRow = Math.round((WORLD_HEIGHT / 2 - 40) / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
+    const cy = wallRow + 36;
     this.keepPoint = { x: cx, y: cy };
     const keepSprite = this.add
       .image(cx, cy, PROP_KEYS.keep)

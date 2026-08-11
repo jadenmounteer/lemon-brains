@@ -76,7 +76,7 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
   {
     role: 'physician',
     name: 'Physician',
-    blurb: 'Plague-masked healer. Tends the sick. Requires an Infirmary.',
+    blurb: 'Plague-masked healer. Cures the sick and tends wounds. Requires an Infirmary.',
     cost: 40,
     requiresBuilding: 'infirmary',
   },

@@ -575,55 +575,86 @@ function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
 }
 
 function drawKeep(scene: Phaser.Scene) {
-  const w = 64;
-  const h = 56;
+  const w = 80;
+  const h = 68;
   const tex = createCanvas(scene, PROP_KEYS.keep, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 18, 52, 36, palette.stone);
-  fillRect(ctx, 6, 18, 52, 2, palette.ink);
-  fillRect(ctx, 6, 18, 2, 36, palette.ink);
-  fillRect(ctx, 56, 18, 2, 36, palette.ink);
-  for (let i = 0; i < 6; i++) {
-    fillRect(ctx, 8 + i * 9, 6, 7, 14, palette.stone);
-    fillRect(ctx, 8 + i * 9, 6, 7, 1, palette.ink);
+  fillRect(ctx, 8, 22, 64, 42, palette.stone);
+  fillRect(ctx, 8, 22, 64, 2, palette.ink);
+  fillRect(ctx, 8, 22, 2, 42, palette.ink);
+  fillRect(ctx, 70, 22, 2, 42, palette.ink);
+  for (let i = 0; i < 7; i++) {
+    fillRect(ctx, 10 + i * 9, 8, 7, 16, palette.stone);
+    fillRect(ctx, 10 + i * 9, 8, 7, 1, palette.ink);
   }
-  fillRect(ctx, 26, 38, 12, 16, palette.woodDark);
-  fillRect(ctx, 14, 28, 6, 5, palette.cream);
-  fillRect(ctx, 44, 28, 6, 5, palette.cream);
-  fillRect(ctx, 28, 26, 8, 6, palette.gold);
+  fillRect(ctx, 32, 46, 16, 18, palette.woodDark);
+  fillRect(ctx, 16, 32, 7, 6, palette.cream);
+  fillRect(ctx, 57, 32, 7, 6, palette.cream);
+  fillRect(ctx, 34, 30, 12, 8, palette.gold);
+  fillRect(ctx, 36, 12, 8, 6, palette.roof);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.keepInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 6, 18, 52, 36, palette.wood);
-  fillRect(ic, 10, 24, 16, 12, palette.roof);
-  fillRect(ic, 36, 22, 14, 20, palette.stoneDark);
-  fillRect(ic, 40, 28, 6, 8, palette.gold);
-  fillRect(ic, 28, 40, 8, 10, palette.woodDark);
+  // stone floor + tapestries
+  fillRect(ic, 8, 22, 64, 42, palette.stoneDark);
+  fillRect(ic, 10, 24, 60, 38, palette.wood);
+  fillRect(ic, 12, 26, 18, 14, palette.roof);
+  fillRect(ic, 14, 28, 14, 10, 0x6b2040);
+  // throne dais
+  fillRect(ic, 48, 28, 20, 24, palette.stone);
+  fillRect(ic, 52, 32, 12, 14, palette.gold);
+  fillRect(ic, 54, 30, 8, 4, palette.cream);
+  // long table
+  fillRect(ic, 18, 44, 28, 6, palette.woodDark);
+  fillRect(ic, 20, 42, 4, 4, palette.wood);
+  fillRect(ic, 40, 42, 4, 4, palette.wood);
+  // hearth niche (fire sprite overlays)
+  fillRect(ic, 28, 50, 14, 10, palette.stoneDark);
+  fillRect(ic, 30, 52, 10, 6, palette.ink);
+  fillRect(ic, 34, 54, 2, 2, 0xff6622);
+  // banner
+  fillRect(ic, 36, 24, 6, 12, palette.clothKing);
+  pixel(ic, 38, 28, palette.gold);
   int.refresh();
 }
 
 function drawHouse(scene: Phaser.Scene) {
-  const w = 48;
-  const h = 44;
+  const w = 56;
+  const h = 52;
   const tex = createCanvas(scene, PROP_KEYS.house, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 18, 36, 24, palette.wood);
-  fillRect(ctx, 6, 18, 36, 1, palette.ink);
-  for (let row = 0; row < 10; row++) {
-    fillRect(ctx, 6 + row, 8 + row, 36 - row * 2, 1, palette.roof);
+  fillRect(ctx, 6, 20, 44, 28, palette.wood);
+  fillRect(ctx, 6, 20, 44, 1, palette.ink);
+  for (let row = 0; row < 12; row++) {
+    fillRect(ctx, 6 + row, 8 + row, 44 - row * 2, 1, palette.roof);
   }
-  fillRect(ctx, 20, 30, 8, 12, palette.woodDark);
-  fillRect(ctx, 12, 24, 5, 5, palette.cream);
-  fillRect(ctx, 31, 24, 5, 5, palette.cream);
+  fillRect(ctx, 22, 34, 12, 14, palette.woodDark);
+  fillRect(ctx, 12, 26, 6, 6, palette.cream);
+  fillRect(ctx, 38, 26, 6, 6, palette.cream);
+  fillRect(ctx, 40, 12, 4, 6, palette.stoneDark); // chimney
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.houseInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 6, 18, 36, 24, palette.dirt);
-  fillRect(ic, 10, 22, 10, 8, palette.woodDark);
-  fillRect(ic, 28, 28, 8, 6, palette.cream);
-  fillRect(ic, 20, 34, 8, 8, palette.wood);
+  fillRect(ic, 6, 20, 44, 28, palette.dirt);
+  fillRect(ic, 8, 22, 40, 24, 0xc4a882);
+  // bed
+  fillRect(ic, 10, 24, 14, 10, palette.woodDark);
+  fillRect(ic, 12, 26, 10, 6, palette.cream);
+  fillRect(ic, 12, 26, 4, 3, palette.clothPeasant);
+  // table + stool
+  fillRect(ic, 30, 36, 12, 5, palette.wood);
+  fillRect(ic, 32, 40, 3, 4, palette.woodDark);
+  fillRect(ic, 38, 40, 3, 4, palette.woodDark);
+  // cupboard
+  fillRect(ic, 42, 24, 6, 12, palette.woodDark);
+  // hearth
+  fillRect(ic, 24, 40, 12, 8, palette.stoneDark);
+  fillRect(ic, 26, 42, 8, 5, palette.ink);
+  fillRect(ic, 28, 44, 4, 2, 0xff8844);
+  // rug
+  fillRect(ic, 18, 34, 10, 6, palette.roof);
   int.refresh();
 }
 
@@ -725,6 +756,31 @@ function drawVfx(scene: Phaser.Scene) {
   fillRect(fctx, 3, 1, 2, 5, 0xffcc44);
   flame.refresh();
 
+  // Animated hearth fire: 4 frames in a row
+  const fw = 12;
+  const fh = 14;
+  const hearth = createCanvas(scene, PROP_KEYS.hearthFire, fw * 4, fh);
+  const hctx = hearth.getContext();
+  for (let i = 0; i < 4; i++) {
+    const ox = i * fw;
+    fillRect(hctx, ox + 2, fh - 3, 8, 3, palette.stoneDark);
+    const flicker = i % 2;
+    fillRect(hctx, ox + 3, 6 + flicker, 6, 6 - flicker, 0xff4422);
+    fillRect(hctx, ox + 4, 3 + (i % 3), 4, 6, 0xff8844);
+    fillRect(hctx, ox + 5, 1 + flicker, 2, 5, 0xffee66);
+    if (i === 1 || i === 3) {
+      pixel(hctx, ox + 3, 5, 0xffaa33);
+      pixel(hctx, ox + 8, 6, 0xff6622);
+    }
+  }
+  hearth.refresh();
+  const htex = scene.textures.get(PROP_KEYS.hearthFire);
+  for (let i = 0; i < 4; i++) {
+    if (!htex.has(String(i))) {
+      htex.add(String(i), 0, i * fw, 0, fw, fh);
+    }
+  }
+
   const smoke = createCanvas(scene, PROP_KEYS.smoke, 8, 8);
   const sctx = smoke.getContext();
   fillRect(sctx, 2, 2, 4, 4, 0x888888);
@@ -756,21 +812,49 @@ function drawVfx(scene: Phaser.Scene) {
 }
 
 function drawTavern(scene: Phaser.Scene) {
-  const w = 36;
-  const h = 32;
+  const w = 48;
+  const h = 44;
   const tex = createCanvas(scene, PROP_KEYS.tavern, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 14, 28, 16, palette.wood);
-  fillRect(ctx, 4, 14, 28, 1, palette.ink);
-  for (let row = 0; row < 8; row++) {
-    fillRect(ctx, 4 + row, 6 + row, 28 - row * 2, 1, palette.roof);
+  fillRect(ctx, 4, 16, 40, 24, palette.wood);
+  fillRect(ctx, 4, 16, 40, 1, palette.ink);
+  for (let row = 0; row < 10; row++) {
+    fillRect(ctx, 4 + row, 6 + row, 40 - row * 2, 1, palette.roof);
   }
-  fillRect(ctx, 14, 20, 8, 10, palette.woodDark);
-  fillRect(ctx, 8, 18, 4, 4, palette.cream);
-  fillRect(ctx, 24, 18, 4, 4, palette.cream);
-  // mug sign
-  fillRect(ctx, 26, 10, 5, 4, palette.gold);
+  fillRect(ctx, 18, 28, 12, 12, palette.woodDark);
+  fillRect(ctx, 10, 22, 5, 5, palette.cream);
+  fillRect(ctx, 33, 22, 5, 5, palette.cream);
+  fillRect(ctx, 36, 10, 4, 8, palette.stoneDark);
+  // hanging sign
+  fillRect(ctx, 20, 14, 8, 5, palette.gold);
   tex.refresh();
+}
+
+function drawTavernInterior(scene: Phaser.Scene) {
+  const w = 48;
+  const h = 44;
+  const int = createCanvas(scene, PROP_KEYS.tavernInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 4, 16, 40, 24, palette.wood);
+  fillRect(ic, 6, 18, 36, 20, 0x5a4030);
+  // bar
+  fillRect(ic, 8, 22, 6, 16, palette.woodDark);
+  fillRect(ic, 8, 22, 6, 3, palette.wood);
+  // kegs
+  fillRect(ic, 10, 28, 4, 6, palette.dirtDark);
+  // tables
+  fillRect(ic, 20, 28, 10, 5, palette.wood);
+  fillRect(ic, 34, 30, 8, 5, palette.wood);
+  fillRect(ic, 22, 32, 2, 4, palette.woodDark);
+  fillRect(ic, 28, 32, 2, 4, palette.woodDark);
+  // hearth
+  fillRect(ic, 28, 36, 12, 8, palette.stoneDark);
+  fillRect(ic, 30, 38, 8, 5, palette.ink);
+  fillRect(ic, 32, 40, 4, 2, 0xff8844);
+  // mugs
+  pixel(ic, 22, 27, palette.cream);
+  pixel(ic, 36, 29, palette.cream);
+  int.refresh();
 }
 
 function drawDrawbridge(scene: Phaser.Scene) {
@@ -855,20 +939,23 @@ function drawBarracks(scene: Phaser.Scene) {
 }
 
 function drawManor(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 36;
+  const w = 56;
+  const h = 52;
   const tex = createCanvas(scene, PROP_KEYS.manor, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 14, 32, 18, palette.stone);
-  fillRect(ctx, 4, 14, 32, 1, palette.ink);
-  for (let row = 0; row < 8; row++) {
-    fillRect(ctx, 4 + row, 6 + row, 32 - row * 2, 1, palette.roof);
+  fillRect(ctx, 6, 18, 44, 30, palette.stone);
+  fillRect(ctx, 6, 18, 44, 1, palette.ink);
+  for (let row = 0; row < 12; row++) {
+    fillRect(ctx, 6 + row, 6 + row, 44 - row * 2, 1, palette.roof);
   }
-  fillRect(ctx, 16, 22, 8, 10, palette.woodDark);
-  fillRect(ctx, 8, 18, 4, 4, palette.cream);
-  fillRect(ctx, 28, 18, 4, 4, palette.cream);
-  fillRect(ctx, 18, 8, 4, 4, palette.gold);
+  fillRect(ctx, 22, 34, 12, 14, palette.woodDark);
+  fillRect(ctx, 12, 24, 6, 6, palette.cream);
+  fillRect(ctx, 38, 24, 6, 6, palette.cream);
+  fillRect(ctx, 24, 10, 8, 6, palette.gold);
+  fillRect(ctx, 42, 12, 4, 8, palette.stoneDark);
   tex.refresh();
+
+  // reuse house-style interior key via manor → houseInterior mapping already
 }
 
 function drawCave(scene: Phaser.Scene) {
@@ -901,55 +988,84 @@ function drawCave(scene: Phaser.Scene) {
 }
 
 function drawCathedral(scene: Phaser.Scene) {
-  const w = 56;
-  const h = 52;
+  const w = 64;
+  const h = 60;
   const tex = createCanvas(scene, PROP_KEYS.cathedral, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 8, 20, 40, 28, palette.stone);
-  fillRect(ctx, 8, 20, 40, 2, palette.ink);
-  for (let row = 0; row < 10; row++) {
-    fillRect(ctx, 10 + row, 10 + row, 36 - row * 2, 1, palette.clothBishop);
+  fillRect(ctx, 8, 22, 48, 34, palette.stone);
+  fillRect(ctx, 8, 22, 48, 2, palette.ink);
+  for (let row = 0; row < 12; row++) {
+    fillRect(ctx, 10 + row, 10 + row, 44 - row * 2, 1, palette.clothBishop);
   }
-  fillRect(ctx, 24, 4, 8, 16, palette.stone);
-  fillRect(ctx, 26, 2, 4, 4, palette.gold);
-  fillRect(ctx, 24, 36, 8, 12, palette.woodDark);
-  fillRect(ctx, 14, 28, 5, 7, palette.cream);
-  fillRect(ctx, 37, 28, 5, 7, palette.cream);
+  fillRect(ctx, 26, 4, 12, 20, palette.stone);
+  fillRect(ctx, 28, 2, 8, 4, palette.gold);
+  fillRect(ctx, 30, 0, 4, 3, palette.gold);
+  fillRect(ctx, 26, 42, 12, 14, palette.woodDark);
+  fillRect(ctx, 14, 30, 6, 8, palette.cream);
+  fillRect(ctx, 44, 30, 6, 8, palette.cream);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.cathedralInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 8, 20, 40, 28, palette.stoneDark);
-  fillRect(ic, 18, 24, 20, 6, palette.wood);
-  fillRect(ic, 24, 22, 8, 4, palette.gold);
-  fillRect(ic, 12, 34, 6, 10, palette.woodDark);
-  fillRect(ic, 38, 34, 6, 10, palette.woodDark);
+  fillRect(ic, 8, 22, 48, 34, palette.stoneDark);
+  fillRect(ic, 10, 24, 44, 30, 0x3a3a48);
+  // aisle + altar
+  fillRect(ic, 28, 26, 8, 22, palette.cream);
+  fillRect(ic, 24, 28, 16, 6, palette.wood);
+  fillRect(ic, 28, 26, 8, 4, palette.gold);
+  // pews
+  fillRect(ic, 12, 36, 10, 4, palette.woodDark);
+  fillRect(ic, 12, 42, 10, 4, palette.woodDark);
+  fillRect(ic, 42, 36, 10, 4, palette.woodDark);
+  fillRect(ic, 42, 42, 10, 4, palette.woodDark);
+  // stained light
+  fillRect(ic, 14, 28, 4, 6, 0x7ec8e3);
+  fillRect(ic, 46, 28, 4, 6, palette.clothBishop);
+  // candles
+  fillRect(ic, 26, 30, 1, 4, palette.cream);
+  fillRect(ic, 37, 30, 1, 4, palette.cream);
+  pixel(ic, 26, 29, 0xffcc44);
+  pixel(ic, 37, 29, 0xffcc44);
   int.refresh();
 }
 
 function drawInfirmary(scene: Phaser.Scene) {
-  const w = 48;
-  const h = 40;
+  const w = 56;
+  const h = 48;
   const tex = createCanvas(scene, PROP_KEYS.infirmary, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 14, 36, 24, palette.stone);
-  fillRect(ctx, 6, 14, 36, 1, palette.ink);
-  for (let row = 0; row < 8; row++) {
-    fillRect(ctx, 6 + row, 6 + row, 36 - row * 2, 1, palette.clothPhysician);
+  fillRect(ctx, 6, 16, 44, 28, palette.stone);
+  fillRect(ctx, 6, 16, 44, 1, palette.ink);
+  for (let row = 0; row < 10; row++) {
+    fillRect(ctx, 6 + row, 6 + row, 44 - row * 2, 1, palette.clothPhysician);
   }
-  fillRect(ctx, 20, 26, 8, 12, palette.woodDark);
-  fillRect(ctx, 12, 20, 5, 5, palette.cream);
-  fillRect(ctx, 31, 20, 5, 5, palette.cream);
-  fillRect(ctx, 22, 8, 4, 10, 0xa04545);
-  fillRect(ctx, 19, 11, 10, 4, 0xa04545);
+  fillRect(ctx, 22, 30, 12, 14, palette.woodDark);
+  fillRect(ctx, 12, 22, 6, 6, palette.cream);
+  fillRect(ctx, 38, 22, 6, 6, palette.cream);
+  fillRect(ctx, 24, 8, 8, 12, 0xa04545);
+  fillRect(ctx, 20, 12, 16, 4, 0xa04545);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.infirmaryInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 6, 14, 36, 24, palette.cream);
-  fillRect(ic, 10, 20, 12, 8, palette.clothPeasant);
-  fillRect(ic, 28, 20, 10, 8, palette.clothPeasant);
-  fillRect(ic, 20, 30, 8, 6, palette.woodDark);
+  fillRect(ic, 6, 16, 44, 28, palette.cream);
+  fillRect(ic, 8, 18, 40, 24, 0xe8e0d0);
+  // beds
+  fillRect(ic, 10, 22, 14, 10, palette.woodDark);
+  fillRect(ic, 12, 24, 10, 6, palette.clothPeasant);
+  fillRect(ic, 32, 22, 14, 10, palette.woodDark);
+  fillRect(ic, 34, 24, 10, 6, palette.clothPeasant);
+  // herb shelf
+  fillRect(ic, 12, 36, 16, 6, palette.wood);
+  pixel(ic, 14, 38, palette.grass);
+  pixel(ic, 18, 37, palette.forest);
+  pixel(ic, 22, 38, 0xa04545);
+  // hearth / brazier
+  fillRect(ic, 36, 36, 10, 8, palette.stoneDark);
+  fillRect(ic, 38, 38, 6, 5, palette.ink);
+  fillRect(ic, 40, 40, 2, 2, 0xff8844);
+  // basin
+  fillRect(ic, 26, 34, 6, 4, palette.waterLight);
   int.refresh();
 }
 
@@ -965,18 +1081,6 @@ function drawDungeon(scene: Phaser.Scene) {
   fillRect(ctx, 8, 14, 4, 4, palette.metal);
   fillRect(ctx, 28, 14, 4, 4, palette.metal);
   tex.refresh();
-}
-
-function drawTavernInterior(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 36;
-  const int = createCanvas(scene, PROP_KEYS.tavernInterior, w, h);
-  const ic = int.getContext();
-  fillRect(ic, 4, 14, 32, 20, palette.wood);
-  fillRect(ic, 8, 20, 10, 6, palette.woodDark);
-  fillRect(ic, 24, 18, 8, 8, palette.cream);
-  fillRect(ic, 16, 26, 8, 6, palette.dirt);
-  int.refresh();
 }
 
 /**
@@ -1002,6 +1106,7 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.catapult,
     PROP_KEYS.trebuchet,
     PROP_KEYS.flame,
+    PROP_KEYS.hearthFire,
     PROP_KEYS.smoke,
     PROP_KEYS.rock,
     PROP_KEYS.arrow,

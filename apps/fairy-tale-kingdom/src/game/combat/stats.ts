@@ -79,6 +79,7 @@ export const CombatBalance = {
   thiefCaptureRange: 32,
   physicianHealRange: 40,
   physicianHealHunger: 35,
+  physicianHealHp: 14,
   marriageRange: 48,
   weddingDurationMs: 4000,
 } as const;

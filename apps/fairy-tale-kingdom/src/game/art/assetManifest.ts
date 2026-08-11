@@ -87,7 +87,11 @@ export const PROP_KEYS = {
   tavernInterior: 'prop-tavern-interior',
   cathedralInterior: 'prop-cathedral-interior',
   infirmaryInterior: 'prop-infirmary-interior',
+  hearthFire: 'vfx-hearth-fire',
 } as const;
+
+export const HEARTH_FIRE_FRAMES = 4;
+export const HEARTH_FIRE_ANIM = 'hearth-fire';
 
 /** N=1 E=2 S=4 W=8 neighbor bitmask → `prop-wall-{mask}` */
 export function wallTextureKey(mask: number): string {

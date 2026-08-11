@@ -399,42 +399,67 @@ export class SubjectSystem {
   healNearestSick(physicianId: string): boolean {
     const doc = this.getById(physicianId);
     if (!doc || doc.data.role !== 'physician' || doc.data.sick) return false;
+
+    const needsCare = (s: ManagedSubject) =>
+      s.data.id !== physicianId &&
+      (s.data.sick || s.data.hp < s.data.maxHp);
+
     let best: ManagedSubject | null = null;
-    let bestD: number = CombatBalance.physicianHealRange;
+    let bestScore = Infinity;
     for (const s of this.subjects) {
-      if (!s.data.sick || s.data.id === physicianId) continue;
+      if (!needsCare(s)) continue;
       const d = Phaser.Math.Distance.Between(
         doc.sprite.x,
         doc.sprite.y,
         s.sprite.x,
         s.sprite.y
       );
-      if (d < bestD) {
-        bestD = d;
+      // Prefer sick over wounded; then nearer
+      const score = d + (s.data.sick ? 0 : 40);
+      if (score < bestScore && d < CombatBalance.physicianHealRange + 80) {
+        bestScore = score;
         best = s;
       }
     }
-    if (!best) {
-      // Seek a sick subject farther away
-      for (const s of this.subjects) {
-        if (!s.data.sick || s.data.id === physicianId) continue;
-        this.nudgeToward(physicianId, s.sprite.x, s.sprite.y, 45);
-        doc.data.activity = 'heal';
-        doc.data.activityLabel = `Seeking ${s.data.name}`;
-        return false;
-      }
+    if (!best) return false;
+
+    const d = Phaser.Math.Distance.Between(
+      doc.sprite.x,
+      doc.sprite.y,
+      best.sprite.x,
+      best.sprite.y
+    );
+    if (d > CombatBalance.physicianHealRange) {
+      this.nudgeToward(physicianId, best.sprite.x, best.sprite.y, 45);
+      doc.data.activity = 'heal';
+      doc.data.activityLabel = `Seeking ${best.data.name}`;
       return false;
     }
-    best.data.sick = false;
-    best.data.hunger = Math.max(
-      0,
-      best.data.hunger - CombatBalance.physicianHealHunger
-    );
+
+    const wasSick = best.data.sick;
+    const wasHurt = best.data.hp < best.data.maxHp;
+    if (wasSick) {
+      best.data.sick = false;
+      best.data.hunger = Math.max(
+        0,
+        best.data.hunger - CombatBalance.physicianHealHunger
+      );
+    }
+    if (wasHurt) {
+      best.data.hp = Math.min(
+        best.data.maxHp,
+        best.data.hp + CombatBalance.physicianHealHp
+      );
+    }
     this.applyHpTint(best);
     doc.data.activity = 'heal';
-    doc.data.activityLabel = `Healing ${best.data.name}`;
+    doc.data.activityLabel = wasSick
+      ? `Healing ${best.data.name}`
+      : `Bandaging ${best.data.name}`;
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${doc.data.name} healed ${best.data.name}`,
+      message: wasSick
+        ? `${doc.data.name} healed ${best.data.name}`
+        : `${doc.data.name} tended ${best.data.name}'s wounds`,
     });
     this.onChanged?.();
     return true;

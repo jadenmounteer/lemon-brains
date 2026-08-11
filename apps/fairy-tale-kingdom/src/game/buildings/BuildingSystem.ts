@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PROP_KEYS, TILE_SIZE, wallTextureKey } from '../art/assetManifest';
+import { PROP_KEYS, TILE_SIZE, wallTextureKey, HEARTH_FIRE_ANIM } from '../art/assetManifest';
 import type { SavedBuilding } from '../../kingdom/LayoutRepository';
 import {
   BEDS_PER_HOUSE,
@@ -42,6 +42,7 @@ export interface BuildingRecord {
   sprite: Phaser.GameObjects.Image;
   /** Shown under the roof when occupied */
   interiorSprite?: Phaser.GameObjects.Image;
+  hearthSprite?: Phaser.GameObjects.Sprite;
   labelIndex: number;
   attachedWallId?: string;
   closed?: boolean;
@@ -55,21 +56,21 @@ export interface Aabb {
 }
 
 const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
-  house: { w: 48, h: 40 },
+  house: { w: 56, h: 48 },
   wall: { w: 16, h: 16 },
-  tavern: { w: 40, h: 34 },
+  tavern: { w: 48, h: 40 },
   drawbridge: { w: 16, h: 16 },
   stairs: { w: 20, h: 26 },
   field: { w: 40, h: 26 },
   granary: { w: 36, h: 34 },
   barracks: { w: 40, h: 30 },
-  manor: { w: 48, h: 40 },
+  manor: { w: 56, h: 48 },
   ballista: { w: 24, h: 18 },
   watchtower: { w: 24, h: 36 },
-  cathedral: { w: 56, h: 48 },
-  infirmary: { w: 48, h: 36 },
+  cathedral: { w: 64, h: 56 },
+  infirmary: { w: 56, h: 44 },
   dungeon: { w: 40, h: 32 },
-  keep: { w: 64, h: 52 },
+  keep: { w: 80, h: 64 },
 };
 
 const STAIR_SNAP_DIST = 28;
@@ -98,6 +99,8 @@ export class BuildingSystem {
   private keepHp: number;
   private keepMaxHp: number;
   private keepSprite: Phaser.GameObjects.Image | null = null;
+  private keepInteriorSprite: Phaser.GameObjects.Image | null = null;
+  private keepHearth: Phaser.GameObjects.Sprite | null = null;
   private onDestroyed: ((b: BuildingRecord) => void) | null = null;
   private selectedId: string | null = null;
   private vfx: SiegeVfx | null = null;
@@ -129,6 +132,12 @@ export class BuildingSystem {
   setKeepSprite(sprite: Phaser.GameObjects.Image): void {
     this.keepSprite = sprite;
     this.makeInteractive(sprite, KEEP_ID);
+    this.keepInteriorSprite = this.scene.add
+      .image(this.keep.x, this.keep.y, PROP_KEYS.keepInterior)
+      .setDepth(7)
+      .setOrigin(0.5, 0.85)
+      .setVisible(false);
+    this.keepHearth = this.spawnHearth(this.keep.x, this.keep.y + 10, 'keep');
   }
 
   getSelectedId(): string | null {
@@ -157,15 +166,16 @@ export class BuildingSystem {
     return this.toSnapshot(this.selectedId, residents);
   }
 
-  seedStarters(worldW: number, worldH: number): void {
-    const cx = worldW / 2;
-    const cy = worldH / 2;
-    this.addBuilding('house', snapCoord(cx - 80), snapCoord(cy + 16), 'house-0');
-    this.addBuilding('house', snapCoord(cx + 88), snapCoord(cy + 24), 'house-1');
-    this.addBuilding('granary', snapCoord(cx - 40), snapCoord(cy + 72), 'granary-0');
-    this.addBuilding('field', snapCoord(cx + 20), snapCoord(cy + 88), 'field-0');
-    this.addBuilding('field', snapCoord(cx + 64), snapCoord(cy + 88), 'field-1');
-    const row = fortSnap(cy - 56);
+  seedStarters(_worldW: number, _worldH: number): void {
+    const cx = this.keep.x;
+    const cy = this.keep.y;
+    this.addBuilding('house', snapCoord(cx - 88), snapCoord(cy + 28), 'house-0');
+    this.addBuilding('house', snapCoord(cx + 96), snapCoord(cy + 32), 'house-1');
+    this.addBuilding('granary', snapCoord(cx - 48), snapCoord(cy + 88), 'granary-0');
+    this.addBuilding('field', snapCoord(cx + 16), snapCoord(cy + 104), 'field-0');
+    this.addBuilding('field', snapCoord(cx + 64), snapCoord(cy + 104), 'field-1');
+    // Wall / drawbridge snug against the keep's north face
+    const row = fortSnap(cy - 36);
     const baseCol = Math.round(cx / FORT_TILE);
     for (let i = -3; i <= 3; i++) {
       const x = baseCol * FORT_TILE + i * FORT_TILE + FORT_TILE / 2;
@@ -865,6 +875,7 @@ export class BuildingSystem {
     if (this.selectedId === b.id) {
       this.selectedId = null;
     }
+    b.hearthSprite?.destroy();
     b.interiorSprite?.destroy();
     b.sprite.destroy();
     this.buildings = this.buildings.filter((x) => x.id !== b.id);
@@ -967,6 +978,7 @@ export class BuildingSystem {
       .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85);
     this.makeInteractive(sprite, id);
     let interiorSprite: Phaser.GameObjects.Image | undefined;
+    let hearthSprite: Phaser.GameObjects.Sprite | undefined;
     const intKey = interiorTextureFor(kind);
     if (intKey && hasInterior(kind)) {
       interiorSprite = this.scene.add
@@ -974,6 +986,9 @@ export class BuildingSystem {
         .setDepth(7)
         .setOrigin(0.5, 0.85)
         .setVisible(false);
+      if (kindHasHearth(kind)) {
+        hearthSprite = this.spawnHearth(px, py + 6, kind) ?? undefined;
+      }
     }
     const record: BuildingRecord = {
       id,
@@ -984,6 +999,7 @@ export class BuildingSystem {
       maxHp,
       sprite,
       interiorSprite,
+      hearthSprite,
       labelIndex: 0,
       attachedWallId: opts?.attachedWallId,
       closed,
@@ -1027,7 +1043,7 @@ export class BuildingSystem {
     });
   }
 
-  /** Hide roofs when any unit stands inside the building. */
+  /** Hide roofs when any unit stands inside the building; light hearths. */
   updateInteriors(unitBodies: Aabb[]): void {
     for (const b of this.buildings) {
       if (!b.interiorSprite) continue;
@@ -1035,13 +1051,47 @@ export class BuildingSystem {
       const occupied = unitBodies.some((u) => intersects(box, u));
       b.sprite.setVisible(!occupied);
       b.interiorSprite.setVisible(occupied);
+      if (b.hearthSprite) {
+        b.hearthSprite.setVisible(occupied);
+        if (occupied && !b.hearthSprite.anims.isPlaying) {
+          b.hearthSprite.play(HEARTH_FIRE_ANIM);
+        }
+      }
     }
     if (this.keepSprite && this.keepHp > 0) {
       const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
       const occupied = unitBodies.some((u) => intersects(keepBox, u));
-      // Primary keep has no separate interior texture swap — dim roof via alpha
-      this.keepSprite.setAlpha(occupied ? 0.25 : 1);
+      this.keepSprite.setVisible(!occupied);
+      this.keepInteriorSprite?.setVisible(occupied);
+      if (this.keepHearth) {
+        this.keepHearth.setVisible(occupied);
+        if (occupied && !this.keepHearth.anims.isPlaying) {
+          this.keepHearth.play(HEARTH_FIRE_ANIM);
+        }
+      }
     }
+  }
+
+  private spawnHearth(
+    x: number,
+    y: number,
+    kind: BuildKind | 'keep'
+  ): Phaser.GameObjects.Sprite | null {
+    if (!this.scene.textures.exists(PROP_KEYS.hearthFire)) return null;
+    const ox =
+      kind === 'keep'
+        ? 2
+        : kind === 'tavern'
+          ? 8
+          : kind === 'infirmary'
+            ? 10
+            : 0;
+    const sprite = this.scene.add
+      .sprite(x + ox, y + 4, PROP_KEYS.hearthFire, 0)
+      .setDepth(8)
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+    return sprite;
   }
 
   private wallAt(x: number, y: number): BuildingRecord | null {
@@ -1188,6 +1238,7 @@ export class BuildingSystem {
 
   private clearSpritesOnly(): void {
     for (const b of this.buildings) {
+      b.hearthSprite?.destroy();
       b.interiorSprite?.destroy();
       b.sprite.destroy();
     }
@@ -1228,6 +1279,16 @@ function textureFor(kind: BuildKind, closed: boolean, wallMask: number): string 
     case 'keep':
       return PROP_KEYS.keep;
   }
+}
+
+function kindHasHearth(kind: BuildKind | 'keep'): boolean {
+  return (
+    kind === 'house' ||
+    kind === 'manor' ||
+    kind === 'tavern' ||
+    kind === 'keep' ||
+    kind === 'infirmary'
+  );
 }
 
 function interiorTextureFor(kind: BuildKind): string | null {

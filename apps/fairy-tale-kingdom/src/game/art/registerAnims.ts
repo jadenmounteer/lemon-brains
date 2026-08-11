@@ -2,7 +2,10 @@ import Phaser from 'phaser';
 import {
   DIRECTIONS,
   ENEMY_ROLES,
+  HEARTH_FIRE_ANIM,
+  HEARTH_FIRE_FRAMES,
   MONSTER_ROLES,
+  PROP_KEYS,
   UNIT_ROLES,
   UnitFrame,
   idleAnimKey,
@@ -50,5 +53,17 @@ export function registerAnims(scene: Phaser.Scene): void {
   }
   for (const role of MONSTER_ROLES) {
     registerRole(scene, role);
+  }
+
+  if (scene.textures.exists(PROP_KEYS.hearthFire)) {
+    ensureAnim(scene, HEARTH_FIRE_ANIM, {
+      key: HEARTH_FIRE_ANIM,
+      frames: scene.anims.generateFrameNumbers(PROP_KEYS.hearthFire, {
+        start: 0,
+        end: HEARTH_FIRE_FRAMES - 1,
+      }),
+      frameRate: 8,
+      repeat: -1,
+    });
   }
 }

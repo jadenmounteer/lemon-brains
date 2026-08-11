@@ -47,7 +47,7 @@ export function randomPointInZone(
     case 'keep':
       return { x: cx + jitter(48), y: cy + 36 + jitter(28) };
     case 'wall':
-      return { x: cx + jitter(70), y: cy - 48 + jitter(20) };
+      return { x: cx + jitter(70), y: cy - 36 + jitter(20) };
     case 'path':
       return rand() < 0.5
         ? { x: cx + jitter(24), y: cy + jitter(200) }
