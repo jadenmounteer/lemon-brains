@@ -17,6 +17,7 @@ import { SettingsService } from '../../services/settings.service';
 import { AppSettings, GameDifficulty } from '../../learning/models/app-settings';
 import { LearningQuestion } from '../../learning/models/learning-question';
 import { CurriculumRegistry } from '../../learning/curriculum-registry.service';
+import { SpeechSynthesisService } from '../../learning/speech-synthesis.service';
 import { QuestionOptionsComponent } from '../question-options/question-options.component';
 
 @Component({
@@ -133,7 +134,8 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
     private curriculumRegistry: CurriculumRegistry,
     private spriteAnimationService: SpriteAnimationService,
     private audioService: AudioService,
-    private settingsService: SettingsService
+    private settingsService: SettingsService,
+    private speechSynthesis: SpeechSynthesisService
   ) {
     this.settings = this.settingsService.getCurrentSettings();
     const difficulty = this.difficultySettings[this.settings.gameDifficulty];
@@ -180,9 +182,28 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   generateNewQuestion() {
     this.selectedAnswer = null;
+    this.speechSynthesis.cancel();
     this.currentQuestion = this.curriculumRegistry.generateQuestion(
       this.settings
     );
+    this.speakCurrentPrompt();
+  }
+
+  get canReplayPromptSpeech(): boolean {
+    return (
+      !!this.currentQuestion?.promptSpeech && this.speechSynthesis.isSupported()
+    );
+  }
+
+  replayPromptSpeech(): void {
+    this.speakCurrentPrompt();
+  }
+
+  private speakCurrentPrompt(): void {
+    const speech = this.currentQuestion?.promptSpeech;
+    if (speech && this.speechSynthesis.isSupported()) {
+      this.speechSynthesis.speak(speech);
+    }
   }
 
   checkAnswer(answer: string | number) {
@@ -704,6 +725,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     // Cleanup all intervals and timeouts
+    this.speechSynthesis.cancel();
     this.audioService.cleanup();
     if (this.zombieSpawnInterval) {
       clearInterval(this.zombieSpawnInterval);

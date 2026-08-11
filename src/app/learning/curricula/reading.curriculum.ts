@@ -7,12 +7,15 @@ import {
 import { pickRandom, shuffle } from '../utils/shuffle';
 import {
   CVC_WORDS,
+  LETTER_PICTURES,
   LETTERS,
   SIGHT_WORD_DISTRACTORS,
   SIGHT_WORDS,
 } from './reading-content';
 
 type ReadingTopic = 'letterRecognition' | 'cvcWords' | 'sightWords';
+
+type LetterSubtype = 'beginning' | 'caseMatch' | 'hearLetter';
 
 export class ReadingCurriculum implements Curriculum {
   readonly id = 'reading';
@@ -44,24 +47,74 @@ export class ReadingCurriculum implements Curriculum {
   }
 
   private generateLetterQuestion(): LearningQuestion {
+    const subtype = pickRandom<LetterSubtype>([
+      'beginning',
+      'caseMatch',
+      'hearLetter',
+    ]);
+
+    switch (subtype) {
+      case 'beginning':
+        return this.generateBeginningLetterQuestion();
+      case 'caseMatch':
+        return this.generateCaseMatchQuestion();
+      case 'hearLetter':
+        return this.generateHearLetterQuestion();
+    }
+  }
+
+  private generateBeginningLetterQuestion(): LearningQuestion {
+    const correct = pickRandom(LETTER_PICTURES);
+    const distractorLetters = shuffle(
+      LETTER_PICTURES.filter((entry) => entry.letter !== correct.letter).map(
+        (entry) => entry.letter
+      )
+    ).slice(0, 3);
+
+    return {
+      prompt: `${correct.emoji}\nWhat letter does this start with?`,
+      options: this.letterOptions([correct.letter, ...distractorLetters]),
+      answer: correct.letter,
+      optionDisplay: 'text',
+      curriculumId: this.id,
+    };
+  }
+
+  private generateCaseMatchQuestion(): LearningQuestion {
     const answer = pickRandom(LETTERS);
+    const lowercase = answer.toLowerCase();
     const distractors = shuffle(LETTERS.filter((letter) => letter !== answer))
       .slice(0, 3);
 
-    const options: LearningOption[] = shuffle([answer, ...distractors]).map(
-      (letter) => ({
-        value: letter,
-        label: letter,
-      })
-    );
-
     return {
-      prompt: `Which letter is ${answer}?`,
-      options,
+      prompt: `Which capital letter matches: ${lowercase}`,
+      options: this.letterOptions([answer, ...distractors]),
       answer,
       optionDisplay: 'text',
       curriculumId: this.id,
     };
+  }
+
+  private generateHearLetterQuestion(): LearningQuestion {
+    const answer = pickRandom(LETTERS);
+    const distractors = shuffle(LETTERS.filter((letter) => letter !== answer))
+      .slice(0, 3);
+
+    return {
+      prompt: 'Which letter do you hear?',
+      options: this.letterOptions([answer, ...distractors]),
+      answer,
+      optionDisplay: 'text',
+      curriculumId: this.id,
+      promptSpeech: `the letter ${answer}`,
+    };
+  }
+
+  private letterOptions(letters: string[]): LearningOption[] {
+    return shuffle(letters).map((letter) => ({
+      value: letter,
+      label: letter,
+    }));
   }
 
   private generateCvcQuestion(): LearningQuestion {

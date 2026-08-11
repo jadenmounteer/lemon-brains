@@ -14,4 +14,6 @@ export interface LearningQuestion {
   answer: string | number;
   optionDisplay: OptionDisplay;
   curriculumId: string;
+  /** Spoken cue for the shell to play; must not reveal the answer in prompt text. */
+  promptSpeech?: string;
 }

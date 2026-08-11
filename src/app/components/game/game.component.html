@@ -42,7 +42,18 @@
 
   <div class="game-half question-area">
     <div class="question-container" *ngIf="!isGameOver && currentQuestion">
-      <h2>{{ currentQuestion.prompt }}</h2>
+      <div class="prompt-row">
+        <h2 class="prompt-text">{{ currentQuestion.prompt }}</h2>
+        <button
+          *ngIf="canReplayPromptSpeech"
+          type="button"
+          class="replay-speech-button"
+          (click)="replayPromptSpeech()"
+          aria-label="Hear the letter again"
+        >
+          🔊
+        </button>
+      </div>
 
       <app-question-options
         [question]="currentQuestion"

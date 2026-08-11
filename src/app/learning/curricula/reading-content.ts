@@ -1,5 +1,41 @@
 export const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
+export interface LetterPicture {
+  letter: string;
+  word: string;
+  emoji: string;
+}
+
+/** Beginning-sound picture cues for letter recognition (one clear emoji per letter). */
+export const LETTER_PICTURES: LetterPicture[] = [
+  { letter: 'A', word: 'apple', emoji: '🍎' },
+  { letter: 'B', word: 'ball', emoji: '⚽' },
+  { letter: 'C', word: 'cat', emoji: '🐱' },
+  { letter: 'D', word: 'dog', emoji: '🐶' },
+  { letter: 'E', word: 'egg', emoji: '🥚' },
+  { letter: 'F', word: 'fish', emoji: '🐠' },
+  { letter: 'G', word: 'goat', emoji: '🐐' },
+  { letter: 'H', word: 'hat', emoji: '🎩' },
+  { letter: 'I', word: 'igloo', emoji: '🧊' },
+  { letter: 'J', word: 'jam', emoji: '🍓' },
+  { letter: 'K', word: 'kite', emoji: '🪁' },
+  { letter: 'L', word: 'leaf', emoji: '🍃' },
+  { letter: 'M', word: 'moon', emoji: '🌙' },
+  { letter: 'N', word: 'nest', emoji: '🪺' },
+  { letter: 'O', word: 'octopus', emoji: '🐙' },
+  { letter: 'P', word: 'pig', emoji: '🐷' },
+  { letter: 'Q', word: 'queen', emoji: '👸' },
+  { letter: 'R', word: 'rainbow', emoji: '🌈' },
+  { letter: 'S', word: 'sun', emoji: '☀️' },
+  { letter: 'T', word: 'tree', emoji: '🌳' },
+  { letter: 'U', word: 'umbrella', emoji: '☂️' },
+  { letter: 'V', word: 'van', emoji: '🚐' },
+  { letter: 'W', word: 'whale', emoji: '🐋' },
+  { letter: 'X', word: 'x-ray', emoji: '🦴' },
+  { letter: 'Y', word: 'yo-yo', emoji: '🪀' },
+  { letter: 'Z', word: 'zebra', emoji: '🦓' },
+];
+
 export interface CvcWord {
   word: string;
   emoji: string;
