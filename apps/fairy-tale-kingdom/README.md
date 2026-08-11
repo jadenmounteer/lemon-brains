@@ -2,7 +2,7 @@
 
 A watchable pixel kingdom for Knowledge Quest — React + Phaser 3.
 
-See the long-term plan in [docs/ROADMAP.md](docs/ROADMAP.md).
+See the long-term plan in [docs/ROADMAP.md](docs/ROADMAP.md) and pixel conventions in [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md).
 
 ## Run locally
 

@@ -1,6 +1,6 @@
 # Fairy Tale Kingdom — Roadmap
 
-Long-term phased vision. **Phase 0** is the current foundation milestone.
+Long-term phased vision.
 
 | Phase | Name | Goal |
 | ----- | ---- | ---- |
@@ -12,13 +12,26 @@ Long-term phased vision. **Phase 0** is the current foundation milestone.
 | 5 | Living world and danger | Goblin/giant/bandit camps; raid events; defense that matters |
 | 6 | Depth and polish | Richer schedules, more roles, save kingdom layout, audio, UX |
 
-## Phase 0 (this milestone)
+## Phase 0 — Foundation (done)
 
 - React + Vite + TypeScript + Phaser 3 app at `apps/fairy-tale-kingdom`
 - React HUD: title, gold stub, back to Knowledge Quest, Questions / Marketplace stubs
-- Empty panable kingdom ground (no custom pixel art yet)
-- Shared settings load via `@knowledge-quest/storage` (ready for later question UI)
+- Empty panable kingdom ground (superseded by Phase 1 tilemap)
+- Shared settings load via `@knowledge-quest/storage`
 - Enabled on the Knowledge Quest games list and included in `npm run build:pages`
+
+## Phase 1 — Graphics (current)
+
+Checklist:
+
+- [x] Style guide (`docs/STYLE_GUIDE.md`) + `public/assets/` drop-in layout
+- [x] Shared palette + asset manifest (stable texture/anim keys)
+- [x] Procedural tileset + peasant/guard/archer sheets (idle + 4-dir walk)
+- [x] Procedural keep / house / wall props
+- [x] Phaser `pixelArt` + integer camera zoom
+- [x] Kingdom tilemap + demo walking cast
+
+See also [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
 ## Non-goals (Phase 0–1)
 
@@ -26,7 +39,7 @@ Long-term phased vision. **Phase 0** is the current foundation milestone.
 - Multiplayer
 - Auth / accounts
 - Combat systems, AI schedules, or shop purchases (start in later phases)
-- Pixel art production is Phase 1, not Phase 0
+- Hand-drawn / AI PNG production (pipeline ready; generators ship first)
 
 ## Product north star
 

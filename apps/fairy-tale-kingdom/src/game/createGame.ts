@@ -1,12 +1,16 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
 import { KingdomScene } from './scenes/KingdomScene';
+import { palette } from './art/palette';
 
 export function createGame(parent: HTMLElement): Phaser.Game {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    backgroundColor: '#2d5a3d',
+    backgroundColor: palette.grassDark,
+    pixelArt: true,
+    antialias: false,
+    roundPixels: true,
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
