@@ -28,6 +28,8 @@ export const KingdomEvents = {
   PAY_RANSOM: 'kingdom:pay-ransom',
   TRANSFORM_PEASANT: 'kingdom:transform-peasant',
   CAPTIVES_CHANGED: 'kingdom:captives-changed',
+  COMMAND_DETACHMENT: 'kingdom:command-detachment',
+  SET_DAYS_PLAYED: 'kingdom:set-days-played',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -90,4 +92,15 @@ export interface TransformPeasantPayload {
 
 export interface CaptivesChangedPayload {
   count: number;
+}
+
+export interface CommandDetachmentPayload {
+  generalId: string;
+  troopCount: number;
+  /** camp id, or `monster:<id>`, or omit for nearest camp */
+  targetId?: string;
+}
+
+export interface SetDaysPlayedPayload {
+  daysPlayed: number;
 }

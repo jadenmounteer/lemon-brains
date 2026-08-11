@@ -165,10 +165,14 @@ function clothFor(role: AnimRole): number {
       return palette.clothBandit;
     case 'giant':
       return palette.clothGiant;
+    case 'goblin':
+      return palette.clothGoblin;
     case 'enemy_army':
       return palette.clothEnemyArmy;
     case 'knight':
       return palette.clothKnight;
+    case 'general':
+      return palette.clothGeneral;
     case 'bishop':
       return palette.clothBishop;
     case 'physician':
@@ -257,8 +261,17 @@ function drawUnitFrame(
   } else if (role === 'bandit') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
+  } else if (role === 'goblin') {
+    fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.forestDark);
+    fillRect(ctx, originX + 12, 11 + baseY, 2, 4, palette.wood);
+    pixel(ctx, originX + 4, 5 + baseY, palette.ink);
+    pixel(ctx, originX + 11, 5 + baseY, palette.ink);
   } else if (role === 'giant') {
     fillRect(ctx, originX + 4, 2 + baseY + tall, 8, 3, palette.woodDark);
+  } else if (role === 'general') {
+    fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.metal);
+    fillRect(ctx, originX + 6, 4 + baseY, 4, 1, palette.gold);
+    fillRect(ctx, originX + 12, 11 + baseY, 2, 6, palette.metal);
   } else if (role !== 'knight') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.wood);
   }
@@ -1083,6 +1096,47 @@ function drawDungeon(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawBanditCamp(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 28;
+  const tex = createCanvas(scene, PROP_KEYS.banditCamp, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 14, 28, 12, palette.dirt);
+  fillRect(ctx, 10, 6, 20, 14, palette.clothBandit);
+  fillRect(ctx, 10, 6, 20, 1, palette.ink);
+  fillRect(ctx, 18, 2, 2, 8, palette.wood);
+  fillRect(ctx, 8, 18, 6, 6, palette.woodDark);
+  fillRect(ctx, 26, 18, 6, 6, 0x3a2a1a);
+  tex.refresh();
+}
+
+function drawThiefDen(scene: Phaser.Scene) {
+  const w = 36;
+  const h = 24;
+  const tex = createCanvas(scene, PROP_KEYS.thiefDen, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 10, 28, 12, palette.ink);
+  fillRect(ctx, 8, 6, 20, 10, palette.stoneDark);
+  fillRect(ctx, 14, 12, 8, 8, 0x0a0608);
+  fillRect(ctx, 22, 4, 3, 6, palette.wood);
+  tex.refresh();
+}
+
+function drawSiegeCamp(scene: Phaser.Scene) {
+  const w = 48;
+  const h = 32;
+  const tex = createCanvas(scene, PROP_KEYS.siegeCamp, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 16, 40, 14, palette.dirt);
+  fillRect(ctx, 8, 8, 18, 14, palette.clothEnemyArmy);
+  fillRect(ctx, 8, 8, 18, 1, palette.ink);
+  fillRect(ctx, 28, 10, 14, 12, palette.stone);
+  fillRect(ctx, 32, 4, 2, 10, palette.metal);
+  fillRect(ctx, 14, 2, 2, 8, palette.wood);
+  fillRect(ctx, 36, 18, 8, 6, palette.woodDark);
+  tex.refresh();
+}
+
 /**
  * Generate all textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
@@ -1116,6 +1170,9 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.cathedral,
     PROP_KEYS.infirmary,
     PROP_KEYS.dungeon,
+    PROP_KEYS.banditCamp,
+    PROP_KEYS.thiefDen,
+    PROP_KEYS.siegeCamp,
     PROP_KEYS.houseInterior,
     PROP_KEYS.keepInterior,
     PROP_KEYS.tavernInterior,
@@ -1165,6 +1222,9 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawCathedral(scene);
   drawInfirmary(scene);
   drawDungeon(scene);
+  drawBanditCamp(scene);
+  drawThiefDen(scene);
+  drawSiegeCamp(scene);
   drawTavernInterior(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);

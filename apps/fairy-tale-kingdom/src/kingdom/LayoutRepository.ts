@@ -2,6 +2,7 @@ import { LocalStorageAdapter, type StoragePort } from '@knowledge-quest/storage'
 import { UNIT_ROLES, type UnitRole } from '../game/art/assetManifest';
 import { BUILDING_MAX_HP, UNIT_MAX_HP } from '../game/combat/stats';
 import type { SavedMonster } from '../game/monsters/MonsterSystem';
+import type { SavedEncampment } from '../game/war/EncampmentSystem';
 import { BUILD_CATALOG, type BuildKind } from '../marketplace/catalog';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
@@ -9,6 +10,13 @@ export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
 const VALID_BUILD_KINDS = new Set<string>(BUILD_CATALOG.map((c) => c.kind));
 const VALID_MONSTER_KINDS = new Set(['troll', 'ogre', 'dragon']);
 const VALID_UNIT_ROLES = new Set<string>(UNIT_ROLES);
+const VALID_CAMP_KINDS = new Set([
+  'bandit',
+  'giant',
+  'goblin',
+  'thief',
+  'siege',
+]);
 
 export interface SavedBuilding {
   id: string;
@@ -40,6 +48,7 @@ export interface LayoutSave {
   subjects: SavedSubject[];
   buildings: SavedBuilding[];
   monsters?: SavedMonster[];
+  encampments?: SavedEncampment[];
   /** Seed for procedural terrain (lakes, forests, mountains, caves). */
   mapSeed?: number;
   keepHp?: number;
@@ -77,6 +86,16 @@ export class LayoutRepository {
           .map(normalizeSubject),
         monsters: Array.isArray(parsed.monsters)
           ? parsed.monsters.filter((m) => VALID_MONSTER_KINDS.has(m.kind))
+          : [],
+        encampments: Array.isArray(parsed.encampments)
+          ? parsed.encampments.filter(
+              (c) =>
+                c &&
+                typeof c.id === 'string' &&
+                VALID_CAMP_KINDS.has(c.kind) &&
+                typeof c.x === 'number' &&
+                typeof c.y === 'number'
+            )
           : [],
         mapSeed:
           typeof parsed.mapSeed === 'number' ? parsed.mapSeed >>> 0 : undefined,

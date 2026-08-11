@@ -14,6 +14,10 @@ import type { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
 import type { SiegeVfx } from '../siege/SiegeVfx';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
+import type { EncampmentSystem } from '../war/EncampmentSystem';
+import { planSiege, type SiegePlan } from '../war/GeneralStrategy';
+import { WarBalance } from '../war/WarBalance';
+import { KEEP_ID } from '../buildings/BuildingSystem';
 
 export interface KeepPoint {
   x: number;
@@ -30,9 +34,12 @@ type RaiderState =
   | 'sieging'
   | 'investing'
   | 'routing'
+  | 'retreating'
   | 'done';
 
 export type SiegePhase = 'none' | 'muster' | 'reduce' | 'storm' | 'routing';
+
+export type StealKind = 'bandit' | 'giant' | 'goblin' | 'thief';
 
 export interface ActiveRaider {
   kind: RaidKind;
@@ -48,32 +55,58 @@ export interface ActiveRaider {
   camp?: Phaser.GameObjects.Arc;
   investX?: number;
   investY?: number;
+  homeCampId: string | null;
+  homeX: number;
+  homeY: number;
+  /** Override steal bookkeeping for thief dens / goblins */
+  stealKind: StealKind | null;
+  looted: boolean;
+  isGeneral: boolean;
+  /** Smart-general detachment: burn outer fields while main host sieges */
+  siegeRole: 'main' | 'field_raid';
+  strategyFieldId: string | null;
 }
-
-const STEAL_AMOUNTS: Record<Exclude<RaidKind, 'enemy_army'>, number> = {
-  bandit: 5,
-  giant: 12,
-};
 
 const LABELS: Record<RaidKind, string> = {
   bandit: 'Bandits',
   giant: 'Giants',
+  goblin: 'Goblins',
   enemy_army: 'a rival kingdom’s army',
 };
 
-const GRACE_MS = 40_000;
-const RAID_INTERVAL_MS = 55_000;
 const KEEP_REACH_PX = 28;
 const MOVE_SPEED: Record<RaidKind, number> = {
   bandit: 42,
   giant: 28,
+  goblin: 52,
   enemy_army: 36,
 };
+
+export interface LaunchCampRaidersOpts {
+  kind: RaidKind;
+  x: number;
+  y: number;
+  count: number;
+  homeCampId: string;
+  homeX: number;
+  homeY: number;
+  stealKind?: StealKind;
+  aggroOnly?: boolean;
+  label?: string;
+  isReinforce?: boolean;
+}
+
+export interface BeginSiegeFromCampOpts {
+  x: number;
+  y: number;
+  count: number;
+  homeCampId: string;
+  generalName?: string;
+}
 
 export class RaidSystem {
   private raiders: ActiveRaider[] = [];
   private elapsedMs = 0;
-  private nextRaidAt = GRACE_MS;
   private gameOver = false;
   private raidCount = 0;
   private buildings: BuildingSystem | null = null;
@@ -81,6 +114,7 @@ export class RaidSystem {
   private pathGrid: PathGrid | null = null;
   private engines: SiegeEngineSystem | null = null;
   private vfx: SiegeVfx | null = null;
+  private encampments: EncampmentSystem | null = null;
   private onChanged: (() => void) | null = null;
   private siegeToastShown = false;
   private siegePhase: SiegePhase = 'none';
@@ -90,6 +124,8 @@ export class RaidSystem {
   private routToastShown = false;
   private activeWaveKind: RaidKind | null = null;
   private campPoint: KeepPoint | null = null;
+  private siegePlan: SiegePlan | null = null;
+  private generalName: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -118,8 +154,122 @@ export class RaidSystem {
     this.vfx = vfx;
   }
 
+  setEncampments(encampments: EncampmentSystem): void {
+    this.encampments = encampments;
+  }
+
   setOnChanged(cb: () => void): void {
     this.onChanged = cb;
+  }
+
+  /** Camp-launched steal / aggro party (no free edge pops). */
+  launchCampRaiders(opts: LaunchCampRaidersOpts): void {
+    if (this.gameOver) return;
+    this.raidCount += 1;
+    if (!opts.aggroOnly && !opts.isReinforce) {
+      this.activeWaveKind = opts.kind;
+      this.campPoint = { x: opts.homeX, y: opts.homeY };
+      this.waveStartCount = opts.count;
+      this.killTimes = [];
+      this.routToastShown = false;
+      this.siegeToastShown = false;
+      this.siegePhase = 'none';
+      this.buildings?.setRaidActive(true);
+      this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
+        kind: opts.stealKind ?? opts.kind,
+        label: opts.label ?? LABELS[opts.kind],
+      });
+    }
+
+    for (let i = 0; i < opts.count; i++) {
+      const ox = opts.x + Phaser.Math.Between(-18, 18);
+      const oy = opts.y + Phaser.Math.Between(-18, 18);
+      this.launchRaider(opts.kind, ox, oy, undefined, i, opts.count, {
+        homeCampId: opts.homeCampId,
+        homeX: opts.homeX,
+        homeY: opts.homeY,
+        stealKind: opts.stealKind ?? null,
+        aggroOnly: Boolean(opts.aggroOnly),
+      });
+    }
+  }
+
+  /** Initial siege wave planted at a siege encampment. */
+  beginSiegeFromCamp(opts: BeginSiegeFromCampOpts): void {
+    if (this.gameOver) return;
+    this.raidCount += 1;
+    this.campPoint = { x: opts.x, y: opts.y };
+    this.activeWaveKind = 'enemy_army';
+    this.siegePhase = 'muster';
+    this.musterMs = 0;
+    this.killTimes = [];
+    this.routToastShown = false;
+    this.siegeToastShown = false;
+    this.generalName = opts.generalName ?? null;
+
+    // Smart general picks the battlefield plan before the host moves
+    if (this.buildings && opts.generalName) {
+      this.siegePlan = planSiege(
+        this.buildings,
+        { x: opts.x, y: opts.y },
+        opts.generalName
+      );
+      this.keep.x = this.siegePlan.keepX;
+      this.keep.y = this.siegePlan.keepY;
+      this.engines?.setKeep({ x: this.siegePlan.keepX, y: this.siegePlan.keepY });
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: this.siegePlan.orderLabel,
+      });
+    } else {
+      this.siegePlan = null;
+      const active = this.buildings?.getActiveKeepPoint();
+      if (active) {
+        this.keep.x = active.x;
+        this.keep.y = active.y;
+      }
+    }
+
+    this.engines?.spawnForRaid(this.raidCount, opts.x, opts.y);
+    const eng = this.engines?.countAlive() ?? 0;
+    this.waveStartCount = opts.count + eng;
+    this.buildings?.setRaidActive(true);
+
+    const label = opts.generalName
+      ? `${opts.generalName}’s siege host (${opts.count} infantry${eng ? `, ${eng} engines` : ''})`
+      : `a siege host (${opts.count} infantry${eng ? `, ${eng} engines` : ''})`;
+    this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
+      kind: 'enemy_army',
+      label,
+    });
+
+    const fieldDetach =
+      this.siegePlan?.focus === 'raid_fields'
+        ? Math.min(
+            Math.max(1, Math.floor(opts.count / 3)),
+            this.siegePlan.fieldIds.length || 1
+          )
+        : 0;
+
+    for (let i = 0; i < opts.count; i++) {
+      const ox = opts.x + Phaser.Math.Between(-20, 20);
+      const oy = opts.y + Phaser.Math.Between(-20, 20);
+      const isFieldRaid = i < fieldDetach;
+      const fieldId =
+        isFieldRaid && this.siegePlan
+          ? this.siegePlan.fieldIds[i % Math.max(1, this.siegePlan.fieldIds.length)] ??
+            null
+          : null;
+      this.launchRaider('enemy_army', ox, oy, undefined, i, opts.count, {
+        homeCampId: opts.homeCampId,
+        homeX: opts.x,
+        homeY: opts.y,
+        stealKind: null,
+        aggroOnly: false,
+        isGeneral: i === fieldDetach && Boolean(opts.generalName),
+        siegeRole: isFieldRaid ? 'field_raid' : 'main',
+        strategyFieldId: fieldId,
+      });
+    }
   }
 
   get isGameOver(): boolean {
@@ -148,7 +298,13 @@ export class RaidSystem {
     let best: ActiveRaider | null = null;
     let bestD = radius;
     for (const r of this.raiders) {
-      if (!r.sprite.active || r.state === 'done' || r.state === 'routing') continue;
+      if (
+        !r.sprite.active ||
+        r.state === 'done' ||
+        r.state === 'routing' ||
+        r.state === 'retreating'
+      )
+        continue;
       const d = Phaser.Math.Distance.Between(x, y, r.sprite.x, r.sprite.y);
       if (d < bestD) {
         bestD = d;
@@ -174,18 +330,27 @@ export class RaidSystem {
   update(deltaMs: number): void {
     if (this.gameOver) return;
 
-    const active = this.buildings?.getActiveKeepPoint();
-    if (active) {
-      this.keep.x = active.x;
-      this.keep.y = active.y;
-      this.engines?.setKeep(active);
+    // Hold the smart general's chosen keep; otherwise track the active keep
+    if (this.siegePlan && this.activeWaveKind === 'enemy_army') {
+      const pt = this.buildings?.getKeepTargetPoint(this.siegePlan.keepId);
+      if (pt) {
+        this.keep.x = pt.x;
+        this.keep.y = pt.y;
+        this.siegePlan.keepX = pt.x;
+        this.siegePlan.keepY = pt.y;
+      }
+      this.engines?.setKeep(this.keep);
+    } else {
+      const active = this.buildings?.getActiveKeepPoint();
+      if (active) {
+        this.keep.x = active.x;
+        this.keep.y = active.y;
+        this.engines?.setKeep(active);
+      }
     }
 
     this.elapsedMs += deltaMs;
-    if (this.elapsedMs >= this.nextRaidAt) {
-      this.nextRaidAt = this.elapsedMs + RAID_INTERVAL_MS;
-      this.spawnRaid();
-    }
+    // Raids launch from encampments — no timer edge spawns
 
     this.tickSiegePhase(deltaMs);
 
@@ -254,80 +419,50 @@ export class RaidSystem {
     return Boolean(path && path.length > 0);
   }
 
-  private spawnRaid(): void {
-    this.raidCount += 1;
-    const army =
-      this.raidCount >= 3 &&
-      (this.raidCount % 3 === 0 || Math.random() < 0.25);
-    const kind: RaidKind = army
-      ? 'enemy_army'
-      : Math.random() < 0.4
-        ? 'giant'
-        : 'bandit';
-
-    const count =
-      kind === 'enemy_army' ? Phaser.Math.Between(3, 5) : Phaser.Math.Between(1, 2);
-
-    const edge = this.randomEdgeSpawn();
-    this.campPoint = edge;
-    this.activeWaveKind = kind;
-    this.waveStartCount = count;
-    this.killTimes = [];
-    this.routToastShown = false;
-    this.siegeToastShown = false;
-
-    let label = LABELS[kind];
-    if (kind === 'enemy_army') {
-      this.siegePhase = 'muster';
-      this.musterMs = 0;
-      this.engines?.spawnForRaid(this.raidCount, edge.x, edge.y);
-      const eng = this.engines?.countAlive() ?? 0;
-      this.waveStartCount = count + eng;
-      label = `a siege host (${count} infantry${eng ? `, ${eng} engines` : ''})`;
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'A siege host approaches!',
-      });
-    } else {
-      this.siegePhase = 'none';
-    }
-
-    this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
-      kind,
-      label,
-    });
-
-    this.buildings?.setRaidActive(true);
-
-    const camp = this.scene.add
-      .circle(edge.x, edge.y, 10, 0x6b3e2e, 0.55)
-      .setStrokeStyle(1, 0x1c241c)
-      .setDepth(5);
-
-    for (let i = 0; i < count; i++) {
-      const ox = edge.x + Phaser.Math.Between(-20, 20);
-      const oy = edge.y + Phaser.Math.Between(-20, 20);
-      this.launchRaider(kind, ox, oy, i === 0 ? camp : undefined, i, count);
-    }
-  }
-
   private launchRaider(
     kind: RaidKind,
     x: number,
     y: number,
     camp?: Phaser.GameObjects.Arc,
     index = 0,
-    total = 1
+    total = 1,
+    home?: {
+      homeCampId: string | null;
+      homeX: number;
+      homeY: number;
+      stealKind: StealKind | null;
+      aggroOnly: boolean;
+      isGeneral?: boolean;
+      siegeRole?: 'main' | 'field_raid';
+      strategyFieldId?: string | null;
+    }
   ): void {
     const sprite = this.scene.add.sprite(x, y, kind, 0);
     sprite.setDepth(25);
     sprite.setOrigin(0.5, 1);
     if (kind === 'giant') {
       sprite.setScale(1.4);
+    } else if (kind === 'goblin') {
+      sprite.setScale(0.85);
+    }
+    if (home?.isGeneral) {
+      sprite.setTint(0xffd700);
     }
     sprite.play(idleAnimKey(kind));
 
-    const maxHp = RAIDER_MAX_HP[kind];
+    const maxHp = home?.isGeneral
+      ? Math.floor(RAIDER_MAX_HP[kind] * 1.5)
+      : RAIDER_MAX_HP[kind];
     const invest = this.investPoint(index, total);
+    const fieldRaid = home?.siegeRole === 'field_raid';
+    const startState: RaiderState =
+      kind === 'enemy_army'
+        ? fieldRaid
+          ? 'burning'
+          : 'investing'
+        : home?.aggroOnly
+          ? 'fighting'
+          : 'pathing';
     const raider: ActiveRaider = {
       kind,
       sprite,
@@ -335,26 +470,48 @@ export class RaidSystem {
       maxHp,
       path: [],
       pathIndex: 0,
-      state: kind === 'enemy_army' ? 'investing' : 'pathing',
+      state: startState,
       targetSubjectId: null,
-      targetBuildingId: null,
+      targetBuildingId: fieldRaid ? home?.strategyFieldId ?? null : null,
       thinkAccumMs: 0,
       camp,
       investX: invest.x,
       investY: invest.y,
+      homeCampId: home?.homeCampId ?? null,
+      homeX: home?.homeX ?? x,
+      homeY: home?.homeY ?? y,
+      stealKind: home?.stealKind ?? null,
+      looted: false,
+      isGeneral: Boolean(home?.isGeneral),
+      siegeRole: home?.siegeRole ?? 'main',
+      strategyFieldId: home?.strategyFieldId ?? null,
     };
     this.raiders.push(raider);
-    if (kind !== 'enemy_army') this.repath(raider);
+    if (kind !== 'enemy_army' && !home?.aggroOnly) this.repath(raider);
   }
 
   private investPoint(index: number, total: number): KeepPoint {
     const camp = this.campPoint ?? { x: 40, y: 40 };
+    // Smart general: invest along the soft approach corridor
+    if (this.siegePlan) {
+      const base = { x: this.siegePlan.breachX, y: this.siegePlan.breachY };
+      const spread =
+        (index - (total - 1) / 2) * SiegeBalance.investSpread;
+      const dx = this.siegePlan.keepX - camp.x;
+      const dy = this.siegePlan.keepY - camp.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const px = -dy / len;
+      const py = dx / len;
+      return {
+        x: base.x + px * spread,
+        y: base.y + py * spread,
+      };
+    }
     const dx = this.keep.x - camp.x;
     const dy = this.keep.y - camp.y;
     const len = Math.hypot(dx, dy) || 1;
     const nx = dx / len;
     const ny = dy / len;
-    // Line outside walls toward keep
     const dist = Math.min(len * 0.45, 160);
     const px = -ny;
     const py = nx;
@@ -376,8 +533,36 @@ export class RaidSystem {
       return;
     }
 
+    if (raider.state === 'retreating') {
+      this.tickRetreat(raider, deltaMs);
+      return;
+    }
+
+    // Thief dens: guards + dungeon can capture while pathing / fighting
+    if (
+      raider.stealKind === 'thief' &&
+      think &&
+      this.buildings?.hasDungeon()
+    ) {
+      const guard = this.subjects?.nearestMilitary(
+        raider.sprite.x,
+        raider.sprite.y,
+        CombatBalance.thiefCaptureRange
+      );
+      if (guard) {
+        this.captureThiefRaider(raider);
+        return;
+      }
+    }
+
     if (this.siegePhase === 'routing') {
       this.beginRoutRaider(raider);
+      return;
+    }
+
+    // Field detachment: burn outer food while the host invests
+    if (raider.kind === 'enemy_army' && raider.siegeRole === 'field_raid') {
+      this.tickFieldRaid(raider, deltaMs, think);
       return;
     }
 
@@ -588,13 +773,25 @@ export class RaidSystem {
       return;
     }
 
-    // Hold line; help breach nearest fortification in reduce
+    // Hold line; help breach — smart generals pick the weakest fort on their approach
     if (this.siegePhase === 'reduce' && think) {
-      const fort = this.buildings?.nearestFortification(
-        raider.sprite.x,
-        raider.sprite.y,
-        100
-      );
+      const fort =
+        this.siegePlan && this.buildings
+          ? this.buildings.weakestFortNear(
+              raider.sprite.x,
+              raider.sprite.y,
+              120
+            ) ??
+            this.buildings.nearestFortification(
+              raider.sprite.x,
+              raider.sprite.y,
+              100
+            )
+          : this.buildings?.nearestFortification(
+              raider.sprite.x,
+              raider.sprite.y,
+              100
+            );
       if (fort) {
         const fd = Phaser.Math.Distance.Between(
           raider.sprite.x,
@@ -614,8 +811,86 @@ export class RaidSystem {
     raider.sprite.play(idleAnimKey(raider.kind), true);
   }
 
+  /** Scorched-earth detachment: burn priority outer fields, then rejoin the storm. */
+  private tickFieldRaid(
+    raider: ActiveRaider,
+    deltaMs: number,
+    think: boolean
+  ): void {
+    if (!think && raider.state === 'burning' && raider.targetBuildingId) {
+      const b = this.buildings?.getById(raider.targetBuildingId);
+      if (b) {
+        const dist = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          b.x,
+          b.y
+        );
+        if (dist > 36) this.stepToward(raider, b.x, b.y, deltaMs);
+      }
+      return;
+    }
+
+    if (!think) return;
+
+    let field =
+      (raider.strategyFieldId
+        ? this.buildings?.getById(raider.strategyFieldId)
+        : null) ?? null;
+    if (!field || field.kind !== 'field' || field.hp <= 0) {
+      if (!this.buildings) return;
+      field =
+        this.buildings.fieldsOutsideWalls()[0] ??
+        this.buildings.fieldsNear(
+          raider.sprite.x,
+          raider.sprite.y,
+          400
+        ) ??
+        null;
+      raider.strategyFieldId = field?.id ?? null;
+    }
+
+    if (!field) {
+      // Food gone — rejoin the main siege
+      raider.siegeRole = 'main';
+      raider.state = 'pathing';
+      raider.targetBuildingId = null;
+      this.repath(raider);
+      return;
+    }
+
+    raider.state = 'burning';
+    raider.targetBuildingId = field.id;
+    raider.targetSubjectId = null;
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      field.x,
+      field.y
+    );
+    if (dist > 36) {
+      this.stepToward(raider, field.x, field.y, deltaMs);
+      return;
+    }
+    this.faceToward(raider, field.x, field.y);
+    raider.sprite.play(idleAnimKey(raider.kind), true);
+    this.vfx?.meleeLunge(raider.sprite, field.x, field.y);
+    const destroyed = this.buildings?.damageBuilding(
+      field.id,
+      CombatBalance.raiderBurn,
+      { fire: true }
+    );
+    if (destroyed) {
+      raider.strategyFieldId = null;
+      raider.targetBuildingId = null;
+    }
+  }
+
   private tickRouting(raider: ActiveRaider, deltaMs: number): void {
-    const edge = this.campPoint ?? { x: 24, y: 24 };
+    const edge = {
+      x: raider.homeX || this.campPoint?.x || 24,
+      y: raider.homeY || this.campPoint?.y || 24,
+    };
     const dist = Phaser.Math.Distance.Between(
       raider.sprite.x,
       raider.sprite.y,
@@ -629,6 +904,63 @@ export class RaidSystem {
     // Faster flee
     this.stepToward(raider, edge.x, edge.y, deltaMs * 1.45);
     raider.sprite.setTint(0xaaaaaa);
+  }
+
+  private tickRetreat(raider: ActiveRaider, deltaMs: number): void {
+    if (
+      raider.stealKind === 'thief' &&
+      this.buildings?.hasDungeon()
+    ) {
+      const guard = this.subjects?.nearestMilitary(
+        raider.sprite.x,
+        raider.sprite.y,
+        CombatBalance.thiefCaptureRange
+      );
+      if (guard) {
+        this.captureThiefRaider(raider);
+        return;
+      }
+    }
+
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      raider.homeX,
+      raider.homeY
+    );
+    if (dist < 22) {
+      this.returnRaiderHome(raider);
+      return;
+    }
+    this.stepToward(raider, raider.homeX, raider.homeY, deltaMs);
+  }
+
+  private returnRaiderHome(raider: ActiveRaider): void {
+    if (raider.state === 'done') return;
+    raider.state = 'done';
+    const campId = raider.homeCampId;
+    raider.camp?.destroy();
+    raider.sprite.destroy();
+    this.raiders = this.raiders.filter((r) => r !== raider);
+    if (campId) this.encampments?.onRaiderReturned(campId);
+    if (!this.hasActiveRaiders()) this.endWave();
+    this.onChanged?.();
+  }
+
+  private captureThiefRaider(raider: ActiveRaider): void {
+    if (raider.state === 'done') return;
+    raider.state = 'done';
+    const campId = raider.homeCampId;
+    raider.sprite.destroy();
+    this.raiders = this.raiders.filter((r) => r !== raider);
+    if (campId) this.encampments?.onRaiderLost(campId);
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: this.buildings?.hasDungeon()
+        ? 'Guards locked a thief in the dungeon!'
+        : 'Guards drove off a thief!',
+    });
+    if (!this.hasActiveRaiders()) this.endWave();
+    this.onChanged?.();
   }
 
   private beginRoutRaider(raider: ActiveRaider): void {
@@ -753,6 +1085,7 @@ export class RaidSystem {
   private killRaider(raider: ActiveRaider, countKill = true): void {
     if (raider.state === 'done') return;
     raider.state = 'done';
+    const campId = raider.homeCampId;
     raider.camp?.destroy();
     raider.camp = undefined;
     if (countKill) this.recordKill();
@@ -763,6 +1096,7 @@ export class RaidSystem {
       onComplete: () => {
         raider.sprite.destroy();
         this.raiders = this.raiders.filter((r) => r !== raider);
+        if (campId) this.encampments?.onRaiderLost(campId);
         if (!this.hasActiveRaiders()) {
           this.endWave();
         }
@@ -775,6 +1109,8 @@ export class RaidSystem {
     this.buildings?.setRaidActive(false);
     this.siegePhase = 'none';
     this.activeWaveKind = null;
+    this.siegePlan = null;
+    this.generalName = null;
     this.engines?.clear();
   }
 
@@ -788,13 +1124,25 @@ export class RaidSystem {
 
     if (!this.siegeToastShown) {
       this.siegeToastShown = true;
+      const focus = this.siegePlan?.focus;
+      const msg =
+        focus === 'weak_keep'
+          ? `${this.generalName ?? 'The host'} storms the weakest keep!`
+          : focus === 'soft_breach'
+            ? `${this.generalName ?? 'The host'} pours through the soft approach!`
+            : 'The keep is under siege!';
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'The keep is under siege!',
+        message: msg,
       });
     }
 
     if (!think) return;
-    const destroyed = this.buildings?.damageKeep(CombatBalance.raiderSiege);
+    // Generals deal slightly more siege damage (ability)
+    let dmg: number = CombatBalance.raiderSiege;
+    if (raider.isGeneral) dmg = Math.floor(dmg * 1.35);
+
+    const keepId = this.siegePlan?.keepId ?? KEEP_ID;
+    const destroyed = this.buildings?.damageKeepTarget(keepId, dmg);
     if (destroyed) {
       this.triggerGameOver();
     }
@@ -818,18 +1166,41 @@ export class RaidSystem {
   private onReachedKeep(raider: ActiveRaider): void {
     if (!raider.sprite.active || raider.state === 'done') return;
     if (raider.kind === 'enemy_army') return;
+    if (raider.looted || raider.state === 'retreating') return;
 
-    let amount = STEAL_AMOUNTS[raider.kind];
+    const stealKey: StealKind =
+      raider.stealKind ??
+      (raider.kind === 'giant'
+        ? 'giant'
+        : raider.kind === 'goblin'
+          ? 'goblin'
+          : 'bandit');
+    let amount = WarBalance.stealAmount(stealKey);
     if (this.buildings?.hasTavern()) {
       amount = Math.max(1, Math.floor(amount * 0.75));
     }
+    const label =
+      stealKey === 'thief'
+        ? 'Thieves'
+        : stealKey === 'goblin'
+          ? 'Goblins'
+          : stealKey === 'giant'
+            ? 'Giants'
+            : 'Bandits';
     this.scene.game.events.emit(KingdomEvents.GOLD_STOLEN, {
       amount,
-      kind: raider.kind,
-      label: LABELS[raider.kind],
+      kind: stealKey,
+      label,
     });
 
-    this.killRaider(raider, false);
+    raider.looted = true;
+    raider.state = 'retreating';
+    raider.targetSubjectId = null;
+    raider.targetBuildingId = null;
+    raider.path = [];
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${label} flee home with the gold!`,
+    });
   }
 
   private triggerGameOver(): void {
@@ -845,27 +1216,6 @@ export class RaidSystem {
       reason:
         'A rival kingdom’s army destroyed every keep. Your kingdom has fallen.',
     });
-  }
-
-  private randomEdgeSpawn(): { x: number; y: number } {
-    const pad = 24;
-    const side = Phaser.Math.Between(0, 3);
-    switch (side) {
-      case 0:
-        return { x: Phaser.Math.Between(pad, this.world.width - pad), y: pad };
-      case 1:
-        return {
-          x: Phaser.Math.Between(pad, this.world.width - pad),
-          y: this.world.height - pad,
-        };
-      case 2:
-        return { x: pad, y: Phaser.Math.Between(pad, this.world.height - pad) };
-      default:
-        return {
-          x: this.world.width - pad,
-          y: Phaser.Math.Between(pad, this.world.height - pad),
-        };
-    }
   }
 }
 

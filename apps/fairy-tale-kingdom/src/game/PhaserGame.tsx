@@ -23,11 +23,17 @@ import type {
 
 interface PhaserGameProps {
   remountKey: number;
+  daysPlayed: number;
   hireRequest: { seq: number; role: UnitRole } | null;
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
   ransomRequest: { seq: number; id: string } | null;
   transformRequest: { seq: number; fgmId: string } | null;
+  commandRequest: {
+    seq: number;
+    generalId: string;
+    troopCount: number;
+  } | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onDayTick: (day: DaySnapshot) => void;
@@ -46,11 +52,13 @@ interface PhaserGameProps {
 
 export function PhaserGame({
   remountKey,
+  daysPlayed,
   hireRequest,
   placeRequest,
   cancelPlaceToken,
   ransomRequest,
   transformRequest,
+  commandRequest,
   onSubjectSelected,
   onBuildingSelected,
   onDayTick,
@@ -107,6 +115,7 @@ export function PhaserGame({
 
     const game = createGame(host);
     gameRef.current = game;
+    game.registry.set('daysPlayed', daysPlayed);
 
     const handleSelect = (snap: SubjectSnapshot | null) => {
       onSelectRef.current(snap);
@@ -218,6 +227,21 @@ export function PhaserGame({
       fgmId: transformRequest.fgmId,
     });
   }, [transformRequest]);
+
+  useEffect(() => {
+    gameRef.current?.registry.set('daysPlayed', daysPlayed);
+    gameRef.current?.events.emit(KingdomEvents.SET_DAYS_PLAYED, {
+      daysPlayed,
+    });
+  }, [daysPlayed]);
+
+  useEffect(() => {
+    if (!commandRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.COMMAND_DETACHMENT, {
+      generalId: commandRequest.generalId,
+      troopCount: commandRequest.troopCount,
+    });
+  }, [commandRequest]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

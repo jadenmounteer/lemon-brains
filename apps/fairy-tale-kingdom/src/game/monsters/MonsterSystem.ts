@@ -91,6 +91,7 @@ export class MonsterSystem {
   private vfx: SiegeVfx | null = null;
   private clock: DayClock | null = null;
   private dayCount = 0;
+  private daysPlayed = 0;
   private spawnAccumDays = 0;
   private onChanged: (() => void) | null = null;
   private keep: Point = { x: 0, y: 0 };
@@ -261,17 +262,25 @@ export class MonsterSystem {
     }
   }
 
+  setDaysPlayed(days: number): void {
+    this.daysPlayed = Math.max(0, Math.floor(days));
+  }
+
   onDayRolled(): void {
     this.dayCount += 1;
     this.spawnAccumDays += 1;
-    if (this.monsters.length >= 4) return;
-    if (this.spawnAccumDays < 2) return;
+    const maxMonsters = Math.min(8, 3 + Math.floor(this.daysPlayed / 4));
+    if (this.monsters.length >= maxMonsters) return;
+    // Spawn more often as days rise (every 2 days early → every day late)
+    const interval = this.daysPlayed >= 10 ? 1 : 2;
+    if (this.spawnAccumDays < interval) return;
     this.spawnAccumDays = 0;
     const hasDragon = this.monsters.some((m) => m.kind === 'dragon');
     let kind: MonsterKind = Math.random() < 0.45 ? 'ogre' : 'troll';
-    if (!hasDragon && this.dayCount >= 3 && Math.random() < 0.55) {
+    if (!hasDragon && (this.dayCount >= 3 || this.daysPlayed >= 3) && Math.random() < 0.55) {
       kind = 'dragon';
     }
+    // Extra spawn chance on long-lived kingdoms
     const m = this.spawnMonster(kind);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message:
@@ -279,6 +288,16 @@ export class MonsterSystem {
           ? `${m.name} the dragon nests in a cave!`
           : `${m.name} the ${kind} stalks the kingdom!`,
     });
+    if (
+      this.daysPlayed >= 12 &&
+      this.monsters.length < maxMonsters &&
+      Math.random() < 0.35
+    ) {
+      const extra = this.spawnMonster(Math.random() < 0.5 ? 'ogre' : 'troll');
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${extra.name} the ${extra.kind} joins the wilds!`,
+      });
+    }
     this.onChanged?.();
   }
 

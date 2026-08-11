@@ -168,6 +168,39 @@ export class SubjectSystem {
     managed.interrupt = null;
   }
 
+  /**
+   * Assign up to `count` free guards/archers (not knights/generals) to assault a target.
+   * targetId is a camp id or `monster:<id>`.
+   */
+  assignAssault(targetId: string, count: number, _generalId: string): number {
+    const commandable = this.subjects.filter(
+      (s) =>
+        !s.data.sick &&
+        !s.interrupt &&
+        !s.data.onWall &&
+        (s.data.role === 'guard' ||
+          s.data.role === 'archer' ||
+          s.data.role === 'elite_guard' ||
+          s.data.role === 'elite_archer')
+    );
+    let assigned = 0;
+    for (const s of commandable) {
+      if (assigned >= count) break;
+      s.interrupt = { kind: 'assault', targetId };
+      s.data.activityLabel = 'On assault orders';
+      assigned += 1;
+    }
+    return assigned;
+  }
+
+  clearAssault(targetId: string): void {
+    for (const s of this.subjects) {
+      if (s.interrupt?.kind === 'assault' && s.interrupt.targetId === targetId) {
+        s.interrupt = null;
+      }
+    }
+  }
+
   cancelInterrupts(kinds: InterruptKind[]): void {
     for (const s of this.subjects) {
       if (s.interrupt && kinds.includes(s.interrupt.kind)) {
@@ -941,14 +974,51 @@ export class SubjectSystem {
     this.applyHpTint(managed);
     if (managed.data.hp <= 0) {
       const name = managed.data.name;
+      const role = managed.data.role;
+      const houseId = managed.data.houseId;
       this.removeSubject(managed);
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `${name} was slain`,
       });
+      if (role === 'king' || role === 'queen') {
+        this.trySuccession(houseId);
+      }
       this.onChanged?.();
       return true;
     }
+    this.onChanged?.();
     return false;
+  }
+
+  /** Married prince + princess at a keep become king & queen if both thrones are empty. */
+  private trySuccession(keepId: string): void {
+    const hasKing = this.subjects.some(
+      (s) => s.data.role === 'king' && s.data.houseId === keepId
+    );
+    const hasQueen = this.subjects.some(
+      (s) => s.data.role === 'queen' && s.data.houseId === keepId
+    );
+    if (hasKing || hasQueen) return;
+
+    const prince = this.subjects.find(
+      (s) =>
+        s.data.role === 'prince' &&
+        s.data.married &&
+        s.data.houseId === keepId
+    );
+    const princess = this.subjects.find(
+      (s) =>
+        s.data.role === 'princess' &&
+        s.data.married &&
+        s.data.houseId === keepId
+    );
+    if (!prince || !princess) return;
+
+    this.transformRole(prince.data.id, 'king', { married: true });
+    this.transformRole(princess.data.id, 'queen', { married: true });
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${prince.data.name} and ${princess.data.name} take the throne!`,
+    });
   }
 
   nudgeToward(
@@ -1213,6 +1283,7 @@ export class SubjectSystem {
         managed.data.role === 'fairy_godmother' && this.fgmCanTransform,
       temporaryPrincess: managed.data.temporaryPrincess,
       married: managed.data.married,
+      canCommandTroops: managed.data.role === 'general',
     };
   }
 }

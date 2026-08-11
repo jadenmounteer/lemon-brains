@@ -74,7 +74,8 @@ export function MarketplacePanel({
               (item.role === 'queen' && stats.queenCount >= stats.keepCount));
           const buildingMissing =
             (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) ||
-            (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary);
+            (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) ||
+            (item.requiresBuilding === 'barracks' && !stats.hasBarracks);
           const needsBed = !item.livesAtKeep && stats.freeBeds <= 0;
           const disabled =
             placeMode.active ||
@@ -98,6 +99,9 @@ export function MarketplacePanel({
                 )}
                 {buildingMissing && item.requiresBuilding === 'infirmary' && (
                   <p className="muted">Requires an Infirmary</p>
+                )}
+                {buildingMissing && item.requiresBuilding === 'barracks' && (
+                  <p className="muted">Requires a Barracks</p>
                 )}
                 {uniqueTaken && (
                   <p className="muted">Already in your kingdom</p>

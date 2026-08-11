@@ -167,18 +167,18 @@ export class BuildingSystem {
   }
 
   seedStarters(_worldW: number, _worldH: number): void {
-    const cx = this.keep.x;
+    const cx = fortSnap(this.keep.x);
     const cy = this.keep.y;
-    this.addBuilding('house', snapCoord(cx - 88), snapCoord(cy + 28), 'house-0');
-    this.addBuilding('house', snapCoord(cx + 96), snapCoord(cy + 32), 'house-1');
-    this.addBuilding('granary', snapCoord(cx - 48), snapCoord(cy + 88), 'granary-0');
-    this.addBuilding('field', snapCoord(cx + 16), snapCoord(cy + 104), 'field-0');
-    this.addBuilding('field', snapCoord(cx + 64), snapCoord(cy + 104), 'field-1');
-    // Wall / drawbridge snug against the keep's north face
-    const row = fortSnap(cy - 36);
-    const baseCol = Math.round(cx / FORT_TILE);
+    // Compact village ring around the road cross / keep
+    this.addBuilding('house', snapCoord(cx - 56), snapCoord(cy + 12), 'house-0');
+    this.addBuilding('house', snapCoord(cx + 56), snapCoord(cy + 12), 'house-1');
+    this.addBuilding('granary', snapCoord(cx - 40), snapCoord(cy + 52), 'granary-0');
+    this.addBuilding('field', snapCoord(cx + 24), snapCoord(cy + 56), 'field-0');
+    this.addBuilding('field', snapCoord(cx + 56), snapCoord(cy + 56), 'field-1');
+    // Drawbridge centered on the vertical path, wall snug north of keep
+    const row = fortSnap(cy - 32);
     for (let i = -3; i <= 3; i++) {
-      const x = baseCol * FORT_TILE + i * FORT_TILE + FORT_TILE / 2;
+      const x = cx + i * FORT_TILE;
       if (i === 0) {
         this.addBuilding('drawbridge', x, row);
       } else {
@@ -394,6 +394,124 @@ export class BuildingSystem {
     const extra = this.buildings.find((b) => b.kind === 'keep' && b.hp > 0);
     if (extra) return { x: extra.x, y: extra.y };
     return { x: this.keep.x, y: this.keep.y };
+  }
+
+  /** All standing keeps with HP (primary + placed). */
+  listKeepTargets(): {
+    id: string;
+    x: number;
+    y: number;
+    hp: number;
+    maxHp: number;
+  }[] {
+    const out: {
+      id: string;
+      x: number;
+      y: number;
+      hp: number;
+      maxHp: number;
+    }[] = [];
+    if (this.keepHp > 0) {
+      out.push({
+        id: KEEP_ID,
+        x: this.keep.x,
+        y: this.keep.y,
+        hp: this.keepHp,
+        maxHp: this.keepMaxHp,
+      });
+    }
+    for (const b of this.buildings) {
+      if (b.kind !== 'keep' || b.hp <= 0) continue;
+      out.push({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        hp: b.hp,
+        maxHp: b.maxHp,
+      });
+    }
+    return out;
+  }
+
+  getKeepTargetPoint(id: string): Point | null {
+    if (id === KEEP_ID) {
+      return this.keepHp > 0 ? { x: this.keep.x, y: this.keep.y } : null;
+    }
+    const b = this.buildings.find((k) => k.id === id && k.kind === 'keep' && k.hp > 0);
+    return b ? { x: b.x, y: b.y } : null;
+  }
+
+  /** Damage a specific keep (primary or placed). Returns true if all keeps are gone. */
+  damageKeepTarget(id: string, amount: number): boolean {
+    if (id === KEEP_ID) {
+      if (this.keepHp <= 0) return this.allKeepsDestroyed();
+      this.keepHp = Math.max(0, this.keepHp - amount);
+      this.applyKeepTint();
+      this.vfx?.hitFlash(this.keepSprite);
+      if (this.keepHp <= 0) {
+        this.keepSprite?.setVisible(false);
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: this.allKeepsDestroyed()
+            ? 'The keep has fallen!'
+            : 'A keep has fallen — defend the others!',
+        });
+      }
+      this.onLayoutChanged?.();
+      return this.allKeepsDestroyed();
+    }
+    const b = this.getById(id);
+    if (b && b.kind === 'keep') {
+      this.damageBuilding(id, amount);
+    }
+    return this.allKeepsDestroyed();
+  }
+
+  /** Fields that sit beyond the wall line (food outside the fort). */
+  fieldsOutsideWalls(wallNearPx = 56): BuildingRecord[] {
+    const fields: BuildingRecord[] = [];
+    for (const b of this.buildings) {
+      if (b.kind !== 'field') continue;
+      let nearest = Infinity;
+      for (const w of this.buildings) {
+        if (w.kind !== 'wall' && w.kind !== 'drawbridge') continue;
+        const d = Phaser.Math.Distance.Between(b.x, b.y, w.x, w.y);
+        if (d < nearest) nearest = d;
+      }
+      if (nearest > wallNearPx) fields.push(b);
+    }
+    return fields;
+  }
+
+  /** Fortification count / strength near a point (higher = better defended). */
+  defenseScoreNear(x: number, y: number, radius = 110): number {
+    let score = 0;
+    for (const b of this.buildings) {
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d > radius) continue;
+      if (b.kind === 'wall') score += 2;
+      else if (b.kind === 'drawbridge') score += 3;
+      else if (b.kind === 'ballista') score += 4;
+      else if (b.kind === 'watchtower') score += 3;
+      else if (b.kind === 'stairs') score += 1;
+    }
+    return score;
+  }
+
+  /** Lowest-HP wall/gate near a point. */
+  weakestFortNear(x: number, y: number, radius: number): BuildingRecord | null {
+    let best: BuildingRecord | null = null;
+    let bestScore = Infinity;
+    for (const b of this.buildings) {
+      if (b.kind !== 'wall' && b.kind !== 'drawbridge') continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d > radius) continue;
+      const score = b.hp / Math.max(1, b.maxHp) + d / Math.max(1, radius);
+      if (score < bestScore) {
+        bestScore = score;
+        best = b;
+      }
+    }
+    return best;
   }
 
   nearestField(x: number, y: number, radius = Infinity): BuildingRecord | null {

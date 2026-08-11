@@ -9,6 +9,7 @@ import type { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
 import type { SiegeVfx } from '../siege/SiegeVfx';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
+import type { EncampmentSystem } from '../war/EncampmentSystem';
 import { CombatBalance } from './stats';
 
 /**
@@ -22,6 +23,7 @@ export class CombatSystem {
   private engines: SiegeEngineSystem | null = null;
   private vfx: SiegeVfx | null = null;
   private monsters: MonsterSystem | null = null;
+  private encampments: EncampmentSystem | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -40,6 +42,10 @@ export class CombatSystem {
 
   setMonsters(monsters: MonsterSystem): void {
     this.monsters = monsters;
+  }
+
+  setEncampments(encampments: EncampmentSystem): void {
+    this.encampments = encampments;
   }
 
   setInspired(active: boolean): void {
@@ -66,6 +72,7 @@ export class CombatSystem {
     if (this.accumMs < CombatBalance.tickMs) return;
     this.accumMs = 0;
 
+    this.tickAssaultOrders();
     this.friendlyFire(raidActive);
     if (raidActive) this.tickBallistae();
     this.tickMonsterCombat();
@@ -76,6 +83,84 @@ export class CombatSystem {
     if (this.buildings.hasBarracks()) dmgMult *= EconomyBalance.barracksDamageMult;
     if (this.inspired) dmgMult *= EconomyBalance.waveCombatMult;
     return dmgMult;
+  }
+
+  private tickAssaultOrders(): void {
+    const dmgMult = this.dmgMult();
+    for (const fighter of this.subjects.withInterrupt('assault')) {
+      const targetId = fighter.interrupt?.targetId;
+      if (!targetId) {
+        this.subjects.clearInterrupt(fighter.data.id);
+        continue;
+      }
+
+      if (targetId.startsWith('monster:')) {
+        const mid = targetId.slice('monster:'.length);
+        const m = this.monsters?.getById(mid);
+        if (!m) {
+          this.subjects.clearInterrupt(fighter.data.id);
+          continue;
+        }
+        const dist = Phaser.Math.Distance.Between(
+          fighter.sprite.x,
+          fighter.sprite.y,
+          m.sprite.x,
+          m.sprite.y
+        );
+        if (dist > CombatBalance.guardRange + 8) {
+          this.subjects.nudgeToward(
+            fighter.data.id,
+            m.sprite.x,
+            m.sprite.y,
+            55
+          );
+          continue;
+        }
+        const base =
+          fighter.data.role === 'elite_guard'
+            ? CombatBalance.eliteGuardMelee
+            : fighter.data.role === 'elite_archer' ||
+                fighter.data.role === 'archer'
+              ? CombatBalance.archerRanged
+              : CombatBalance.guardMelee;
+        this.vfx?.meleeLunge(fighter.sprite, m.sprite.x, m.sprite.y);
+        const dead = this.monsters?.damageMonster(m.id, base * dmgMult);
+        if (dead) {
+          this.subjects.clearAssault(targetId);
+          this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+            message: `${fighter.data.name}’s detachment slew the monster!`,
+          });
+        }
+        continue;
+      }
+
+      const point = this.encampments?.getCampPoint(targetId);
+      if (!point) {
+        this.subjects.clearInterrupt(fighter.data.id);
+        continue;
+      }
+      const dist = Phaser.Math.Distance.Between(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        point.x,
+        point.y
+      );
+      if (dist > 40) {
+        this.subjects.nudgeToward(fighter.data.id, point.x, point.y, 55);
+        continue;
+      }
+      const base =
+        fighter.data.role === 'elite_guard'
+          ? CombatBalance.eliteGuardMelee
+          : CombatBalance.guardMelee;
+      const destroyed = this.encampments?.applyAssaultHit(
+        targetId,
+        base * dmgMult
+      );
+      if (destroyed) {
+        this.subjects.clearAssault(targetId);
+      }
+    }
   }
 
   private friendlyFire(raidActive: boolean): void {

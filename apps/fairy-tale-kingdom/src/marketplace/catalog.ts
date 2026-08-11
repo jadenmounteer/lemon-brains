@@ -21,7 +21,7 @@ export const BEDS_PER_HOUSE = 3;
 export const FIELDS_PER_GRANARY = 2;
 export const ROYAL_SLOTS_PER_KEEP = 4;
 
-export type HireGate = 'cathedral' | 'infirmary';
+export type HireGate = 'cathedral' | 'infirmary' | 'barracks';
 
 export interface HireCatalogItem {
   role: UnitRole;
@@ -74,6 +74,14 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
     cost: 45,
   },
   {
+    role: 'general',
+    name: 'General',
+    blurb: 'Commands guards and archers against encampments and monsters. Requires a Barracks.',
+    cost: 70,
+    requiresRoyalty: true,
+    requiresBuilding: 'barracks',
+  },
+  {
     role: 'physician',
     name: 'Physician',
     blurb: 'Plague-masked healer. Cures the sick and tends wounds. Requires an Infirmary.',
@@ -92,16 +100,18 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
   {
     role: 'elite_guard',
     name: 'Elite Guard',
-    blurb: 'Hardened melee fighter. Requires King & Queen.',
+    blurb: 'Hardened melee fighter. Requires King & Queen and a Barracks.',
     cost: 35,
     requiresRoyalty: true,
+    requiresBuilding: 'barracks',
   },
   {
     role: 'elite_archer',
     name: 'Elite Archer',
-    blurb: 'Master bowman. Requires King & Queen.',
+    blurb: 'Master bowman. Requires King & Queen and a Barracks.',
     cost: 40,
     requiresRoyalty: true,
+    requiresBuilding: 'barracks',
   },
   {
     role: 'king',

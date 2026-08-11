@@ -20,11 +20,14 @@ import { RoyaltySystem } from '../royalty/RoyaltySystem';
 import { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
 import { SiegeVfx } from '../siege/SiegeVfx';
 import { ThiefSystem } from '../thieves/ThiefSystem';
+import { EncampmentSystem } from '../war/EncampmentSystem';
 import {
   KingdomEvents,
   type BeginPlacePayload,
+  type CommandDetachmentPayload,
   type HireSubjectPayload,
   type PayRansomPayload,
+  type SetDaysPlayedPayload,
   type TransformPeasantPayload,
 } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
@@ -63,6 +66,7 @@ export class KingdomScene extends Phaser.Scene {
   private siegeVfx!: SiegeVfx;
   private monsters!: MonsterSystem;
   private thieves!: ThiefSystem;
+  private encampments!: EncampmentSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private mapData: number[][] = [];
   private mapSeed = 0;
@@ -97,10 +101,17 @@ export class KingdomScene extends Phaser.Scene {
     )!;
     map.createLayer(0, tileset, 0, 0)!.setDepth(0);
 
-    const cx = WORLD_WIDTH / 2;
-    // Keep sits just south of the fort wall / drawbridge
-    const wallRow = Math.round((WORLD_HEIGHT / 2 - 40) / TILE_SIZE) * TILE_SIZE + TILE_SIZE / 2;
-    const cy = wallRow + 36;
+    // Align keep + fort to the procedural road cross (tile centers)
+    const pathCx =
+      Math.floor(MAP_COLS / 2) * TILE_SIZE + TILE_SIZE / 2;
+    const pathCy =
+      Math.floor(MAP_ROWS / 2) * TILE_SIZE + TILE_SIZE / 2;
+    // Wall / drawbridge just north of keep, centered on the vertical road
+    const wallY =
+      Math.round((pathCy - 28 - TILE_SIZE / 2) / TILE_SIZE) * TILE_SIZE +
+      TILE_SIZE / 2;
+    const cx = pathCx;
+    const cy = wallY + 32;
     this.keepPoint = { x: cx, y: cy };
     const keepSprite = this.add
       .image(cx, cy, PROP_KEYS.keep)
@@ -184,6 +195,24 @@ export class KingdomScene extends Phaser.Scene {
     this.raids.setVfx(this.siegeVfx);
     this.raids.setOnChanged(() => this.schedulePersist());
 
+    this.encampments = new EncampmentSystem(
+      this,
+      { width: WORLD_WIDTH, height: WORLD_HEIGHT },
+      { x: cx, y: cy }
+    );
+    this.encampments.setBuildings(this.buildings);
+    this.encampments.setSubjects(this.subjects);
+    this.encampments.setRaids(this.raids);
+    this.encampments.setPathGrid(this.pathGrid);
+    this.encampments.setOnChanged(() => this.schedulePersist());
+    this.raids.setEncampments(this.encampments);
+    const initialDays =
+      typeof this.registry.get('daysPlayed') === 'number'
+        ? (this.registry.get('daysPlayed') as number)
+        : 0;
+    this.encampments.setDaysPlayed(initialDays);
+    this.monsters.setDaysPlayed(initialDays);
+
     this.combat = new CombatSystem(
       this,
       this.subjects,
@@ -193,6 +222,7 @@ export class KingdomScene extends Phaser.Scene {
     this.combat.setEngines(this.siegeEngines);
     this.combat.setVfx(this.siegeVfx);
     this.combat.setMonsters(this.monsters);
+    this.combat.setEncampments(this.encampments);
     this.tasks = new TaskSystem(this.subjects, this.buildings);
     this.hunger = new HungerSystem(this, this.subjects);
     this.tasks.setHunger(this.hunger);
@@ -219,6 +249,9 @@ export class KingdomScene extends Phaser.Scene {
         this.monsters.restore(saved.monsters);
       } else {
         this.monsters.seedIfEmpty();
+      }
+      if (saved.encampments && saved.encampments.length > 0) {
+        this.encampments.restore(saved.encampments);
       }
       // Migrate older saves that lacked mapSeed
       if (typeof saved.mapSeed !== 'number') {
@@ -368,6 +401,8 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.on(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
     this.game.events.on(KingdomEvents.DAY_ROLLED, this.onDayRolled);
+    this.game.events.on(KingdomEvents.COMMAND_DETACHMENT, this.onCommand);
+    this.game.events.on(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -427,7 +462,8 @@ export class KingdomScene extends Phaser.Scene {
       Boolean(isNight),
       this.raids?.hasActiveRaiders() ?? false
     );
-            this.buildings?.updateInteriors(this.subjects.unitBodies());
+    this.encampments?.update(delta, Boolean(isNight));
+    this.buildings?.updateInteriors(this.subjects.unitBodies());
     this.applyNightOverlay();
   }
 
@@ -437,6 +473,7 @@ export class KingdomScene extends Phaser.Scene {
     this.siegeVfx?.clear();
     this.monsters?.clear();
     this.thieves?.clear();
+    this.encampments?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
@@ -446,6 +483,8 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.off(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
     this.game.events.off(KingdomEvents.DAY_ROLLED, this.onDayRolled);
+    this.game.events.off(KingdomEvents.COMMAND_DETACHMENT, this.onCommand);
+    this.game.events.off(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
   }
 
   private onHire = (payload: HireSubjectPayload) => {
@@ -550,12 +589,14 @@ export class KingdomScene extends Phaser.Scene {
       hasCathedral: this.buildings.hasCathedral(),
       hasInfirmary: this.buildings.hasInfirmary(),
       hasDungeon: this.buildings.hasDungeon(),
+      hasBarracks: this.buildings.hasBarracks(),
       hasKing,
       hasQueen,
       hasPrince: this.subjects.hasRole('prince'),
       hasPrincess: this.subjects.hasRole('princess'),
       hasFairyGodmother: this.subjects.hasRole('fairy_godmother'),
       hasBishop: this.subjects.hasRole('bishop'),
+      hasGeneral: this.subjects.hasRole('general'),
       royaltyUnlocked: hasKing && hasQueen,
       inspired: this.royalty?.isInspired() ?? false,
       food: this.hunger?.currentFood() ?? 0,
@@ -563,6 +604,14 @@ export class KingdomScene extends Phaser.Scene {
       kingCount: this.subjects.countRole('king'),
       queenCount: this.subjects.countRole('queen'),
       fieldSlots: this.buildings.fieldSlots(),
+      militaryAvailable: this.subjects.combatants().filter(
+        (s) =>
+          !s.interrupt &&
+          (s.data.role === 'guard' ||
+            s.data.role === 'archer' ||
+            s.data.role === 'elite_guard' ||
+            s.data.role === 'elite_archer')
+      ).length,
     });
   }
 
@@ -578,6 +627,7 @@ export class KingdomScene extends Phaser.Scene {
       subjects: this.subjects.serialize(),
       buildings: this.buildings.serialize(),
       monsters: this.monsters.serialize(),
+      encampments: this.encampments.serialize(),
       mapSeed: this.mapSeed,
       keepHp: keep.keepHp,
       keepMaxHp: keep.keepMaxHp,
@@ -606,6 +656,30 @@ export class KingdomScene extends Phaser.Scene {
   private onDayRolled = () => {
     this.monsters?.onDayRolled();
     this.schedulePersist();
+  };
+
+  private onSetDaysPlayed = (payload: SetDaysPlayedPayload) => {
+    const days = payload.daysPlayed;
+    this.registry.set('daysPlayed', days);
+    this.encampments?.setDaysPlayed(days);
+    this.monsters?.setDaysPlayed(days);
+  };
+
+  private onCommand = (payload: CommandDetachmentPayload) => {
+    if (payload.targetId?.startsWith('monster:')) {
+      this.encampments?.commandDestroyMonster(
+        payload.generalId,
+        payload.troopCount,
+        payload.targetId.slice('monster:'.length)
+      );
+    } else {
+      this.encampments?.commandDestroyCamp(
+        payload.generalId,
+        payload.troopCount,
+        payload.targetId
+      );
+    }
+    this.emitStats();
   };
 
   private zoomAtPointer(dy: number): void {

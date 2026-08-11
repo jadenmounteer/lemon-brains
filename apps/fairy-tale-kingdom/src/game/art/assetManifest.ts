@@ -18,6 +18,7 @@ export const UNIT_ROLES = [
   'elite_guard',
   'elite_archer',
   'knight',
+  'general',
   'physician',
   'bishop',
   'king',
@@ -29,7 +30,7 @@ export const UNIT_ROLES = [
 export type UnitRole = (typeof UNIT_ROLES)[number];
 
 /** Hostile units (procedural sheets, same frame layout as friendly cast) */
-export const ENEMY_ROLES = ['bandit', 'giant', 'enemy_army'] as const;
+export const ENEMY_ROLES = ['bandit', 'giant', 'goblin', 'enemy_army'] as const;
 export type EnemyRole = (typeof ENEMY_ROLES)[number];
 
 /** World monsters (scheduled NPCs, not raid waves) */
@@ -81,6 +82,9 @@ export const PROP_KEYS = {
   cathedral: 'prop-cathedral',
   infirmary: 'prop-infirmary',
   dungeon: 'prop-dungeon',
+  banditCamp: 'prop-bandit-camp',
+  thiefDen: 'prop-thief-den',
+  siegeCamp: 'prop-siege-camp',
   /** Interior underlays (shown when roof hidden) */
   houseInterior: 'prop-house-interior',
   keepInterior: 'prop-keep-interior',
@@ -176,7 +180,8 @@ export function isMilitaryRole(role: UnitRole): boolean {
     role === 'archer' ||
     role === 'elite_guard' ||
     role === 'elite_archer' ||
-    role === 'knight'
+    role === 'knight' ||
+    role === 'general'
   );
 }
 

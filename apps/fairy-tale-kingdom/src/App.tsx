@@ -54,12 +54,14 @@ const DEFAULT_STATS: KingdomStats = {
   hasCathedral: false,
   hasInfirmary: false,
   hasDungeon: false,
+  hasBarracks: false,
   hasKing: false,
   hasQueen: false,
   hasPrince: false,
   hasPrincess: false,
   hasFairyGodmother: false,
   hasBishop: false,
+  hasGeneral: false,
   royaltyUnlocked: false,
   inspired: false,
   food: 0,
@@ -67,6 +69,7 @@ const DEFAULT_STATS: KingdomStats = {
   kingCount: 0,
   queenCount: 0,
   fieldSlots: 0,
+  militaryAvailable: 0,
 };
 
 export default function App() {
@@ -114,6 +117,11 @@ export default function App() {
   const [transformRequest, setTransformRequest] = useState<{
     seq: number;
     fgmId: string;
+  } | null>(null);
+  const [commandRequest, setCommandRequest] = useState<{
+    seq: number;
+    generalId: string;
+    troopCount: number;
   } | null>(null);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
@@ -173,6 +181,10 @@ export default function App() {
       }
       if (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) {
         flash('Build an Infirmary first');
+        return;
+      }
+      if (item.requiresBuilding === 'barracks' && !stats.hasBarracks) {
+        flash('Build a Barracks first');
         return;
       }
       if (
@@ -338,11 +350,13 @@ export default function App() {
         {kingdomReady && !needsSetup && (
           <PhaserGame
             remountKey={remountKey}
+            daysPlayed={kingdom.daysPlayed}
             hireRequest={hireRequest}
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
             ransomRequest={ransomRequest}
             transformRequest={transformRequest}
+            commandRequest={commandRequest}
             onSubjectSelected={setSelected}
             onBuildingSelected={setSelectedBuilding}
             onDayTick={setDay}
@@ -409,6 +423,7 @@ export default function App() {
             {selected && (
               <InspectorPanel
                 subject={selected}
+                militaryAvailable={stats.militaryAvailable}
                 onClose={() => {
                   setSelected(null);
                   setDeselectToken((n) => n + 1);
@@ -417,6 +432,13 @@ export default function App() {
                   setTransformRequest({
                     seq: Date.now(),
                     fgmId: selected.id,
+                  });
+                }}
+                onCommandTroops={(troopCount) => {
+                  setCommandRequest({
+                    seq: Date.now(),
+                    generalId: selected.id,
+                    troopCount,
                   });
                 }}
               />

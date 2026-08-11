@@ -26,6 +26,7 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   elite_guard: 55,
   elite_archer: 40,
   knight: 50,
+  general: 55,
   physician: 28,
   bishop: 30,
   king: 45,
@@ -87,6 +88,7 @@ export const CombatBalance = {
 export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
   bandit: 25,
   giant: 60,
+  goblin: 18,
   enemy_army: 35,
 };
 

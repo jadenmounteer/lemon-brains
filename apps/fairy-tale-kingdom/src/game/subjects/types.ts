@@ -73,7 +73,8 @@ export type InterruptKind =
   | 'harvest'
   | 'defend'
   | 'heal'
-  | 'wedding';
+  | 'wedding'
+  | 'assault';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -133,6 +134,7 @@ export interface SubjectSnapshot {
   married?: boolean;
   ballActive?: boolean;
   festivalActive?: boolean;
+  canCommandTroops?: boolean;
 }
 
 export interface DaySnapshot {
@@ -153,12 +155,14 @@ export interface KingdomStats {
   hasCathedral: boolean;
   hasInfirmary: boolean;
   hasDungeon: boolean;
+  hasBarracks: boolean;
   hasKing: boolean;
   hasQueen: boolean;
   hasPrince: boolean;
   hasPrincess: boolean;
   hasFairyGodmother: boolean;
   hasBishop: boolean;
+  hasGeneral: boolean;
   royaltyUnlocked: boolean;
   inspired: boolean;
   food: number;
@@ -166,4 +170,5 @@ export interface KingdomStats {
   kingCount: number;
   queenCount: number;
   fieldSlots: number;
+  militaryAvailable: number;
 }
