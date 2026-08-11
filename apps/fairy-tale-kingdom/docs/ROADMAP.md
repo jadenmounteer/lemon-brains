@@ -14,41 +14,39 @@ Long-term phased vision.
 
 ## Phase 0 — Foundation (done)
 
-- React + Vite + TypeScript + Phaser 3 app at `apps/fairy-tale-kingdom`
-- React HUD: title, gold stub, back to Knowledge Quest, Questions / Marketplace stubs
-- Shared settings load via `@knowledge-quest/storage`
-- Enabled on the Knowledge Quest games list and included in `npm run build:pages`
+- React + Vite + TypeScript + Phaser 3 app
+- Host / Pages wiring + shared settings load
 
 ## Phase 1 — Graphics (done)
 
-- Style guide (`docs/STYLE_GUIDE.md`) + `public/assets/` drop-in layout
-- Shared palette + asset manifest (stable texture/anim keys)
-- Procedural tileset + peasant/guard/archer sheets (idle + 4-dir walk)
-- Procedural keep / house / wall props
-- Phaser `pixelArt` + integer camera zoom
-- Kingdom tilemap + walking cast
+- Style guide + procedural tileset / cast / props
+- Pixel art config + panable tilemap
 
 See also [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
-## Phase 2 — Living subjects (current)
+## Phase 2 — Living subjects (done)
+
+- Named subjects with roles and day schedules
+- Click-to-inspect React panel + selection bridge
+- Day clock driving activities
+
+## Phase 3 — Learn-to-earn (current)
 
 Checklist:
 
-- [x] Named subjects (seeded name pools) with roles
-- [x] Accelerated day clock + per-role schedules / zones
-- [x] Subjects prefer schedule zones over pure random wander
-- [x] Click-to-inspect with pan threshold (no accidental select while dragging)
-- [x] React inspector panel (name, role, activity, schedule) + day phase HUD
-- [x] Phaser ↔ React selection bridge
+- [x] Live Question panel via `createCurriculumRegistry` + shared settings
+- [x] +3 gold per correct answer; wrong keeps the question
+- [x] Persist gold (`fairyTaleKingdom.gold`)
+- [x] Read-aloud + replay when enabled
+- [x] Night darkening overlay from day clock
+- [x] HUD title shows time of day (not brand name); inspector has no clock line
 
-## Non-goals (Phase 0–2)
+## Non-goals (Phase 0–3)
 
 - Full Dwarf Fortress–depth simulation
-- Multiplayer
-- Auth / accounts
-- Combat, marketplace purchases, gold/questions (Phase 3+)
-- Pathfinding around buildings (point-to-zone wander is enough for now)
-- Persistence of kingdom state
+- Multiplayer / auth
+- Marketplace spending / building placement (Phase 4)
+- Combat / raids (Phase 5)
 
 ## Product north star
 

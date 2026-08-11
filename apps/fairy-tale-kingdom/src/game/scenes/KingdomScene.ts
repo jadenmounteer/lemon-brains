@@ -6,6 +6,7 @@ import {
   TerrainTile,
 } from '../art/assetManifest';
 import { KingdomEvents } from '../subjects/events';
+import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 
 const MAP_COLS = 80;
@@ -14,12 +15,14 @@ const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
 const PAN_THRESHOLD_PX = 6;
+const NIGHT_TINT = 0x0a1520;
 
 export class KingdomScene extends Phaser.Scene {
   private dragStart: Phaser.Math.Vector2 | null = null;
   private cameraStart: Phaser.Math.Vector2 | null = null;
   private pointerMoved = false;
   private subjects!: SubjectSystem;
+  private nightOverlay!: Phaser.GameObjects.Rectangle;
 
   constructor() {
     super('KingdomScene');
@@ -54,6 +57,15 @@ export class KingdomScene extends Phaser.Scene {
     cam.setZoom(CAMERA_ZOOM);
     cam.setRoundPixels(true);
     cam.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+
+    // Camera-fixed night veil (below hint text)
+    this.nightOverlay = this.add
+      .rectangle(0, 0, this.scale.width, this.scale.height, NIGHT_TINT, 0)
+      .setOrigin(0, 0)
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.scale.on('resize', this.onResize, this);
+    this.applyNightOverlay();
 
     this.add
       .text(12, 12, 'Drag to look · click a subject', {
@@ -130,10 +142,23 @@ export class KingdomScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     this.subjects?.update(delta);
+    this.applyNightOverlay();
   }
 
   shutdown() {
+    this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+  }
+
+  private onResize = (gameSize: Phaser.Structs.Size) => {
+    this.nightOverlay?.setSize(gameSize.width, gameSize.height);
+  };
+
+  private applyNightOverlay() {
+    if (!this.nightOverlay || !this.subjects) return;
+    const alpha = nightAlphaForHour(this.subjects.clock.hour);
+    this.nightOverlay.setFillStyle(NIGHT_TINT, alpha);
+    this.nightOverlay.setVisible(alpha > 0.01);
   }
 
   private onClearSelection = () => {

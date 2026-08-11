@@ -78,14 +78,6 @@ a {
   color: #f6e2a8;
 }
 
-.day-phase {
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  background: rgba(232, 245, 233, 0.08);
-  border: 1px solid #6a9276;
-  color: var(--cream);
-  font-size: 0.9rem;
-}
 
 .hud-actions button,
 .back {
@@ -208,4 +200,86 @@ a {
 
 .schedule-list li {
   margin: 0.2rem 0;
+}
+
+.question-tools {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.question-prompt {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.question-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.question-option {
+  min-height: 48px;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid #6a9276;
+  background: #2f523c;
+  color: var(--cream);
+  font-weight: 650;
+  font-size: 1rem;
+}
+
+.question-option:disabled {
+  opacity: 0.75;
+}
+
+.question-option.wrong {
+  border-color: #c45c5c;
+  background: #5a3030;
+}
+
+.question-option.emoji-option {
+  font-size: 1.6rem;
+}
+
+.question-option.color-option {
+  min-height: 56px;
+  border-width: 2px;
+}
+
+.question-option.shape-option {
+  padding: 0.35rem;
+}
+
+.question-option.shape-option svg {
+  width: 48px;
+  height: 48px;
+  display: block;
+  margin: 0 auto;
+}
+
+.question-feedback {
+  margin: 0.65rem 0 0;
+  color: #f6e2a8;
+  font-weight: 700;
+}
+
+.curriculum-hint {
+  margin-top: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

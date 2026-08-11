@@ -3,13 +3,15 @@ import { config } from './config';
 import { PhaserGame } from './game/PhaserGame';
 import type { DaySnapshot, SubjectSnapshot } from './game/subjects/types';
 import { QuestionPanel } from './learning/QuestionPanel';
+import { useGold } from './learning/useGold';
 import { useSettings } from './learning/useSettings';
 import { MarketplacePanel } from './marketplace/MarketplacePanel';
 import { InspectorPanel } from './subjects/InspectorPanel';
+import { formatClock } from './utils/formatClock';
 
 export default function App() {
   const { settings, ready } = useSettings();
-  const [gold] = useState(0);
+  const { gold, earnCorrectAnswer } = useGold();
   const [showQuestions, setShowQuestions] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
   const [selected, setSelected] = useState<SubjectSnapshot | null>(null);
@@ -26,13 +28,12 @@ export default function App() {
     <div className="app">
       <header className="hud">
         <div className="brand">
-          <h1>Fairy Tale Kingdom</h1>
-          <p className="tagline">A watchable kingdom — learn, earn, grow</p>
+          <h1 aria-live="polite">
+            {day.dayPhase} · {formatClock(day.hour)}
+          </h1>
+          <p className="tagline">Learn for gold</p>
         </div>
         <div className="hud-actions">
-          <div className="day-phase" aria-live="polite">
-            {day.dayPhase}
-          </div>
           <div className="gold" aria-live="polite">
             Gold: <strong>{gold}</strong>
           </div>
@@ -66,7 +67,11 @@ export default function App() {
               />
             )}
             {showQuestions && (
-              <QuestionPanel settings={settings} ready={ready} />
+              <QuestionPanel
+                settings={settings}
+                ready={ready}
+                onGoldEarned={earnCorrectAnswer}
+              />
             )}
             {showMarket && <MarketplacePanel />}
           </aside>

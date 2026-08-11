@@ -34,7 +34,7 @@ export class SubjectSystem {
   private subjects: ManagedSubject[] = [];
   private selectedId: string | null = null;
   private marker: Phaser.GameObjects.Arc | null = null;
-  private lastDayEmitHour = -1;
+  private dayEmitAccumMs = 0;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -134,9 +134,10 @@ export class SubjectSystem {
     this.clock.tick(deltaMs);
     this.syncActivities();
 
-    const hourFloor = Math.floor(this.clock.hour);
-    if (hourFloor !== this.lastDayEmitHour) {
-      this.lastDayEmitHour = hourFloor;
+    // Smooth HUD clock (~1s) + night overlay consumers
+    this.dayEmitAccumMs += deltaMs;
+    if (this.dayEmitAccumMs >= 1000) {
+      this.dayEmitAccumMs = 0;
       this.scene.game.events.emit(KingdomEvents.DAY_TICK, {
         dayPhase: this.clock.phase,
         hour: this.clock.hour,
