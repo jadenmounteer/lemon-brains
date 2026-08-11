@@ -98,6 +98,18 @@ export class PathGrid {
     return this.isBlocked(g.col, g.row);
   }
 
+  /** True if every sample along the segment is walkable (stops corner-cutting across rivers). */
+  isSegmentClear(ax: number, ay: number, bx: number, by: number): boolean {
+    const dist = Math.hypot(bx - ax, by - ay);
+    if (dist < 1) return !this.isWorldBlocked(bx, by);
+    const steps = Math.max(2, Math.ceil(dist / (this.tile * 0.45)));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      if (this.isWorldBlocked(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
+    }
+    return true;
+  }
+
   findPath(from: Point, to: Point): Point[] | null {
     let start = this.worldToGrid(from.x, from.y);
     let goal = this.worldToGrid(to.x, to.y);

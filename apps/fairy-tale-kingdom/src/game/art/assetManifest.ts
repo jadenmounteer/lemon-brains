@@ -60,6 +60,18 @@ export type MonsterRole = (typeof MONSTER_ROLES)[number];
 
 export type AnimRole = UnitRole | EnemyRole | MonsterRole;
 
+/** Unique sprite-sheet keys (bandit/gypsy appear in both unit + enemy lists). */
+export function uniqueSheetRoles(): AnimRole[] {
+  const seen = new Set<string>();
+  const out: AnimRole[] = [];
+  for (const role of [...UNIT_ROLES, ...ENEMY_ROLES, ...MONSTER_ROLES]) {
+    if (seen.has(role)) continue;
+    seen.add(role);
+    out.push(role);
+  }
+  return out;
+}
+
 /** Terrain tileset key + tile indices */
 export const TERRAIN_KEY = 'terrain';
 export const TerrainTile = {

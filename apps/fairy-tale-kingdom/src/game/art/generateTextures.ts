@@ -1,14 +1,12 @@
 import Phaser from 'phaser';
 import {
-  ENEMY_ROLES,
-  MONSTER_ROLES,
   PROP_KEYS,
   TERRAIN_KEY,
   TILE_SIZE,
   UNIT_FRAME_COUNT,
   UNIT_HEIGHT,
-  UNIT_ROLES,
   UNIT_WIDTH,
+  uniqueSheetRoles,
   wallTextureKey,
   type AnimRole,
 } from './assetManifest';
@@ -1931,9 +1929,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   ];
   for (const key of [
     TERRAIN_KEY,
-    ...UNIT_ROLES,
-    ...ENEMY_ROLES,
-    ...MONSTER_ROLES,
+    ...uniqueSheetRoles(),
     ...propKeys,
   ]) {
     if (scene.textures.exists(key)) {
@@ -1942,13 +1938,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   }
 
   drawTerrain(scene);
-  for (const role of UNIT_ROLES) {
-    drawUnitSheet(scene, role);
-  }
-  for (const role of ENEMY_ROLES) {
-    drawUnitSheet(scene, role);
-  }
-  for (const role of MONSTER_ROLES) {
+  for (const role of uniqueSheetRoles()) {
     drawUnitSheet(scene, role);
   }
   drawKeep(scene);

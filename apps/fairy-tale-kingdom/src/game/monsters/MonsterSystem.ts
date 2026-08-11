@@ -658,10 +658,20 @@ export class MonsterSystem {
         { x, y }
       );
       if (path && path.length > 1) {
-        const hop = Math.min(4, path.length - 1);
+        let hop = Math.min(4, path.length - 1);
+        while (
+          hop > 1 &&
+          !this.pathGrid.isSegmentClear(m.sprite.x, m.sprite.y, path[hop]!.x, path[hop]!.y)
+        ) {
+          hop -= 1;
+        }
         x = path[hop]!.x;
         y = path[hop]!.y;
-      } else if (this.pathGrid.isWorldBlocked(x, y)) {
+        if (!this.pathGrid.isSegmentClear(m.sprite.x, m.sprite.y, x, y)) {
+          return;
+        }
+      } else {
+        // No land path — never walk straight through rivers/lakes
         return;
       }
     }

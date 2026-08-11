@@ -3,10 +3,11 @@ import type { CareerTodoItem } from '../game/subjects/types';
 interface TodoPanelProps {
   todos: CareerTodoItem[];
   gold: number;
+  infiniteGold?: boolean;
   onHire: (todo: CareerTodoItem) => void;
 }
 
-export function TodoPanel({ todos, gold, onHire }: TodoPanelProps) {
+export function TodoPanel({ todos, gold, infiniteGold = false, onHire }: TodoPanelProps) {
   if (!todos.length) return null;
 
   return (
@@ -19,7 +20,7 @@ export function TodoPanel({ todos, gold, onHire }: TodoPanelProps) {
       </p>
       <ul className="market-list">
         {todos.map((todo) => {
-          const disabled = gold < todo.cost;
+          const disabled = !infiniteGold && gold < todo.cost;
           return (
             <li key={`${todo.subjectId}-${todo.targetRole}`} className="market-row">
               <div>

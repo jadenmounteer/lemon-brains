@@ -11,6 +11,7 @@ import type { KingdomStats } from '../game/subjects/types';
 
 interface MarketplacePanelProps {
   gold: number;
+  infiniteGold?: boolean;
   stats: KingdomStats;
   placeMode: { active: boolean; kind: BuildKind | null };
   onHire: (role: UnitRole) => void;
@@ -21,6 +22,7 @@ interface MarketplacePanelProps {
 
 export function MarketplacePanel({
   gold,
+  infiniteGold = false,
   stats,
   placeMode,
   onHire,
@@ -28,6 +30,7 @@ export function MarketplacePanel({
   onBuyNaval,
   onCancelPlace,
 }: MarketplacePanelProps) {
+  const canAfford = (cost: number) => infiniteGold || gold >= cost;
   return (
     <section className="panel market-panel">
       <h2>Marketplace</h2>
@@ -86,7 +89,7 @@ export function MarketplacePanel({
           const needsBed = !item.livesAtKeep && stats.freeBeds <= 0;
           const disabled =
             placeMode.active ||
-            gold < item.cost ||
+            !canAfford(item.cost) ||
             needsBed ||
             locked ||
             uniqueTaken ||
@@ -159,7 +162,7 @@ export function MarketplacePanel({
             item.kind === 'gallows' && !stats.hasDungeon;
           const disabled =
             placeMode.active ||
-            gold < item.cost ||
+            !canAfford(item.cost) ||
             locked ||
             fieldBlocked ||
             cemeteryNeedsCat ||
@@ -214,7 +217,10 @@ export function MarketplacePanel({
               ? stats.fishingBoatCount >= stats.fishingBoatCapacity
               : stats.warshipCount >= stats.warshipCapacity;
           const disabled =
-            placeMode.active || gold < item.cost || !stats.hasDock || atCapacity;
+            placeMode.active ||
+            !canAfford(item.cost) ||
+            !stats.hasDock ||
+            atCapacity;
           return (
             <li key={item.kind} className="market-row">
               <div>

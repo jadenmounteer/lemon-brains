@@ -296,7 +296,7 @@ export class SiegeEngineSystem {
     let nx = engine.sprite.x + (dx / dist) * Math.min(step, dist);
     let ny = engine.sprite.y + (dy / dist) * Math.min(step, dist);
     if (this.pathGrid?.isWorldBlocked(nx, ny)) {
-      // slide along open neighbor
+      // slide along open neighbor — never roll through water
       const path = this.pathGrid.findPath(
         { x: engine.sprite.x, y: engine.sprite.y },
         { x: tx, y: ty }
@@ -307,7 +307,10 @@ export class SiegeEngineSystem {
         const d2 = Math.hypot(nx - engine.sprite.x, ny - engine.sprite.y) || 1;
         nx = engine.sprite.x + ((nx - engine.sprite.x) / d2) * Math.min(step, d2);
         ny = engine.sprite.y + ((ny - engine.sprite.y) / d2) * Math.min(step, d2);
+      } else {
+        return;
       }
+      if (this.pathGrid.isWorldBlocked(nx, ny)) return;
     }
     engine.sprite.setPosition(nx, ny);
     engine.sprite.setDepth(24 + ny * 0.01);

@@ -869,9 +869,8 @@ export class RaidSystem {
       if (blocker && think) {
         raider.state = 'breaching';
         this.breach(raider, blocker);
-      } else {
-        this.stepToward(raider, this.keep.x, this.keep.y + 20, deltaMs);
       }
+      // No land path (river / mountain / walls) — wait; do not cut across water
       return;
     }
 
@@ -1247,12 +1246,8 @@ export class RaidSystem {
     let nx = raider.sprite.x + (dx / dist) * Math.min(step, dist);
     let ny = raider.sprite.y + (dy / dist) * Math.min(step, dist);
 
-    // Respect walls for ground movement (raiders already path; this catches fights)
-    if (
-      this.pathGrid?.isWorldBlocked(nx, ny) &&
-      raider.state !== 'breaching' &&
-      raider.state !== 'routing'
-    ) {
+    // Never step onto water / mountains / fortifications (even while fighting or routing)
+    if (this.pathGrid?.isWorldBlocked(nx, ny)) {
       const path = this.pathGrid.findPath(
         { x: raider.sprite.x, y: raider.sprite.y },
         { x: tx, y: ty }
@@ -1263,7 +1258,10 @@ export class RaidSystem {
           Math.hypot(wp.x - raider.sprite.x, wp.y - raider.sprite.y) || 1;
         nx = raider.sprite.x + ((wp.x - raider.sprite.x) / d2) * Math.min(step, d2);
         ny = raider.sprite.y + ((wp.y - raider.sprite.y) / d2) * Math.min(step, d2);
+      } else {
+        return;
       }
+      if (this.pathGrid.isWorldBlocked(nx, ny)) return;
     }
 
     this.faceToward(raider, tx, ty);

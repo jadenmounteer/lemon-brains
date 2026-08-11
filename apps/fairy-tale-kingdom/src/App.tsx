@@ -342,12 +342,14 @@ export default function App() {
         flash('Not enough gold');
         return;
       }
-      setPendingPlaceCost(item.cost);
+      // Cheat never deducts — only stash a refund amount when real gold was spent
+      setPendingPlaceCost(infiniteGold ? null : item.cost);
       setPlaceRequest({ seq: Date.now(), kind });
       flash(`Place your ${item.name.toLowerCase()} on empty ground`);
     },
     [
       flash,
+      infiniteGold,
       spend,
       stats.fieldCount,
       stats.fieldSlots,
@@ -589,6 +591,7 @@ export default function App() {
               <TodoPanel
                 todos={stats.careerTodos ?? []}
                 gold={gold}
+                infiniteGold={infiniteGold}
                 onHire={(todo) => {
                   void handleCareerHire(todo);
                 }}
@@ -661,6 +664,7 @@ export default function App() {
               <RansomPanel
                 captives={captives}
                 gold={gold}
+                infiniteGold={infiniteGold}
                 canExecute={stats.canExecuteCaptive}
                 onRansom={(id, cost) => {
                   void handleRansom(id, cost);
@@ -681,6 +685,7 @@ export default function App() {
             {showMarket && (
               <MarketplacePanel
                 gold={gold}
+                infiniteGold={infiniteGold}
                 stats={stats}
                 placeMode={placeMode}
                 onHire={(role) => {

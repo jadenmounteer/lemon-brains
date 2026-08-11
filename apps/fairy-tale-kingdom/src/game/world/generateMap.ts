@@ -101,8 +101,8 @@ export function generateKingdomMap(
     if (spot) mountains.push(tileCenter(spot.c, spot.r));
   }
 
-  // Rivers that cut through the interior (not only the fringe)
-  const riverCount = Math.max(2, Math.round(2 + rand() * 2 * scale));
+  // Rivers that cut through the interior (sparse — early game is walkable before bridges)
+  const riverCount = Math.max(1, Math.round(1 + rand() * 1.15 * scale));
   const riverPaths: { c: number; r: number }[][] = [];
   for (let i = 0; i < riverCount; i++) {
     const path = paintMeanderingRiver(
@@ -118,9 +118,9 @@ export function generateKingdomMap(
     if (path.length > 8) riverPaths.push(path);
   }
 
-  // Tributaries branching from mid-river toward lakes or coast
+  // Occasional tributary — keep rare so regions stay connected without bridges
   for (const path of riverPaths) {
-    if (path.length < 20 || rand() > 0.75) continue;
+    if (path.length < 28 || rand() > 0.88) continue;
     const fork = path[Math.floor(path.length * (0.3 + rand() * 0.4))]!;
     paintTributary(data, cols, rows, midCol, midRow, rand, fork, lakeCenters);
   }
@@ -425,7 +425,7 @@ function paintMeanderingRiver(
   let c = sc;
   let r = sr;
   const maxSteps = cols + rows + Math.floor(rand() * 40);
-  let width = rand() < 0.35 ? 2 : 1;
+  let width = rand() < 0.18 ? 2 : 1;
 
   for (let step = 0; step < maxSteps; step++) {
     stampRiverCell(data, cols, rows, midCol, midRow, c, r, width, rand);
@@ -452,9 +452,9 @@ function paintMeanderingRiver(
       r += rand() < 0.5 ? 1 : -1;
     }
 
-    // Occasionally widen mid-course (delta / marsh feel)
-    if (step > 0 && step % 28 === 0) {
-      width = rand() < 0.4 ? 2 : 1;
+    // Occasionally widen mid-course (delta / marsh feel) — mostly stay narrow
+    if (step > 0 && step % 36 === 0) {
+      width = rand() < 0.22 ? 2 : 1;
     }
 
     c = clamp(c, 1, cols - 2);

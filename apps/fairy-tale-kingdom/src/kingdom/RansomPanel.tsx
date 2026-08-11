@@ -5,6 +5,7 @@ import { roleLabel } from '../game/subjects/schedules';
 interface RansomPanelProps {
   captives: CaptiveRecord[];
   gold: number;
+  infiniteGold?: boolean;
   canExecute?: boolean;
   onRansom: (id: string, cost: number) => void;
   onExecute?: (id: string) => void;
@@ -14,6 +15,7 @@ interface RansomPanelProps {
 export function RansomPanel({
   captives,
   gold,
+  infiniteGold = false,
   canExecute,
   onRansom,
   onExecute,
@@ -47,7 +49,7 @@ export function RansomPanel({
                   <button
                     type="button"
                     className="market-buy"
-                    disabled={gold < cost}
+                    disabled={!infiniteGold && gold < cost}
                     onClick={() => onRansom(c.id, cost)}
                   >
                     Pay

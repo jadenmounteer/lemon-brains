@@ -1701,16 +1701,32 @@ export class SubjectSystem {
     let x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
     let y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
 
-    // Path around walls / closed gates for all ground units
+    // Path around walls / closed gates / water / mountains for all ground units
     if (this.pathGrid) {
       const path = this.pathGrid.findPath(
         { x: managed.sprite.x, y: managed.sprite.y },
         { x, y }
       );
       if (path && path.length > 1) {
-        const hop = Math.min(3, path.length - 1);
+        let hop = Math.min(3, path.length - 1);
+        while (
+          hop > 1 &&
+          !this.pathGrid.isSegmentClear(
+            managed.sprite.x,
+            managed.sprite.y,
+            path[hop]!.x,
+            path[hop]!.y
+          )
+        ) {
+          hop -= 1;
+        }
         x = path[hop]!.x;
         y = path[hop]!.y;
+        if (
+          !this.pathGrid.isSegmentClear(managed.sprite.x, managed.sprite.y, x, y)
+        ) {
+          return;
+        }
         const atGoal =
           Phaser.Math.Distance.Between(
             path[path.length - 1]!.x,
@@ -1724,11 +1740,11 @@ export class SubjectSystem {
         this.tweenMove(managed, x, y, speed, continuePath);
         return;
       }
-      // No path — do not walk through fortifications
-      if (this.pathGrid.isWorldBlocked(x, y)) {
+      // No land path — never straight-line across water or other blocked terrain
+      if (Math.hypot(managed.sprite.x - x, managed.sprite.y - y) < 12) {
         onArrive?.();
-        return;
       }
+      return;
     }
 
     const dx = x - managed.sprite.x;
