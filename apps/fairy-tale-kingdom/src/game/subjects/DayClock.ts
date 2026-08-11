@@ -6,8 +6,14 @@ export const DAY_LENGTH_MS = 150_000;
 export class DayClock {
   private elapsedMs = 0;
 
-  tick(deltaMs: number): void {
-    this.elapsedMs = (this.elapsedMs + deltaMs) % DAY_LENGTH_MS;
+  /** Advance time. Returns true when a full day rolls over. */
+  tick(deltaMs: number): boolean {
+    this.elapsedMs += deltaMs;
+    if (this.elapsedMs < DAY_LENGTH_MS) {
+      return false;
+    }
+    this.elapsedMs %= DAY_LENGTH_MS;
+    return true;
   }
 
   get hour(): number {

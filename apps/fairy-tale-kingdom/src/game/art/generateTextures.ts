@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import {
+  ENEMY_ROLES,
   PROP_KEYS,
   TERRAIN_KEY,
   TILE_SIZE,
@@ -7,7 +8,7 @@ import {
   UNIT_HEIGHT,
   UNIT_ROLES,
   UNIT_WIDTH,
-  type UnitRole,
+  type AnimRole,
 } from './assetManifest';
 import { palette } from './palette';
 
@@ -88,7 +89,7 @@ function drawTerrain(scene: Phaser.Scene) {
   tex.refresh();
 }
 
-function clothFor(role: UnitRole): number {
+function clothFor(role: AnimRole): number {
   switch (role) {
     case 'peasant':
       return palette.clothPeasant;
@@ -96,6 +97,12 @@ function clothFor(role: UnitRole): number {
       return palette.clothGuard;
     case 'archer':
       return palette.clothArcher;
+    case 'bandit':
+      return palette.clothBandit;
+    case 'giant':
+      return palette.clothGiant;
+    case 'enemy_army':
+      return palette.clothEnemyArmy;
   }
 }
 
@@ -103,7 +110,7 @@ function clothFor(role: UnitRole): number {
 function drawUnitFrame(
   ctx: Ctx,
   originX: number,
-  role: UnitRole,
+  role: AnimRole,
   facing: 'down' | 'left' | 'right' | 'up',
   walkStep: number | null
 ) {
@@ -111,6 +118,7 @@ function drawUnitFrame(
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
   const cloth = clothFor(role);
+  const tall = role === 'giant' ? -2 : 0;
 
   fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
 
@@ -119,38 +127,43 @@ function drawUnitFrame(
   fillRect(ctx, leftBootX, 18 + baseY, 3, 3, palette.ink);
   fillRect(ctx, rightBootX, 18 + baseY, 3, 3, palette.ink);
 
-  fillRect(ctx, originX + 5, 10 + baseY, 6, 8, cloth);
-  fillRect(ctx, originX + 4, 10 + baseY, 1, 8, palette.ink);
-  fillRect(ctx, originX + 11, 10 + baseY, 1, 8, palette.ink);
+  fillRect(ctx, originX + 5, 10 + baseY + tall, 6, 8 - tall, cloth);
+  fillRect(ctx, originX + 4, 10 + baseY + tall, 1, 8 - tall, palette.ink);
+  fillRect(ctx, originX + 11, 10 + baseY + tall, 1, 8 - tall, palette.ink);
 
-  fillRect(ctx, originX + 5, 4 + baseY, 6, 6, palette.skin);
-  fillRect(ctx, originX + 4, 4 + baseY, 1, 6, palette.ink);
-  fillRect(ctx, originX + 11, 4 + baseY, 1, 6, palette.ink);
-  fillRect(ctx, originX + 5, 3 + baseY, 6, 1, palette.ink);
+  fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 6, palette.skin);
+  fillRect(ctx, originX + 4, 4 + baseY + tall, 1, 6, palette.ink);
+  fillRect(ctx, originX + 11, 4 + baseY + tall, 1, 6, palette.ink);
+  fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 1, palette.ink);
 
-  if (role === 'guard') {
-    fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.metal);
-    fillRect(ctx, originX + 12, 11 + baseY, 2, 6, palette.metal);
+  if (role === 'guard' || role === 'enemy_army') {
+    fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 2, palette.metal);
+    fillRect(ctx, originX + 12, 11 + baseY + tall, 2, 6, palette.metal);
   } else if (role === 'archer') {
     fillRect(ctx, originX + 3, 11 + baseY, 1, 7, palette.wood);
     fillRect(ctx, originX + 2, 12 + baseY, 1, 5, palette.woodDark);
+  } else if (role === 'bandit') {
+    fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
+    fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
+  } else if (role === 'giant') {
+    fillRect(ctx, originX + 4, 2 + baseY + tall, 8, 3, palette.woodDark);
   } else {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.wood);
   }
 
   if (facing === 'left') {
-    pixel(ctx, originX + 6, 6 + baseY, palette.ink);
+    pixel(ctx, originX + 6, 6 + baseY + tall, palette.ink);
   } else if (facing === 'right') {
-    pixel(ctx, originX + 9, 6 + baseY, palette.ink);
+    pixel(ctx, originX + 9, 6 + baseY + tall, palette.ink);
   } else if (facing === 'up') {
-    fillRect(ctx, originX + 5, 4 + baseY, 6, 2, cloth);
+    fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 2, cloth);
   } else {
-    pixel(ctx, originX + 7, 6 + baseY, palette.ink);
-    pixel(ctx, originX + 9, 6 + baseY, palette.ink);
+    pixel(ctx, originX + 7, 6 + baseY + tall, palette.ink);
+    pixel(ctx, originX + 9, 6 + baseY + tall, palette.ink);
   }
 }
 
-function drawUnitSheet(scene: Phaser.Scene, role: UnitRole) {
+function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
   const width = UNIT_WIDTH * UNIT_FRAME_COUNT;
   const height = UNIT_HEIGHT;
   const tex = createCanvas(scene, role, width, height);
@@ -240,6 +253,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   for (const key of [
     TERRAIN_KEY,
     ...UNIT_ROLES,
+    ...ENEMY_ROLES,
     PROP_KEYS.keep,
     PROP_KEYS.house,
     PROP_KEYS.wall,
@@ -251,6 +265,9 @@ export function generateTextures(scene: Phaser.Scene): void {
 
   drawTerrain(scene);
   for (const role of UNIT_ROLES) {
+    drawUnitSheet(scene, role);
+  }
+  for (const role of ENEMY_ROLES) {
     drawUnitSheet(scene, role);
   }
   drawKeep(scene);

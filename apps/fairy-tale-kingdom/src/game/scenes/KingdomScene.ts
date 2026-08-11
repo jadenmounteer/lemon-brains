@@ -5,6 +5,7 @@ import {
   TILE_SIZE,
   TerrainTile,
 } from '../art/assetManifest';
+import { RaidSystem } from '../raids/RaidSystem';
 import { KingdomEvents } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
@@ -22,6 +23,7 @@ export class KingdomScene extends Phaser.Scene {
   private cameraStart: Phaser.Math.Vector2 | null = null;
   private pointerMoved = false;
   private subjects!: SubjectSystem;
+  private raids!: RaidSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
 
   constructor() {
@@ -51,6 +53,12 @@ export class KingdomScene extends Phaser.Scene {
       height: WORLD_HEIGHT,
     });
     this.subjects.spawn();
+
+    this.raids = new RaidSystem(
+      this,
+      { width: WORLD_WIDTH, height: WORLD_HEIGHT },
+      { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 }
+    );
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -142,10 +150,12 @@ export class KingdomScene extends Phaser.Scene {
 
   update(_time: number, delta: number) {
     this.subjects?.update(delta);
+    this.raids?.update(delta);
     this.applyNightOverlay();
   }
 
   shutdown() {
+    this.raids?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
   }

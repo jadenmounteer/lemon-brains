@@ -131,8 +131,12 @@ export class SubjectSystem {
 
   /** Advance clock and refresh activities; move idle subjects toward schedule zones. */
   update(deltaMs: number): void {
-    this.clock.tick(deltaMs);
+    const rolled = this.clock.tick(deltaMs);
     this.syncActivities();
+
+    if (rolled) {
+      this.scene.game.events.emit(KingdomEvents.DAY_ROLLED);
+    }
 
     // Smooth HUD clock (~1s) + night overlay consumers
     this.dayEmitAccumMs += deltaMs;

@@ -30,5 +30,22 @@ export function useGold() {
     return addGold(GOLD_PER_CORRECT);
   }, [addGold]);
 
-  return { gold, ready, addGold, earnCorrectAnswer, rewardAmount: GOLD_PER_CORRECT };
+  const resetGold = useCallback(async () => {
+    await repository.reset();
+    setGold(0);
+  }, []);
+
+  const stealGold = useCallback(async (amount: number) => {
+    return addGold(-Math.abs(amount));
+  }, [addGold]);
+
+  return {
+    gold,
+    ready,
+    addGold,
+    earnCorrectAnswer,
+    resetGold,
+    stealGold,
+    rewardAmount: GOLD_PER_CORRECT,
+  };
 }

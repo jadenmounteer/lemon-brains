@@ -8,45 +8,36 @@ Long-term phased vision.
 | 1 | Graphics | Pixel art style guide, sprite sheets, tileset, basic idle/walk animations for the core cast |
 | 2 | Living subjects | Named people, roles, schedules, click-to-inspect (Stronghold-style inspector) |
 | 3 | Learn-to-earn | Question panel via `@knowledge-quest/learning`; gold rewards; persist gold |
+| 3.5 | Kingdom meta + danger lite | Named kingdom, days played, new-kingdom menu, raids (steal gold / army lose) |
 | 4 | Marketplace and buildings | Buy peasants/guards/archers/etc. and place houses/walls/tavern/keep |
-| 5 | Living world and danger | Goblin/giant/bandit camps; raid events; defense that matters |
+| 5 | Living world and danger | Richer camps, defense that matters, deeper raid AI |
 | 6 | Depth and polish | Richer schedules, more roles, save kingdom layout, audio, UX |
 
-## Phase 0 — Foundation (done)
+## Phase 0–3 (done)
 
-- React + Vite + TypeScript + Phaser 3 app
-- Host / Pages wiring + shared settings load
+Foundation, graphics, living subjects, learn-to-earn (questions + gold + night HUD).
 
-## Phase 1 — Graphics (done)
-
-- Style guide + procedural tileset / cast / props
-- Pixel art config + panable tilemap
-
-See also [STYLE_GUIDE.md](STYLE_GUIDE.md).
-
-## Phase 2 — Living subjects (done)
-
-- Named subjects with roles and day schedules
-- Click-to-inspect React panel + selection bridge
-- Day clock driving activities
-
-## Phase 3 — Learn-to-earn (current)
+## Phase 3.5 — Kingdom meta + danger lite (current)
 
 Checklist:
 
-- [x] Live Question panel via `createCurriculumRegistry` + shared settings
-- [x] +3 gold per correct answer; wrong keeps the question
-- [x] Persist gold (`fairyTaleKingdom.gold`)
-- [x] Read-aloud + replay when enabled
-- [x] Night darkening overlay from day clock
-- [x] HUD title shows time of day (not brand name); inspector has no clock line
+- [x] Persist kingdom name + days played (`fairyTaleKingdom.kingdom`)
+- [x] Show name + day count in the HUD tagline
+- [x] Hamburger menu to start a new kingdom (resets gold + days)
+- [x] First-run naming gate before the map loads
+- [x] Day clock rollover increments days played
+- [x] Bandits / giants march on the keep and steal gold
+- [x] Rival kingdom army reaching the keep = game over
 
-## Non-goals (Phase 0–3)
+## Phase 4 — Marketplace (next)
 
-- Full Dwarf Fortress–depth simulation
+Hire units and place buildings with gold.
+
+## Non-goals (for now)
+
+- Full combat / intercepting raids with your guards (Phase 5)
 - Multiplayer / auth
-- Marketplace spending / building placement (Phase 4)
-- Combat / raids (Phase 5)
+- Hand-drawn PNG production
 
 ## Product north star
 

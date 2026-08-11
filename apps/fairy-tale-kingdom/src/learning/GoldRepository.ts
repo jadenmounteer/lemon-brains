@@ -27,4 +27,8 @@ export class GoldRepository {
     await this.save(next);
     return next;
   }
+
+  async reset(): Promise<void> {
+    await this.save(0);
+  }
 }

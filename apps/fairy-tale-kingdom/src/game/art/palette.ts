@@ -15,6 +15,9 @@ export const palette = {
   clothPeasant: 0xc4a35a,
   clothGuard: 0x4a6fa5,
   clothArcher: 0x5a8f4a,
+  clothBandit: 0x6b3e2e,
+  clothGiant: 0x7a6a4a,
+  clothEnemyArmy: 0x8b2e2e,
   metal: 0xc0c4c8,
   cream: 0xf4efe4,
 } as const;

@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
 import {
   DIRECTIONS,
+  ENEMY_ROLES,
   UNIT_ROLES,
   UnitFrame,
   idleAnimKey,
   walkAnimKey,
   walkFramesFor,
-  type UnitRole,
+  type AnimRole,
 } from './assetManifest';
 
 function ensureAnim(
@@ -20,7 +21,7 @@ function ensureAnim(
   scene.anims.create(config);
 }
 
-function registerRole(scene: Phaser.Scene, role: UnitRole) {
+function registerRole(scene: Phaser.Scene, role: AnimRole) {
   ensureAnim(scene, idleAnimKey(role), {
     key: idleAnimKey(role),
     frames: [{ key: role, frame: UnitFrame.idle }],
@@ -41,6 +42,9 @@ function registerRole(scene: Phaser.Scene, role: UnitRole) {
 
 export function registerAnims(scene: Phaser.Scene): void {
   for (const role of UNIT_ROLES) {
+    registerRole(scene, role);
+  }
+  for (const role of ENEMY_ROLES) {
     registerRole(scene, role);
   }
 }

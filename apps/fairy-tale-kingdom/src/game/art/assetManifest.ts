@@ -14,6 +14,12 @@ export type Direction = (typeof DIRECTIONS)[number];
 export const UNIT_ROLES = ['peasant', 'guard', 'archer'] as const;
 export type UnitRole = (typeof UNIT_ROLES)[number];
 
+/** Hostile units (procedural sheets, same frame layout as friendly cast) */
+export const ENEMY_ROLES = ['bandit', 'giant', 'enemy_army'] as const;
+export type EnemyRole = (typeof ENEMY_ROLES)[number];
+
+export type AnimRole = UnitRole | EnemyRole;
+
 /** Terrain tileset key + tile indices */
 export const TERRAIN_KEY = 'terrain';
 export const TerrainTile = {
@@ -51,11 +57,11 @@ export const UnitFrame = {
 
 export const UNIT_FRAME_COUNT = 17;
 
-export function idleAnimKey(role: UnitRole): string {
+export function idleAnimKey(role: AnimRole): string {
   return `${role}-idle`;
 }
 
-export function walkAnimKey(role: UnitRole, dir: Direction): string {
+export function walkAnimKey(role: AnimRole, dir: Direction): string {
   return `${role}-walk-${dir}`;
 }
 
