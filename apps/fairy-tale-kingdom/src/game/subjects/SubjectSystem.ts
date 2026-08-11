@@ -203,6 +203,12 @@ export class SubjectSystem {
     this.raidMode = active;
     if (active && !was) {
       this.cancelInterrupts(['repair', 'chat', 'harvest']);
+      // Don't leave the kingdom frozen in sleep poses when a raid starts at night
+      for (const s of this.subjects) {
+        if (s.presenceAnim === 'sleep' || s.data.activity === 'sleep') {
+          this.clearActivityAnim(s);
+        }
+      }
     }
     if (!active && was) {
       this.cancelInterrupts(['defend', 'flee']);
@@ -2324,7 +2330,7 @@ export class SubjectSystem {
   }
 
   private syncActivities(): void {
-    if (this.raidMode) return;
+    // Always follow the clock — raids used to skip this and leave people asleep at 3pm.
     for (const managed of this.subjects) {
       if (managed.interrupt) continue;
       // Keep event gathers visible until the event systems clear them
@@ -2341,9 +2347,11 @@ export class SubjectSystem {
       managed.data.activityLabel = slot.label;
       managed.data.zone = slot.zone;
       if (
-        prev !== slot.activity &&
-        (prev === 'sleep' || managed.presenceAnim)
+        slot.activity !== 'sleep' &&
+        (prev === 'sleep' || managed.presenceAnim === 'sleep')
       ) {
+        this.clearActivityAnim(managed);
+      } else if (prev !== slot.activity && managed.presenceAnim) {
         this.clearActivityAnim(managed);
       }
     }
