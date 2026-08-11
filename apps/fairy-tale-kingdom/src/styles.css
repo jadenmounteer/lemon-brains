@@ -78,6 +78,15 @@ a {
   color: #f6e2a8;
 }
 
+.day-phase {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(232, 245, 233, 0.08);
+  border: 1px solid #6a9276;
+  color: var(--cream);
+  font-size: 0.9rem;
+}
+
 .hud-actions button,
 .back {
   min-height: 36px;
@@ -147,4 +156,56 @@ a {
 
 .muted {
   opacity: 0.8;
+}
+
+.inspector-panel h2 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.25rem;
+}
+
+.inspector-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.inspector-close {
+  min-height: 32px;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid #6a9276;
+  background: transparent;
+  color: var(--cream);
+  font-weight: 650;
+  flex-shrink: 0;
+}
+
+.inspector-role {
+  margin: 0 0 0.5rem;
+  font-weight: 650;
+  color: #f6e2a8;
+}
+
+.inspector-subhead {
+  margin: 0.75rem 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.schedule-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+.schedule-list li {
+  margin: 0.2rem 0;
 }

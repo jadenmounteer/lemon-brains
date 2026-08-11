@@ -16,30 +16,39 @@ Long-term phased vision.
 
 - React + Vite + TypeScript + Phaser 3 app at `apps/fairy-tale-kingdom`
 - React HUD: title, gold stub, back to Knowledge Quest, Questions / Marketplace stubs
-- Empty panable kingdom ground (superseded by Phase 1 tilemap)
 - Shared settings load via `@knowledge-quest/storage`
 - Enabled on the Knowledge Quest games list and included in `npm run build:pages`
 
-## Phase 1 — Graphics (current)
+## Phase 1 — Graphics (done)
 
-Checklist:
-
-- [x] Style guide (`docs/STYLE_GUIDE.md`) + `public/assets/` drop-in layout
-- [x] Shared palette + asset manifest (stable texture/anim keys)
-- [x] Procedural tileset + peasant/guard/archer sheets (idle + 4-dir walk)
-- [x] Procedural keep / house / wall props
-- [x] Phaser `pixelArt` + integer camera zoom
-- [x] Kingdom tilemap + demo walking cast
+- Style guide (`docs/STYLE_GUIDE.md`) + `public/assets/` drop-in layout
+- Shared palette + asset manifest (stable texture/anim keys)
+- Procedural tileset + peasant/guard/archer sheets (idle + 4-dir walk)
+- Procedural keep / house / wall props
+- Phaser `pixelArt` + integer camera zoom
+- Kingdom tilemap + walking cast
 
 See also [STYLE_GUIDE.md](STYLE_GUIDE.md).
 
-## Non-goals (Phase 0–1)
+## Phase 2 — Living subjects (current)
+
+Checklist:
+
+- [x] Named subjects (seeded name pools) with roles
+- [x] Accelerated day clock + per-role schedules / zones
+- [x] Subjects prefer schedule zones over pure random wander
+- [x] Click-to-inspect with pan threshold (no accidental select while dragging)
+- [x] React inspector panel (name, role, activity, schedule) + day phase HUD
+- [x] Phaser ↔ React selection bridge
+
+## Non-goals (Phase 0–2)
 
 - Full Dwarf Fortress–depth simulation
 - Multiplayer
 - Auth / accounts
-- Combat systems, AI schedules, or shop purchases (start in later phases)
-- Hand-drawn / AI PNG production (pipeline ready; generators ship first)
+- Combat, marketplace purchases, gold/questions (Phase 3+)
+- Pathfinding around buildings (point-to-zone wander is enough for now)
+- Persistence of kingdom state
 
 ## Product north star
 

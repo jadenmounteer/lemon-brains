@@ -4,27 +4,22 @@ import {
   TERRAIN_KEY,
   TILE_SIZE,
   TerrainTile,
-  idleAnimKey,
-  walkAnimKey,
-  type Direction,
-  type UnitRole,
 } from '../art/assetManifest';
+import { KingdomEvents } from '../subjects/events';
+import { SubjectSystem } from '../subjects/SubjectSystem';
 
 const MAP_COLS = 80;
 const MAP_ROWS = 50;
 const WORLD_WIDTH = MAP_COLS * TILE_SIZE;
 const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
-
-type DemoUnit = {
-  sprite: Phaser.GameObjects.Sprite;
-  role: UnitRole;
-};
+const PAN_THRESHOLD_PX = 6;
 
 export class KingdomScene extends Phaser.Scene {
   private dragStart: Phaser.Math.Vector2 | null = null;
   private cameraStart: Phaser.Math.Vector2 | null = null;
-  private units: DemoUnit[] = [];
+  private pointerMoved = false;
+  private subjects!: SubjectSystem;
 
   constructor() {
     super('KingdomScene');
@@ -37,12 +32,22 @@ export class KingdomScene extends Phaser.Scene {
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
     });
-    const tileset = map.addTilesetImage(TERRAIN_KEY, TERRAIN_KEY, TILE_SIZE, TILE_SIZE)!;
+    const tileset = map.addTilesetImage(
+      TERRAIN_KEY,
+      TERRAIN_KEY,
+      TILE_SIZE,
+      TILE_SIZE
+    )!;
     const ground = map.createLayer(0, tileset, 0, 0)!;
     ground.setDepth(0);
 
     this.placeProps();
-    this.spawnDemoCast();
+
+    this.subjects = new SubjectSystem(this, {
+      width: WORLD_WIDTH,
+      height: WORLD_HEIGHT,
+    });
+    this.subjects.spawn();
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
@@ -51,7 +56,7 @@ export class KingdomScene extends Phaser.Scene {
     cam.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
 
     this.add
-      .text(12, 12, 'Drag to look around', {
+      .text(12, 12, 'Drag to look · click a subject', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -62,27 +67,93 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(1000);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.leftButtonDown()) {
-        return;
-      }
+      if (!pointer.leftButtonDown()) return;
+      this.pointerMoved = false;
       this.dragStart = new Phaser.Math.Vector2(pointer.x, pointer.y);
       this.cameraStart = new Phaser.Math.Vector2(cam.scrollX, cam.scrollY);
     });
 
-    this.input.on('pointerup', () => {
-      this.dragStart = null;
-      this.cameraStart = null;
-    });
-
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (!pointer.isDown || !this.dragStart || !this.cameraStart) {
-        return;
+      if (!pointer.isDown || !this.dragStart || !this.cameraStart) return;
+      const dist = Phaser.Math.Distance.Between(
+        pointer.x,
+        pointer.y,
+        this.dragStart.x,
+        this.dragStart.y
+      );
+      if (dist > PAN_THRESHOLD_PX) {
+        this.pointerMoved = true;
       }
+      if (!this.pointerMoved) return;
+
       const zoom = cam.zoom;
       const dx = (pointer.x - this.dragStart.x) / zoom;
       const dy = (pointer.y - this.dragStart.y) / zoom;
       cam.setScroll(this.cameraStart.x - dx, this.cameraStart.y - dy);
     });
+
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      const wasPan = this.pointerMoved;
+      const hitId = this.resolveHitSubject(pointer);
+      this.dragStart = null;
+      this.cameraStart = null;
+      this.pointerMoved = false;
+
+      if (wasPan) return;
+
+      if (hitId) {
+        this.publishSelection(this.subjects.select(hitId));
+      } else {
+        this.publishSelection(this.subjects.select(null));
+      }
+    });
+
+    this.game.events.on(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+
+    // Initial day tick for HUD
+    this.game.events.emit(KingdomEvents.DAY_TICK, {
+      dayPhase: this.subjects.clock.phase,
+      hour: this.subjects.clock.hour,
+    });
+
+    // Refresh inspector activity while selected
+    this.time.addEvent({
+      delay: 1000,
+      loop: true,
+      callback: () => {
+        if (!this.subjects.getSelectedId()) return;
+        const snap = this.subjects.refreshSelectedSnapshot();
+        if (snap) this.publishSelection(snap);
+      },
+    });
+  }
+
+  update(_time: number, delta: number) {
+    this.subjects?.update(delta);
+  }
+
+  shutdown() {
+    this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+  }
+
+  private onClearSelection = () => {
+    this.publishSelection(this.subjects.select(null));
+  };
+
+  private publishSelection(
+    snap: ReturnType<SubjectSystem['select']>
+  ): void {
+    this.registry.set('selectedSubjectId', snap?.id ?? null);
+    this.game.events.emit(KingdomEvents.SUBJECT_SELECTED, snap);
+  }
+
+  private resolveHitSubject(pointer: Phaser.Input.Pointer): string | null {
+    const hits = this.input.hitTestPointer(pointer);
+    for (const obj of hits) {
+      const id = obj.getData('subjectId') as string | undefined;
+      if (id) return id;
+    }
+    return null;
   }
 
   private placeProps() {
@@ -100,7 +171,6 @@ export class KingdomScene extends Phaser.Scene {
       .setDepth(8)
       .setOrigin(0.5, 0.85);
 
-    // Short wall segments near the keep
     for (let i = -2; i <= 2; i++) {
       if (i === 0) continue;
       this.add
@@ -109,90 +179,6 @@ export class KingdomScene extends Phaser.Scene {
         .setOrigin(0.5, 0.9);
     }
   }
-
-  private spawnDemoCast() {
-    const roles: UnitRole[] = [
-      'peasant',
-      'peasant',
-      'guard',
-      'guard',
-      'archer',
-      'archer',
-    ];
-    const cx = WORLD_WIDTH / 2;
-    const cy = WORLD_HEIGHT / 2;
-
-    roles.forEach((role, index) => {
-      const angle = (index / roles.length) * Math.PI * 2;
-      const x = cx + Math.cos(angle) * 90;
-      const y = cy + Math.sin(angle) * 70 + 40;
-      const sprite = this.add.sprite(x, y, role, 0);
-      sprite.setDepth(20);
-      sprite.setOrigin(0.5, 1);
-      sprite.play(idleAnimKey(role));
-      const unit: DemoUnit = { sprite, role };
-      this.units.push(unit);
-      this.scheduleWander(unit);
-    });
-  }
-
-  private scheduleWander(unit: DemoUnit) {
-    const delay = Phaser.Math.Between(400, 1800);
-    this.time.delayedCall(delay, () => this.wanderOnce(unit));
-  }
-
-  private wanderOnce(unit: DemoUnit) {
-    if (!unit.sprite.active) {
-      return;
-    }
-
-    const range = 80;
-    const targetX = Phaser.Math.Clamp(
-      unit.sprite.x + Phaser.Math.Between(-range, range),
-      TILE_SIZE * 4,
-      WORLD_WIDTH - TILE_SIZE * 4
-    );
-    const targetY = Phaser.Math.Clamp(
-      unit.sprite.y + Phaser.Math.Between(-range, range),
-      TILE_SIZE * 4,
-      WORLD_HEIGHT - TILE_SIZE * 4
-    );
-
-    const dir = facingFromDelta(targetX - unit.sprite.x, targetY - unit.sprite.y);
-    unit.sprite.play(walkAnimKey(unit.role, dir), true);
-
-    const dist = Phaser.Math.Distance.Between(
-      unit.sprite.x,
-      unit.sprite.y,
-      targetX,
-      targetY
-    );
-    const duration = Math.max(400, dist * 12);
-
-    this.tweens.add({
-      targets: unit.sprite,
-      x: targetX,
-      y: targetY,
-      duration,
-      ease: 'Linear',
-      onUpdate: () => {
-        unit.sprite.setDepth(20 + unit.sprite.y * 0.01);
-      },
-      onComplete: () => {
-        unit.sprite.play(idleAnimKey(unit.role));
-        this.time.delayedCall(Phaser.Math.Between(600, 2200), () =>
-          this.wanderOnce(unit)
-        );
-      },
-    });
-  }
-}
-
-function facingFromDelta(dx: number, dy: number): Direction {
-  if (Math.abs(dx) > Math.abs(dy)) {
-    return dx < 0 ? 'left' : 'right';
-  }
-  return dy < 0 ? 'up' : 'down';
 }
 
 function buildMapData(): number[][] {
