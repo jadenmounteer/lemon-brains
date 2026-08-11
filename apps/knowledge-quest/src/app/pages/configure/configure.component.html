@@ -1,0 +1,102 @@
+<main class="page">
+  <header>
+    <a routerLink="/" class="back">← Knowledge Quest</a>
+    <h1>Configure learning</h1>
+    <p>Choose a curriculum and options. These settings are shared by every game.</p>
+  </header>
+
+  <section class="panel">
+    <h2>Curriculum</h2>
+    <div class="radio-group">
+      <label>
+        <input type="radio" name="curriculum" value="math" [(ngModel)]="settings.curriculumId" (change)="updateSettings()" />
+        <span>Math</span>
+      </label>
+      <label>
+        <input type="radio" name="curriculum" value="reading" [(ngModel)]="settings.curriculumId" (change)="updateSettings()" />
+        <span>Reading</span>
+      </label>
+      <label>
+        <input type="radio" name="curriculum" value="portuguese" [(ngModel)]="settings.curriculumId" (change)="updateSettings()" />
+        <span>Portuguese</span>
+      </label>
+      <label>
+        <input type="radio" name="curriculum" value="colors" [(ngModel)]="settings.curriculumId" (change)="updateSettings()" />
+        <span>Colors</span>
+      </label>
+      <label>
+        <input type="radio" name="curriculum" value="shapes" [(ngModel)]="settings.curriculumId" (change)="updateSettings()" />
+        <span>Shapes</span>
+      </label>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="settings.curriculumId === 'math'">
+    <h2>Math options</h2>
+    <div class="checkbox-group">
+      <label><input type="checkbox" [(ngModel)]="settings.math.operations.addition" (change)="updateSettings()" /> Addition</label>
+      <label><input type="checkbox" [(ngModel)]="settings.math.operations.subtraction" (change)="updateSettings()" /> Subtraction</label>
+      <label><input type="checkbox" [(ngModel)]="settings.math.operations.multiplication" (change)="updateSettings()" /> Multiplication</label>
+      <label><input type="checkbox" [(ngModel)]="settings.math.operations.division" (change)="updateSettings()" /> Division</label>
+    </div>
+    <h3>Number ranges</h3>
+    <div class="checkbox-group">
+      <label><input type="checkbox" [(ngModel)]="settings.math.numberRanges.range0to5" (change)="updateSettings()" /> 0–5</label>
+      <label><input type="checkbox" [(ngModel)]="settings.math.numberRanges.range5to10" (change)="updateSettings()" /> 5–10</label>
+      <label><input type="checkbox" [(ngModel)]="settings.math.numberRanges.range10to20" (change)="updateSettings()" /> 10–20</label>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="settings.curriculumId === 'portuguese'">
+    <h2>Portuguese topics</h2>
+    <div class="checkbox-group">
+      <label><input type="checkbox" [(ngModel)]="settings.portuguese.categories.vocabulary" (change)="updateSettings()" /> Vocabulary</label>
+      <label><input type="checkbox" [(ngModel)]="settings.portuguese.categories.phrases" (change)="updateSettings()" /> Phrases</label>
+      <label><input type="checkbox" [(ngModel)]="settings.portuguese.categories.numbers" (change)="updateSettings()" /> Numbers</label>
+      <label><input type="checkbox" [(ngModel)]="settings.portuguese.categories.colors" (change)="updateSettings()" /> Colors</label>
+    </div>
+  </section>
+
+  <section class="panel" *ngIf="settings.curriculumId === 'reading'">
+    <h2>Reading topics</h2>
+    <div class="checkbox-group">
+      <label><input type="checkbox" [(ngModel)]="settings.reading.letterRecognition" (change)="updateSettings()" /> Letter recognition</label>
+      <label><input type="checkbox" [(ngModel)]="settings.reading.cvcWords" (change)="updateSettings()" /> CVC words</label>
+      <label><input type="checkbox" [(ngModel)]="settings.reading.sightWords" (change)="updateSettings()" /> Sight words</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Read aloud</h2>
+    <div class="checkbox-group">
+      <label>
+        <input type="checkbox" [(ngModel)]="settings.readQuestionsAloud" (change)="updateSettings()" />
+        Read questions aloud automatically
+      </label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Game difficulty</h2>
+    <div class="radio-group">
+      <label>
+        <input type="radio" name="difficulty" value="easy" [(ngModel)]="settings.gameDifficulty" (change)="updateSettings()" />
+        <span>Easy</span>
+      </label>
+      <label>
+        <input type="radio" name="difficulty" value="normal" [(ngModel)]="settings.gameDifficulty" (change)="updateSettings()" />
+        <span>Normal</span>
+      </label>
+      <label>
+        <input type="radio" name="difficulty" value="hard" [(ngModel)]="settings.gameDifficulty" (change)="updateSettings()" />
+        <span>Hard</span>
+      </label>
+    </div>
+  </section>
+
+  <footer class="actions">
+    <a routerLink="/games" class="btn primary" [class.disabled]="!isValid" [attr.aria-disabled]="!isValid">
+      Choose a game
+    </a>
+  </footer>
+</main>

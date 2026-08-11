@@ -1,0 +1,57 @@
+@font-face {
+  font-family: "Fraunces";
+  font-style: normal;
+  font-weight: 600 700;
+  font-display: swap;
+  src: local("Georgia"), local("Times New Roman");
+}
+
+:root {
+  --kq-ink: #1c2b26;
+  --kq-forest: #1f6f5b;
+  --kq-leaf: #3d9b7a;
+  --kq-sun: #f0c75e;
+  --kq-cream: #f7f1e3;
+  --kq-mist: #d8e6df;
+  --kq-card: rgba(255, 255, 255, 0.72);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--kq-ink);
+  background:
+    radial-gradient(circle at top left, rgba(240, 199, 94, 0.35), transparent 40%),
+    radial-gradient(circle at bottom right, rgba(61, 155, 122, 0.28), transparent 45%),
+    linear-gradient(160deg, #eef7f2 0%, var(--kq-cream) 55%, #e7f0ea 100%);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+img,
+svg {
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+button,
+a,
+input,
+label,
+select,
+textarea,
+[role="button"] {
+  pointer-events: auto;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+* {
+  box-sizing: border-box;
+}

@@ -1,0 +1,27 @@
+<main class="page">
+  <header>
+    <a routerLink="/" class="back">← Knowledge Quest</a>
+    <h1>Choose a game</h1>
+    <p>Your learning setup travels with you into whichever game you pick.</p>
+    <a routerLink="/configure" class="link">Edit learning setup</a>
+  </header>
+
+  <p class="warning" *ngIf="!canPlay">
+    Finish configuring your curriculum before starting a game.
+  </p>
+
+  <div class="grid">
+    <article class="card" *ngFor="let game of games" [class.disabled]="!game.enabled">
+      <h2>{{ game.title }}</h2>
+      <p>{{ game.description }}</p>
+      <button
+        type="button"
+        class="btn"
+        [disabled]="!game.enabled || !canPlay"
+        (click)="launch(game)"
+      >
+        {{ game.enabled ? 'Play' : 'Coming soon' }}
+      </button>
+    </article>
+  </div>
+</main>

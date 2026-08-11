@@ -1,0 +1,76 @@
+.page {
+  width: min(760px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.back {
+  color: var(--kq-forest);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0.75rem 0 0.35rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2rem, 5vw, 3rem);
+}
+
+header p {
+  margin: 0 0 1.5rem;
+  color: rgba(28, 43, 38, 0.75);
+}
+
+.panel {
+  background: var(--kq-card);
+  border: 1px solid rgba(31, 111, 91, 0.15);
+  border-radius: 18px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  backdrop-filter: blur(6px);
+}
+
+h2,
+h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+h3 {
+  margin-top: 1rem;
+}
+
+.radio-group,
+.checkbox-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+label {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  font-weight: 600;
+}
+
+.actions {
+  margin-top: 1.5rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0.85rem 1.35rem;
+  border-radius: 999px;
+  text-decoration: none;
+  font-weight: 700;
+  background: var(--kq-forest);
+  color: #fff;
+}
+
+.btn.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}

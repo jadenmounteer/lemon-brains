@@ -1,27 +1,55 @@
-# LemonBrains
+# Knowledge Quest
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 17.3.11.
+A monorepo learning playground: configure a curriculum in **Knowledge Quest**, then play games like **Lemon Brains**.
 
-## Development server
+```
+apps/
+  knowledge-quest/   # Host: configure learning + pick a game
+  lemon-brains/      # Arcade game that consumes shared settings
+packages/
+  learning/          # Framework-agnostic curricula + questions
+  storage/           # StoragePort + LocalStorageAdapter (swap for a DB later)
+```
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+## Local development
 
-## Code scaffolding
+Install once from the repo root:
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+```bash
+npm install
+```
 
-## Build
+Run the host (port 4300) and game (port 4200) in two terminals:
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+```bash
+npm run start:host
+npm run start:lemon-brains
+```
 
-## Running unit tests
+1. Open http://localhost:4300/
+2. Configure learning
+3. Choose **Lemon Brains** to play
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+## GitHub Pages
 
-## Running end-to-end tests
+Push to `main` — GitHub Actions builds both apps into one static site and deploys:
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
+| Path | App |
+|------|-----|
+| `/lemon-brains/` | Knowledge Quest |
+| `/lemon-brains/games/lemon-brains/` | Lemon Brains |
 
-## Further help
+Local assemble (same as CI):
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.io/cli) page.
+```bash
+npm run build:pages
+```
+
+Output lands in `dist/site/`.
+
+## Packages
+
+- `@knowledge-quest/learning` — curricula, question generation, speech helpers
+- `@knowledge-quest/storage` — `StoragePort`, `LocalStorageAdapter`, `SettingsRepository`
+
+New games (Angular, React, etc.) can depend on those packages without sharing a UI framework.
