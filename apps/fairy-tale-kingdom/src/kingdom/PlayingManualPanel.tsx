@@ -11,9 +11,19 @@ function ManualArt({ artKey, title }: { artKey?: string; title: string }) {
   if (!src) {
     return <div className="manual-art manual-art-missing" aria-hidden="true" />;
   }
+  const isUnit =
+    !!artKey &&
+    (artKey.startsWith('unit:') ||
+      artKey.startsWith('enemy:') ||
+      artKey.startsWith('monster:'));
   return (
     <div className="manual-art">
-      <img src={src} alt="" title={title} className="manual-art-img" />
+      <img
+        src={src}
+        alt=""
+        title={title}
+        className={isUnit ? 'manual-art-img manual-art-img-unit' : 'manual-art-img'}
+      />
     </div>
   );
 }

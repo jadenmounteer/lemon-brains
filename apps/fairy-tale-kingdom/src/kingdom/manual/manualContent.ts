@@ -201,33 +201,33 @@ export function buildManualSections(): ManualSection[] {
           'Hunts coven witches, aids exorcisms, and joins knights against vampire castles. Cathedral required.',
         ]),
         hireEntry('king', 'unit:king', [
-          'Sole monarch with the queen. Unlocks royal buildings, barracks, balls, and succession rules. Lives at a keep.',
+          'Sole monarch with the queen — jeweled crown, fur-trimmed robe, and scepter. Unlocks royal buildings, barracks, balls, and succession. Lives at a keep.',
         ]),
         hireEntry('queen', 'unit:queen', [
-          'Rules beside the king. May bear a prince. Needed with the king for elites, manors, and jousts.',
+          'Rules beside the king in a full gown, crown, and veil. May bear a prince. Needed with the king for elites, manors, and jousts.',
         ]),
         {
           artKey: 'unit:prince',
           title: 'Prince',
           body: [
-            'Born to the royal couple or present at court. Can restore cursed princesses and marry a permanent princess at the cathedral. If both monarchs fall, a married prince & princess may succeed the throne.',
+            'Born to the royal couple or present at court — coronet and noble cape. Can restore cursed princesses and marry a permanent princess at the cathedral. If both monarchs fall, a married prince & princess may succeed the throne.',
           ],
         },
         {
           artKey: 'unit:princess',
           title: 'Princess',
           body: [
-            'Permanent after cathedral marriage to a prince. Temporary princesses come from Fairy Godmother blessings at balls (female peasants) and revert at morning if unwed. Restores frog princes.',
+            'Gown and diadem. Permanent after cathedral marriage to a prince. Temporary princesses come from Fairy Godmother blessings at balls (female peasants) and revert at morning if unwed. Restores frog princes.',
           ],
         },
         hireEntry('duke', 'unit:duke', [
-          'Seat at an extra keep. Spreads influence and softens the all-keeps-must-fall lose condition.',
+          'Regional lord for an extra keep — noble trim and shoulder cape, lesser crown than the king. Spreads influence and softens the all-keeps-must-fall lose condition.',
         ]),
         hireEntry('duchess', 'unit:duchess', [
-          'Lady of an extra keep — same strategic value as a duke.',
+          'Regional lady for an extra keep — noble dress without a full queen’s train. Same strategic value as a duke.',
         ]),
         hireEntry('fairy_godmother', 'unit:fairy_godmother', [
-          'During a royal ball, bless a female peasant into a temporary princess. Unique court mage of matchmaking chaos.',
+          'Starry hat, flowing gown, and sparkle wand. At a royal ball, blesses a female peasant into a temporary princess. Unique.',
         ]),
         {
           artKey: 'unit:necromancer',
@@ -303,16 +303,16 @@ export function buildManualSections(): ManualSection[] {
           'Three beds. Starter homes for hires and families.',
         ]),
         buildEntry('manor', 'prop:manor', [
-          'Six beds for growing households. Needs king & queen.',
+          'Twin-wing stone estate with slate roofs, banners, and a grand door — six beds. Needs king & queen.',
         ]),
         buildEntry('granary', 'prop:granary', [
-          'Unlocks two fields each and sweetens harvest while standing.',
+          'Tall timber silo on stilts with grain sacks and a loading chute — not a cottage. +50% harvest while standing; unlocks 2 field slots.',
         ]),
         buildEntry('field', 'prop:field', [
           'Farmers harvest here (job capacity). Needs granary slots.',
         ]),
         buildEntry('bakery', 'prop:bakery', [
-          'Bakers soften food pressure — pair with fields.',
+          'Shop with bread-window, striped awning, and a brick oven chimney. Bakers soften food pressure.',
         ]),
         buildEntry('market', 'prop:market', [
           'Merchants trade; market festivals gather here.',

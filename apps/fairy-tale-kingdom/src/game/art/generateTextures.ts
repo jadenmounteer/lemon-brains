@@ -246,6 +246,18 @@ function drawUnitFrame(
     drawGoblinFrame(ctx, originX, facing, walkStep);
     return;
   }
+  if (
+    role === 'king' ||
+    role === 'queen' ||
+    role === 'prince' ||
+    role === 'princess' ||
+    role === 'duke' ||
+    role === 'duchess' ||
+    role === 'fairy_godmother'
+  ) {
+    drawRoyalFrame(ctx, originX, role, facing, walkStep);
+    return;
+  }
 
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
@@ -286,18 +298,6 @@ function drawUnitFrame(
     if (role === 'elite_archer') {
       fillRect(ctx, originX + 5, 3 + baseY, 6, 1, palette.gold);
     }
-  } else if (
-    role === 'king' ||
-    role === 'queen' ||
-    role === 'prince' ||
-    role === 'princess' ||
-    role === 'duke' ||
-    role === 'duchess'
-  ) {
-    fillRect(ctx, originX + 5, 2 + baseY + tall, 6, 2, palette.gold);
-  } else if (role === 'fairy_godmother') {
-    fillRect(ctx, originX + 12, 8 + baseY, 2, 8, palette.wood);
-    pixel(ctx, originX + 13, 7 + baseY, palette.gold);
   } else if (role === 'jester') {
     fillRect(ctx, originX + 4, 2 + baseY, 8, 2, palette.gold);
     pixel(ctx, originX + 4, 2 + baseY, palette.clothJester);
@@ -668,6 +668,165 @@ function drawBishopFrame(
   fillRect(ctx, originX + 13, 4 + y, 1, 14, palette.gold);
   fillRect(ctx, originX + 12, 3 + y, 3, 2, palette.gold);
   fillRect(ctx, originX + 14, 4 + y, 1, 2, palette.gold);
+}
+
+/**
+ * Royalty & fairy godmother — crowns, dresses/robes, capes.
+ * Distinct from the generic tunic body used by commoners.
+ */
+function drawRoyalFrame(
+  ctx: Ctx,
+  originX: number,
+  role:
+    | 'king'
+    | 'queen'
+    | 'prince'
+    | 'princess'
+    | 'duke'
+    | 'duchess'
+    | 'fairy_godmother',
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob;
+  const cloth = clothFor(role);
+  const isDress =
+    role === 'queen' ||
+    role === 'princess' ||
+    role === 'duchess' ||
+    role === 'fairy_godmother';
+  const isMonarch = role === 'king' || role === 'queen';
+
+  // shadow
+  fillRect(ctx, originX + 3, 21, 10, 2, palette.ink);
+
+  // shoes peeking under hem / boots
+  if (isDress) {
+    fillRect(ctx, originX + 5 - leg, 19 + y, 3, 2, palette.ink);
+    fillRect(ctx, originX + 9 + leg, 19 + y, 3, 2, palette.ink);
+  } else {
+    fillRect(ctx, originX + 5 - leg, 18 + y, 3, 3, palette.ink);
+    fillRect(ctx, originX + 9 + leg, 18 + y, 3, 3, palette.ink);
+  }
+
+  // Cape / train behind (side & down facings)
+  if (facing !== 'up') {
+    if (role === 'king' || role === 'duke') {
+      fillRect(ctx, originX + 3, 9 + y, 2, 10, cloth);
+      fillRect(ctx, originX + 12, 9 + y, 2, 10, cloth);
+      fillRect(ctx, originX + 2, 10 + y, 1, 8, 0x6b4010);
+      fillRect(ctx, originX + 14, 10 + y, 1, 8, 0x6b4010);
+    }
+    if (isDress) {
+      // trailing skirt volume
+      fillRect(ctx, originX + 2, 14 + y, 12, 6, cloth);
+      fillRect(ctx, originX + 1, 16 + y, 14, 4, cloth);
+      if (role === 'queen' || role === 'fairy_godmother') {
+        fillRect(ctx, originX + 0, 18 + y, 16, 2, cloth);
+      }
+    }
+  }
+
+  // Torso / bodice
+  if (isDress) {
+    fillRect(ctx, originX + 5, 9 + y, 6, 6, cloth);
+    fillRect(ctx, originX + 4, 14 + y, 8, 5, cloth);
+    // waist sash
+    fillRect(ctx, originX + 5, 13 + y, 6, 1, palette.gold);
+    if (role === 'fairy_godmother') {
+      fillRect(ctx, originX + 5, 13 + y, 6, 1, 0xf0f8ff);
+    }
+  } else {
+    // ornate robe (wider than peasant tunic)
+    fillRect(ctx, originX + 4, 9 + y, 8, 10, cloth);
+    fillRect(ctx, originX + 5, 10 + y, 6, 8, cloth);
+    // fur / gold trim down front
+    fillRect(ctx, originX + 7, 9 + y, 2, 10, isMonarch ? palette.cream : palette.gold);
+    if (role === 'king') {
+      fillRect(ctx, originX + 4, 9 + y, 8, 1, palette.cream);
+      fillRect(ctx, originX + 4, 17 + y, 8, 1, palette.cream);
+    }
+  }
+
+  // Head
+  fillRect(ctx, originX + 5, 4 + y, 6, 5, palette.skin);
+  fillRect(ctx, originX + 4, 4 + y, 1, 5, palette.ink);
+  fillRect(ctx, originX + 11, 4 + y, 1, 5, palette.ink);
+
+  // Crowns / circlets / hats
+  if (role === 'king') {
+    fillRect(ctx, originX + 4, 1 + y, 8, 3, palette.gold);
+    pixel(ctx, originX + 4, 0 + y, palette.gold);
+    pixel(ctx, originX + 6, 0 + y, palette.gold);
+    pixel(ctx, originX + 8, 0 + y, palette.gold);
+    pixel(ctx, originX + 11, 0 + y, palette.gold);
+    pixel(ctx, originX + 5, 2 + y, 0xc03030);
+    pixel(ctx, originX + 7, 2 + y, 0x3060c0);
+    pixel(ctx, originX + 9, 2 + y, 0xc03030);
+  } else if (role === 'queen') {
+    fillRect(ctx, originX + 4, 1 + y, 8, 2, palette.gold);
+    pixel(ctx, originX + 5, 0 + y, palette.gold);
+    pixel(ctx, originX + 7, 0 + y, palette.gold);
+    pixel(ctx, originX + 9, 0 + y, palette.gold);
+    pixel(ctx, originX + 7, 2 + y, 0xc03050);
+    // veil
+    fillRect(ctx, originX + 3, 3 + y, 2, 4, palette.cream);
+    fillRect(ctx, originX + 12, 3 + y, 2, 4, palette.cream);
+  } else if (role === 'prince') {
+    fillRect(ctx, originX + 5, 2 + y, 6, 2, palette.gold);
+    pixel(ctx, originX + 7, 1 + y, palette.gold);
+    pixel(ctx, originX + 8, 1 + y, 0x3060c0);
+  } else if (role === 'princess') {
+    fillRect(ctx, originX + 5, 2 + y, 6, 2, palette.gold);
+    pixel(ctx, originX + 6, 1 + y, palette.gold);
+    pixel(ctx, originX + 8, 1 + y, palette.gold);
+    pixel(ctx, originX + 7, 2 + y, 0xd06090);
+  } else if (role === 'duke') {
+    fillRect(ctx, originX + 5, 2 + y, 6, 2, palette.metal);
+    fillRect(ctx, originX + 6, 2 + y, 4, 1, palette.gold);
+  } else if (role === 'duchess') {
+    fillRect(ctx, originX + 5, 2 + y, 6, 2, palette.gold);
+    pixel(ctx, originX + 7, 1 + y, palette.gold);
+  } else if (role === 'fairy_godmother') {
+    // starry pointed hat
+    fillRect(ctx, originX + 5, 0 + y, 6, 4, palette.clothFairy);
+    fillRect(ctx, originX + 6, 0 + y, 4, 1, 0xf0f8ff);
+    pixel(ctx, originX + 7, 0 + y, palette.gold);
+    pixel(ctx, originX + 9, 1 + y, palette.gold);
+  }
+
+  // Face
+  if (facing === 'up') {
+    fillRect(ctx, originX + 5, 4 + y, 6, 2, cloth);
+  } else if (facing === 'left') {
+    pixel(ctx, originX + 6, 6 + y, palette.ink);
+  } else if (facing === 'right') {
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+  } else {
+    pixel(ctx, originX + 6, 6 + y, palette.ink);
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+  }
+
+  // Props: scepter / wand
+  if (role === 'king' && facing !== 'up') {
+    fillRect(ctx, originX + 13, 6 + y, 1, 10, palette.gold);
+    fillRect(ctx, originX + 12, 5 + y, 3, 2, palette.gold);
+    pixel(ctx, originX + 13, 4 + y, 0xc03030);
+  }
+  if (role === 'fairy_godmother') {
+    fillRect(ctx, originX + 13, 6 + y, 1, 10, palette.wood);
+    pixel(ctx, originX + 13, 5 + y, palette.gold);
+    pixel(ctx, originX + 12, 4 + y, 0xf0f8ff);
+    pixel(ctx, originX + 14, 4 + y, 0xf0f8ff);
+  }
+
+  // Shoulder clasp for prince/duke
+  if (role === 'prince' || role === 'duke') {
+    fillRect(ctx, originX + 4, 9 + y, 2, 3, palette.gold);
+    fillRect(ctx, originX + 11, 9 + y, 2, 3, palette.gold);
+  }
 }
 
 function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
@@ -1078,16 +1237,137 @@ function drawField(scene: Phaser.Scene) {
 
 function drawGranary(scene: Phaser.Scene) {
   const w = 36;
-  const h = 36;
+  const h = 44;
   const tex = createCanvas(scene, PROP_KEYS.granary, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 12, 24, 20, palette.wood);
-  fillRect(ctx, 6, 12, 24, 1, palette.ink);
-  for (let row = 0; row < 6; row++) {
-    fillRect(ctx, 8 + row, 6 + row, 20 - row * 2, 1, palette.roof);
+  // Raised stilts
+  fillRect(ctx, 8, 36, 3, 6, palette.woodDark);
+  fillRect(ctx, 25, 36, 3, 6, palette.woodDark);
+  // Tall vertical silo / barn body
+  fillRect(ctx, 6, 10, 24, 28, palette.wood);
+  fillRect(ctx, 6, 10, 24, 1, palette.ink);
+  fillRect(ctx, 6, 10, 1, 28, palette.ink);
+  fillRect(ctx, 29, 10, 1, 28, palette.ink);
+  // Horizontal plank lines
+  for (let py = 14; py < 36; py += 4) {
+    fillRect(ctx, 7, py, 22, 1, palette.woodDark);
   }
-  fillRect(ctx, 14, 22, 8, 10, palette.woodDark);
-  fillRect(ctx, 22, 16, 6, 6, palette.wheat);
+  // Domed / peaked grain roof (narrow tall, not cottage)
+  fillRect(ctx, 8, 6, 20, 5, palette.wheatDark);
+  fillRect(ctx, 10, 3, 16, 4, palette.wheat);
+  fillRect(ctx, 14, 1, 8, 3, palette.wheatDark);
+  fillRect(ctx, 16, 0, 4, 2, palette.wheat);
+  // Small high loft windows
+  fillRect(ctx, 10, 14, 4, 4, palette.ink);
+  fillRect(ctx, 22, 14, 4, 4, palette.ink);
+  fillRect(ctx, 11, 15, 2, 2, palette.cream);
+  fillRect(ctx, 23, 15, 2, 2, palette.cream);
+  // Loading door mid-height + chute
+  fillRect(ctx, 14, 24, 8, 10, palette.woodDark);
+  fillRect(ctx, 15, 25, 6, 8, palette.dirt);
+  fillRect(ctx, 16, 34, 4, 4, palette.wheat);
+  // Grain sacks at base
+  fillRect(ctx, 4, 34, 5, 5, palette.wheat);
+  fillRect(ctx, 5, 35, 3, 3, palette.wheatDark);
+  fillRect(ctx, 27, 34, 5, 5, palette.wheat);
+  fillRect(ctx, 28, 35, 3, 3, palette.wheatDark);
+  tex.refresh();
+}
+
+function drawManor(scene: Phaser.Scene) {
+  const w = 64;
+  const h = 56;
+  const tex = createCanvas(scene, PROP_KEYS.manor, w, h);
+  const ctx = tex.getContext();
+  // Twin stone wings
+  fillRect(ctx, 2, 22, 18, 28, palette.stone);
+  fillRect(ctx, 44, 22, 18, 28, palette.stone);
+  // Central hall (taller)
+  fillRect(ctx, 16, 18, 32, 32, palette.stone);
+  fillRect(ctx, 16, 18, 32, 1, palette.ink);
+  // Dark timber trim
+  fillRect(ctx, 2, 22, 18, 1, palette.ink);
+  fillRect(ctx, 44, 22, 18, 1, palette.ink);
+  // Blue slate roofs on wings (not red cottage)
+  for (let row = 0; row < 6; row++) {
+    fillRect(ctx, 2 + row, 16 + row, 18 - row * 2, 1, 0x4a5a7a);
+    fillRect(ctx, 44 + row, 16 + row, 18 - row * 2, 1, 0x4a5a7a);
+  }
+  // Central steep roof with gold ridge
+  for (let row = 0; row < 10; row++) {
+    fillRect(ctx, 16 + row, 8 + row, 32 - row * 2, 1, 0x3a4a6a);
+  }
+  fillRect(ctx, 28, 6, 8, 3, palette.gold);
+  // Twin chimneys
+  fillRect(ctx, 8, 10, 4, 10, palette.stoneDark);
+  fillRect(ctx, 52, 10, 4, 10, palette.stoneDark);
+  fillRect(ctx, 8, 9, 4, 2, palette.stone);
+  fillRect(ctx, 52, 9, 4, 2, palette.stone);
+  // Grand double door + steps
+  fillRect(ctx, 26, 36, 12, 14, palette.woodDark);
+  fillRect(ctx, 28, 38, 3, 10, palette.wood);
+  fillRect(ctx, 33, 38, 3, 10, palette.wood);
+  fillRect(ctx, 24, 48, 16, 3, palette.stoneDark);
+  fillRect(ctx, 26, 50, 12, 2, palette.stone);
+  // Wing windows (tall)
+  fillRect(ctx, 6, 28, 5, 8, palette.cream);
+  fillRect(ctx, 8, 28, 1, 8, palette.ink);
+  fillRect(ctx, 53, 28, 5, 8, palette.cream);
+  fillRect(ctx, 55, 28, 1, 8, palette.ink);
+  // Hall windows
+  fillRect(ctx, 20, 24, 6, 6, palette.cream);
+  fillRect(ctx, 38, 24, 6, 6, palette.cream);
+  // Banners
+  fillRect(ctx, 18, 20, 2, 10, palette.clothKing);
+  fillRect(ctx, 44, 20, 2, 10, palette.clothQueen);
+  pixel(ctx, 18, 20, palette.gold);
+  pixel(ctx, 44, 20, palette.gold);
+  tex.refresh();
+}
+
+function drawBakery(scene: Phaser.Scene) {
+  const w = 44;
+  const h = 40;
+  const tex = createCanvas(scene, PROP_KEYS.bakery, w, h);
+  const ctx = tex.getContext();
+  // Warm plaster shop body
+  fillRect(ctx, 4, 16, 28, 20, 0xd4c4a0);
+  fillRect(ctx, 4, 16, 28, 1, palette.ink);
+  fillRect(ctx, 4, 16, 1, 20, palette.woodDark);
+  fillRect(ctx, 31, 16, 1, 20, palette.woodDark);
+  // Shallow terracotta roof (not peaked cottage clone)
+  fillRect(ctx, 2, 12, 32, 5, 0xc06040);
+  fillRect(ctx, 4, 10, 28, 3, 0xd47850);
+  fillRect(ctx, 8, 8, 20, 3, 0xc06040);
+  // Brick oven bulge on the right
+  fillRect(ctx, 30, 18, 12, 16, palette.stone);
+  fillRect(ctx, 32, 20, 8, 10, palette.stoneDark);
+  fillRect(ctx, 34, 22, 4, 6, palette.ink);
+  fillRect(ctx, 35, 24, 2, 3, 0xff8844);
+  // Smoking chimney
+  fillRect(ctx, 36, 6, 5, 14, palette.stoneDark);
+  fillRect(ctx, 37, 5, 3, 2, palette.stone);
+  pixel(ctx, 38, 3, palette.stoneDark);
+  pixel(ctx, 39, 2, palette.stone);
+  pixel(ctx, 37, 2, palette.stoneDark);
+  // Shop window with bread loaves
+  fillRect(ctx, 8, 20, 14, 8, palette.ink);
+  fillRect(ctx, 9, 21, 12, 6, 0x87a8c8);
+  fillRect(ctx, 10, 24, 3, 2, 0xe8c070);
+  fillRect(ctx, 14, 23, 3, 3, 0xe0b060);
+  fillRect(ctx, 18, 24, 3, 2, 0xe8c070);
+  // Striped awning
+  fillRect(ctx, 7, 18, 16, 3, palette.cream);
+  fillRect(ctx, 7, 18, 4, 3, 0xc04545);
+  fillRect(ctx, 15, 18, 4, 3, 0xc04545);
+  // Door
+  fillRect(ctx, 24, 26, 6, 10, palette.woodDark);
+  pixel(ctx, 28, 31, palette.gold);
+  // Hanging pretzel / bread sign
+  fillRect(ctx, 12, 6, 2, 5, palette.wood);
+  fillRect(ctx, 10, 4, 6, 4, 0xe8c070);
+  pixel(ctx, 11, 5, 0xc09040);
+  pixel(ctx, 14, 5, 0xc09040);
   tex.refresh();
 }
 
@@ -1103,26 +1383,6 @@ function drawBarracks(scene: Phaser.Scene) {
   fillRect(ctx, 28, 14, 4, 4, palette.cream);
   fillRect(ctx, 30, 6, 2, 8, palette.metal);
   tex.refresh();
-}
-
-function drawManor(scene: Phaser.Scene) {
-  const w = 56;
-  const h = 52;
-  const tex = createCanvas(scene, PROP_KEYS.manor, w, h);
-  const ctx = tex.getContext();
-  fillRect(ctx, 6, 18, 44, 30, palette.stone);
-  fillRect(ctx, 6, 18, 44, 1, palette.ink);
-  for (let row = 0; row < 12; row++) {
-    fillRect(ctx, 6 + row, 6 + row, 44 - row * 2, 1, palette.roof);
-  }
-  fillRect(ctx, 22, 34, 12, 14, palette.woodDark);
-  fillRect(ctx, 12, 24, 6, 6, palette.cream);
-  fillRect(ctx, 38, 24, 6, 6, palette.cream);
-  fillRect(ctx, 24, 10, 8, 6, palette.gold);
-  fillRect(ctx, 42, 12, 4, 8, palette.stoneDark);
-  tex.refresh();
-
-  // reuse house-style interior key via manor → houseInterior mapping already
 }
 
 function drawCave(scene: Phaser.Scene) {
@@ -1247,24 +1507,6 @@ function drawDungeon(scene: Phaser.Scene) {
   fillRect(ctx, 16, 20, 8, 12, 0x1a1018);
   fillRect(ctx, 8, 14, 4, 4, palette.metal);
   fillRect(ctx, 28, 14, 4, 4, palette.metal);
-  tex.refresh();
-}
-
-function drawBakery(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 36;
-  const tex = createCanvas(scene, PROP_KEYS.bakery, w, h);
-  const ctx = tex.getContext();
-  fillRect(ctx, 4, 14, 32, 20, palette.wood);
-  fillRect(ctx, 4, 14, 32, 1, palette.ink);
-  for (let row = 0; row < 8; row++) {
-    fillRect(ctx, 6 + row, 6 + row, 28 - row * 2, 1, palette.roof);
-  }
-  fillRect(ctx, 16, 24, 8, 10, palette.woodDark);
-  fillRect(ctx, 10, 18, 5, 5, palette.cream);
-  fillRect(ctx, 26, 18, 5, 5, palette.cream);
-  fillRect(ctx, 28, 8, 4, 8, palette.stoneDark);
-  fillRect(ctx, 18, 12, 6, 3, 0xe8c070);
   tex.refresh();
 }
 
