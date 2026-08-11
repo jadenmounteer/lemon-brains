@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PROP_KEYS, isMilitaryRole, isRoyalRole } from '../art/assetManifest';
-import type { BuildingSystem } from '../buildings/BuildingSystem';
+import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { CombatBalance } from '../combat/stats';
@@ -11,13 +11,35 @@ interface Haunt {
   ghostName: string;
 }
 
+/** Footprint dims mirror the vampire-castle canvas drawn in generateTextures.ts. */
+const CASTLE_FOOTPRINT = { w: 56, h: 48 };
+
 interface VampireCastle {
   id: string;
   x: number;
   y: number;
   hp: number;
   sprite: Phaser.GameObjects.Image;
+  interiorSprite: Phaser.GameObjects.Image | null;
   lifeMs: number;
+}
+
+function aabbIntersects(a: Aabb, b: Aabb): boolean {
+  return !(
+    a.right <= b.left ||
+    a.left >= b.right ||
+    a.bottom <= b.top ||
+    a.top >= b.bottom
+  );
+}
+
+function castleFootprint(x: number, y: number): Aabb {
+  return {
+    left: x - CASTLE_FOOTPRINT.w / 2,
+    right: x + CASTLE_FOOTPRINT.w / 2,
+    top: y - CASTLE_FOOTPRINT.h,
+    bottom: y,
+  };
 }
 
 interface ActiveNecromancer {
@@ -52,6 +74,7 @@ export class UndeadSystem {
     // interrupts each non-raid tick, so haunted tenants need continuous
     // re-application to keep fleeing, same as monster-flee elsewhere.
     this.tickHauntedTenants();
+    this.tickVampireWivesDaySeek(isNight);
 
     this.accumMs += deltaMs;
     if (this.accumMs < 1200) return;
@@ -101,10 +124,48 @@ export class UndeadSystem {
   }
 
   clear(): void {
-    for (const c of this.castles) c.sprite.destroy();
+    for (const c of this.castles) {
+      c.sprite.destroy();
+      c.interiorSprite?.destroy();
+    }
     this.castles = [];
     this.necromancers = [];
     this.haunts = [];
+  }
+
+  /** Hides a castle's roof (like buildings/keep) while a unit stands inside its footprint. */
+  updateCastleInteriors(unitBodies: Aabb[]): void {
+    for (const c of this.castles) {
+      if (!c.interiorSprite) continue;
+      const box = castleFootprint(c.x, c.y);
+      const occupied = unitBodies.some((u) => aabbIntersects(box, u));
+      c.sprite.setVisible(!occupied);
+      c.interiorSprite.setVisible(occupied);
+    }
+  }
+
+  /**
+   * By day, vampire wives retreat into their castle's footprint (out of the
+   * sun); by night they head back out to prowl and bite as before — handled
+   * by their normal schedule (`vampireWifeSchedule`'s 'hunt' slots).
+   */
+  private tickVampireWivesDaySeek(isNight: boolean): void {
+    if (isNight || !this.castles.length) return;
+    for (const s of this.subjects.listManaged()) {
+      if (s.data.role !== 'vampire_wife' || !s.sprite.active || s.interrupt) {
+        continue;
+      }
+      const castle = [...this.castles].sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(s.sprite.x, s.sprite.y, a.x, a.y) -
+          Phaser.Math.Distance.Between(s.sprite.x, s.sprite.y, b.x, b.y)
+      )[0];
+      if (!castle) continue;
+      const d = Phaser.Math.Distance.Between(s.sprite.x, s.sprite.y, castle.x, castle.y);
+      if (d > 10) {
+        this.subjects.nudgeToward(s.data.id, castle.x, castle.y - 4, 42);
+      }
+    }
   }
 
   // --- Necromancers -------------------------------------------------------
@@ -394,12 +455,20 @@ export class UndeadSystem {
         .image(cx, cy, PROP_KEYS.vampireCastle)
         .setDepth(8)
         .setOrigin(0.5, 1);
+      const interiorSprite = this.scene.textures.exists(PROP_KEYS.vampireCastleInterior)
+        ? this.scene.add
+            .image(cx, cy, PROP_KEYS.vampireCastleInterior)
+            .setDepth(8)
+            .setOrigin(0.5, 1)
+            .setVisible(false)
+        : null;
       this.castles.push({
         id,
         x: cx,
         y: cy,
         hp: 40,
         sprite,
+        interiorSprite,
         lifeMs: 180_000 + Math.random() * 120_000,
       });
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -465,6 +534,7 @@ export class UndeadSystem {
 
   private despawnCastle(c: VampireCastle): void {
     c.sprite.destroy();
+    c.interiorSprite?.destroy();
     this.castles = this.castles.filter((x) => x !== c);
   }
 }

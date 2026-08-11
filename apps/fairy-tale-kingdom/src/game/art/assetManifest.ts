@@ -38,6 +38,9 @@ export const UNIT_ROLES = [
   'necromancer',
   'zombie',
   'vampire_wife',
+  'bandit',
+  'thief',
+  'gypsy',
 ] as const;
 export type UnitRole = (typeof UNIT_ROLES)[number];
 

@@ -53,6 +53,9 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   necromancer: 26,
   zombie: 22,
   vampire_wife: 30,
+  bandit: 25,
+  thief: 20,
+  gypsy: 18,
 };
 
 export const MONSTER_MAX_HP = {

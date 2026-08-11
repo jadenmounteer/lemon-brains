@@ -76,6 +76,7 @@ export class CombatSystem {
     this.friendlyFire(raidActive);
     if (raidActive) this.tickBallistae();
     this.tickMonsterCombat();
+    this.tickMilitaryVsCampHostiles();
   }
 
   private dmgMult(): number {
@@ -456,6 +457,73 @@ export class CombatSystem {
           message: `${fighter.data.name} slew ${monster.name}`,
         });
       }
+    }
+  }
+
+  /** Military engage wandering living-camp garrison members (bandits/thieves/gypsies) on sight. */
+  private tickMilitaryVsCampHostiles(): void {
+    const dmgMult = this.dmgMult();
+
+    for (const fighter of this.subjects.combatants()) {
+      const isArcher =
+        fighter.data.role === 'archer' || fighter.data.role === 'elite_archer';
+      const range = isArcher
+        ? this.archerRange(fighter.sprite.x, fighter.sprite.y, fighter.data.onWall)
+        : CombatBalance.aggroRadius;
+      const hostile = this.subjects.nearestCampHostile(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        range
+      );
+      if (!hostile) continue;
+
+      const dist = Phaser.Math.Distance.Between(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        hostile.sprite.x,
+        hostile.sprite.y
+      );
+
+      if (isArcher) {
+        if (dist > range) continue;
+        let dmg =
+          fighter.data.role === 'elite_archer'
+            ? CombatBalance.eliteArcherRanged
+            : CombatBalance.archerRanged;
+        if (fighter.data.onWall) dmg *= CombatBalance.archerWallDamageMult;
+        dmg *= dmgMult;
+        const targetId = hostile.data.id;
+        this.vfx?.projectileArc(
+          fighter.sprite.x,
+          fighter.sprite.y - 10,
+          hostile.sprite.x,
+          hostile.sprite.y - 8,
+          'arrow',
+          () => {
+            this.subjects.damageSubject(targetId, dmg);
+          }
+        );
+        continue;
+      }
+
+      if (dist > CombatBalance.guardRange) {
+        this.subjects.nudgeToward(
+          fighter.data.id,
+          hostile.sprite.x,
+          hostile.sprite.y,
+          55
+        );
+        continue;
+      }
+      const base =
+        fighter.data.role === 'knight'
+          ? CombatBalance.knightMelee
+          : fighter.data.role === 'elite_guard'
+            ? CombatBalance.eliteGuardMelee
+            : CombatBalance.guardMelee;
+      this.vfx?.meleeLunge(fighter.sprite, hostile.sprite.x, hostile.sprite.y);
+      this.vfx?.hitFlash(hostile.sprite);
+      this.subjects.damageSubject(hostile.data.id, base * dmgMult);
     }
   }
 

@@ -392,7 +392,7 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Happiness',
           body: [
-            'Festivals, weddings, jesters, and full bellies raise it. Sieges, hunger, curses, and fear lower it. Too low: defections to witches, thieves, or bandit camps — they keep their life log and become your problem on the fringe.',
+            'Festivals, weddings, jesters, and full bellies raise it. Sieges, hunger, curses, and fear lower it. Too low: peasants walk to a bandit, thief, or gypsy camp and only turn when they arrive — soldiers leave them alone until then. They keep their name and life log.',
           ],
         },
       ],
@@ -509,7 +509,7 @@ export function buildManualSections(): ManualSection[] {
       id: 'monsters',
       label: 'Monsters',
       intro: [
-        'Wild named beasts keep schedules. Early game they decorate the wilderness; later they pressure harder. Click to inspect and follow.',
+        'Wild named beasts keep schedules. Early game they decorate the wilderness; later they pressure harder. Click to inspect, follow, and see its territory ring on the map.',
       ],
       entries: [
         {
@@ -530,21 +530,28 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'monster:dragon',
           title: 'Dragon',
           body: [
-            'Sleeps in caves (knights can slay them asleep). Soars ridges, then dives on the keep to steal gold. Some are two-headed and greedier. Flies over water and mountains — bridges mean nothing to wyrms. Generals can hunt them.',
+            'Sleeps in caves (knights can slay them asleep). Soars ridges, then dives on the keep to steal gold — the one errand that lets it fly outside its territory. Some are two-headed and greedier. Flies over water and mountains — bridges mean nothing to wyrms. Generals can hunt them.',
           ],
         },
         {
           artKey: 'prop:cave',
           title: 'Dragon caves',
           body: [
-            'Nest markers on the fringe. A sleeping dragon is a knight’s quest; a waking one is a treasury problem.',
+            'Nest markers on the fringe — and a dragon’s home for territory purposes. A sleeping dragon is a knight’s quest; a waking one is a treasury problem.',
+          ],
+        },
+        {
+          title: 'Territory & hunger',
+          body: [
+            'Every monster claims a home point (its spawn spot, or its cave for dragons) with a roaming sphere around it — click the monster to draw the ring, same as a keep or barracks influence circle. Wandering stays inside that ring.',
+            'Hunger climbs the longer a monster goes without a meal. Past the threshold it abandons idle roaming and actively hunts the nearest subject still inside its sphere — a toast announces the hunt starting, and a successful bite quiets the hunger for a while.',
           ],
         },
         {
           artKey: 'prop:vampireCastle',
           title: 'Vampire castle',
           body: [
-            'Appears and fades on the fringe. At night bats seek women to turn into vampire wives. Knights, witch hunters, and general orders can end the nest.',
+            'Appears and fades on the fringe. By day the castle sits quiet — any vampire wife born from it paths home and the roof hides to reveal a gloomy interior once she is inside, same as a house or keep. At night bats seek women to turn into vampire wives, and turned wives head back out to prowl and bite. Knights, witch hunters, and general orders can end the nest.',
           ],
         },
       ],
@@ -553,14 +560,15 @@ export function buildManualSections(): ManualSection[] {
       id: 'encampments',
       label: 'Encampments',
       intro: [
-        'Camps are places to watch. Click for leader, roster (home vs away), and supply (siege). Leaders demoralize when slain until a successor rises.',
+        'Camps are places to watch. Click the camp for leader, roster (home vs away), supply (siege), and an influence sphere. Bandit, thief, and gypsy camps field real wandering named units inside that ring — click a person for their inspector. Leaders demoralize when slain until a successor rises.',
+        'Miserable peasants flee on foot to the nearest bandit, thief, or gypsy camp (never giants or goblins). They stay peasant-looking until they arrive, then reskin and join the garrison. Soldiers will not attack them mid-journey.',
       ],
       entries: [
         {
           artKey: 'prop:banditCamp',
           title: 'Bandit camp',
           body: [
-            'Tents, cookfires, crude fences. Captain picks soft targets when the roster hits threshold.',
+            'Tents, cookfires, crude fences — and living bandits pacing the sphere. Captain picks soft targets when the roster hits threshold. Accepts defectors.',
           ],
         },
         {
@@ -581,14 +589,14 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'prop:thiefDen',
           title: 'Thief den',
           body: [
-            'Night specialists. Arrests recover gold; ignore them and the keep bleeds quietly.',
+            'Night specialists with living cutpurses in the sphere. Arrests recover gold; ignore them and the keep bleeds quietly. Accepts defectors.',
           ],
         },
         {
           artKey: 'prop:gypsyCamp',
           title: 'Gypsy camp',
           body: [
-            'Music by day, raids when the leader calls. Inspect the named roster before you ride out.',
+            'Music by day, raids when the leader calls. Named wanderers in the sphere; accepts defectors. Inspect the roster before you ride out.',
           ],
         },
         {

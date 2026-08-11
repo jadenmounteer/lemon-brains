@@ -59,6 +59,8 @@ export interface ActiveRaider {
   homeCampId: string | null;
   homeX: number;
   homeY: number;
+  /** For living-camp raiders — the home SubjectSystem entity to reveal/remove on return/loss. */
+  rosterSubjectId: string | null;
   /** Override steal bookkeeping for thief dens / goblins */
   /** Gold this raider is carrying / last stole (recoverable on arrest) */
   carriedGold: number;
@@ -101,6 +103,8 @@ export interface LaunchCampRaidersOpts {
   isReinforce?: boolean;
   /** The camp's leader is riding with this party — tag one raider as the general */
   hasGeneral?: boolean;
+  /** Home SubjectSystem ids (one per raider, living camps only) to reveal/remove on return/loss */
+  rosterSubjectIds?: string[];
 }
 
 export interface BeginSiegeFromCampOpts {
@@ -201,6 +205,7 @@ export class RaidSystem {
         stealKind: opts.stealKind ?? null,
         aggroOnly: Boolean(opts.aggroOnly),
         isGeneral: Boolean(opts.hasGeneral) && i === 0,
+        rosterSubjectId: opts.rosterSubjectIds?.[i] ?? null,
       });
     }
   }
@@ -574,6 +579,7 @@ export class RaidSystem {
       isGeneral?: boolean;
       siegeRole?: 'main' | 'field_raid';
       strategyFieldId?: string | null;
+      rosterSubjectId?: string | null;
     }
   ): void {
     const sprite = this.scene.add.sprite(x, y, kind, 0);
@@ -619,6 +625,7 @@ export class RaidSystem {
       homeCampId: home?.homeCampId ?? null,
       homeX: home?.homeX ?? x,
       homeY: home?.homeY ?? y,
+      rosterSubjectId: home?.rosterSubjectId ?? null,
       stealKind: home?.stealKind ?? null,
       carriedGold: 0,
       looted: false,
@@ -1086,7 +1093,9 @@ export class RaidSystem {
     raider.camp?.destroy();
     raider.sprite.destroy();
     this.raiders = this.raiders.filter((r) => r !== raider);
-    if (campId) this.encampments?.onRaiderReturned(campId);
+    if (campId) {
+      this.encampments?.onRaiderReturned(campId, raider.rosterSubjectId);
+    }
     if (!this.hasActiveRaiders()) this.endWave();
     this.onChanged?.();
   }
@@ -1115,7 +1124,13 @@ export class RaidSystem {
     );
     raider.sprite.destroy();
     this.raiders = this.raiders.filter((r) => r !== raider);
-    if (campId) this.encampments?.onRaiderLost(campId, raider.isGeneral);
+    if (campId) {
+      this.encampments?.onRaiderLost(
+        campId,
+        raider.isGeneral,
+        raider.rosterSubjectId
+      );
+    }
     this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
       amount: recovered,
       kind: kindLabel,
@@ -1276,7 +1291,13 @@ export class RaidSystem {
       onComplete: () => {
         raider.sprite.destroy();
         this.raiders = this.raiders.filter((r) => r !== raider);
-        if (campId) this.encampments?.onRaiderLost(campId, raider.isGeneral);
+        if (campId) {
+          this.encampments?.onRaiderLost(
+            campId,
+            raider.isGeneral,
+            raider.rosterSubjectId
+          );
+        }
         if (!this.hasActiveRaiders()) {
           this.endWave();
         }

@@ -199,6 +199,37 @@ const witchSchedule: ScheduleSlot[] = withMeals(
 
 const dukeSchedule = withMeals(royalBase, 'keep', 'keep');
 
+/** Living-camp garrison: sleep by the fire, otherwise roam within the camp sphere. */
+function campSchedule(label: string): ScheduleSlot[] {
+  return [
+    {
+      startHour: 0,
+      endHour: 6,
+      activity: 'sleep',
+      zone: 'home',
+      label: `Sleeping at the ${label} camp`,
+    },
+    {
+      startHour: 6,
+      endHour: 20,
+      activity: 'patrol',
+      zone: 'home',
+      label: `Keeping watch near the ${label} camp`,
+    },
+    {
+      startHour: 20,
+      endHour: 24,
+      activity: 'sleep',
+      zone: 'home',
+      label: `Resting at the ${label} camp`,
+    },
+  ];
+}
+
+const banditSchedule = campSchedule('bandit');
+const thiefSchedule = campSchedule('thief');
+const gypsySchedule = campSchedule('gypsy');
+
 /** Necromancers linger by the cemetery raising the dead until dawn drives them off. */
 const necromancerSchedule: ScheduleSlot[] = [
   { startHour: 0, endHour: 24, activity: 'gather', zone: 'cemetery', label: 'Raising the dead' },
@@ -263,6 +294,12 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
       return zombieSchedule;
     case 'vampire_wife':
       return vampireWifeSchedule;
+    case 'bandit':
+      return banditSchedule;
+    case 'thief':
+      return thiefSchedule;
+    case 'gypsy':
+      return gypsySchedule;
   }
 }
 
@@ -344,5 +381,11 @@ export function roleLabel(role: SubjectRole): string {
       return 'Zombie';
     case 'vampire_wife':
       return 'Vampire Wife';
+    case 'bandit':
+      return 'Bandit';
+    case 'thief':
+      return 'Thief';
+    case 'gypsy':
+      return 'Gypsy';
   }
 }

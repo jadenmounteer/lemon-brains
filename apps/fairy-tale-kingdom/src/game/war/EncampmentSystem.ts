@@ -14,6 +14,18 @@ import { WarBalance, type CampKind } from './WarBalance';
 
 export type { CampSnapshot };
 
+/** Camp kinds whose garrison is made of real, wandering SubjectSystem entities. */
+const LIVING_CAMP_KINDS: CampKind[] = ['bandit', 'thief', 'gypsy'];
+
+function isLivingCampKind(
+  kind: CampKind
+): kind is 'bandit' | 'thief' | 'gypsy' {
+  return LIVING_CAMP_KINDS.includes(kind);
+}
+
+/** Roughly how far a camp's garrison wanders / how far its aggro reaches. */
+const LIVING_CAMP_INFLUENCE_RADIUS = 140;
+
 export interface SavedEncampment {
   id: string;
   kind: CampKind;
@@ -286,6 +298,134 @@ export class EncampmentSystem {
     return c ? { x: c.x, y: c.y } : null;
   }
 
+  getCampKind(id: string): CampKind | null {
+    return this.camps.find((camp) => camp.id === id)?.kind ?? null;
+  }
+
+  /** How far a camp's garrison wanders / how far its aggro & overlay sphere reaches. */
+  influenceRadius(kind: CampKind): number {
+    return isLivingCampKind(kind)
+      ? LIVING_CAMP_INFLUENCE_RADIUS
+      : WarBalance.aggroRadius;
+  }
+
+  influenceContains(campId: string, x: number, y: number): boolean {
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp) return false;
+    return (
+      Phaser.Math.Distance.Between(camp.x, camp.y, x, y) <=
+      this.influenceRadius(camp.kind)
+    );
+  }
+
+  /** Nearest living camp of the given kinds with room for another garrison member. */
+  nearestCampWithCapacity(
+    x: number,
+    y: number,
+    kinds: CampKind[]
+  ): { id: string; kind: CampKind; x: number; y: number } | null {
+    let best: CampRecord | null = null;
+    let bestD = Infinity;
+    for (const c of this.camps) {
+      if (!kinds.includes(c.kind)) continue;
+      if (c.garrison + c.away >= WarBalance.garrisonCap(c.kind, this.daysPlayed)) {
+        continue;
+      }
+      const d = Phaser.Math.Distance.Between(x, y, c.x, c.y);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best ? { id: best.id, kind: best.kind, x: best.x, y: best.y } : null;
+  }
+
+  /** Founds a fresh, empty fringe camp of the given kind (e.g. for a lone defector). */
+  createFringeCamp(
+    kind: CampKind
+  ): { id: string; kind: CampKind; x: number; y: number } | null {
+    const pos = this.pickFringePoint();
+    if (!pos) return null;
+    if (
+      Phaser.Math.Distance.Between(pos.x, pos.y, this.keep.x, this.keep.y) <
+      this.keepClearance()
+    ) {
+      return null;
+    }
+    const camp = this.createCamp(kind, pos.x, pos.y, { garrison: 0 });
+    if (!camp) return null;
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `A ${CAMP_LABEL[kind]} appears on the frontier!`,
+    });
+    return { id: camp.id, kind: camp.kind, x: camp.x, y: camp.y };
+  }
+
+  /** A subject has walked in and joined this camp's garrison — id must already be a real subject. */
+  registerDefector(campId: string, subjectId: string, name: string): void {
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp) return;
+    camp.garrison += 1;
+    const acts = HOME_ACTIVITIES[camp.kind];
+    camp.roster.push({
+      id: subjectId,
+      name,
+      role: ROSTER_ROLE[camp.kind],
+      status: 'home',
+      activity: acts[Math.floor(Math.random() * acts.length)]!,
+    });
+    this.onChanged?.();
+  }
+
+  /** A living garrison member died (combat, old age, arrest) — reconcile counts/roster. */
+  onGarrisonMemberDied(campId: string, subjectId: string): void {
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp) return;
+    const idx = camp.roster.findIndex((u) => u.id === subjectId);
+    if (idx >= 0) {
+      const wasHome = camp.roster[idx]!.status === 'home';
+      camp.roster.splice(idx, 1);
+      if (wasHome) camp.garrison = Math.max(0, camp.garrison - 1);
+      else camp.away = Math.max(0, camp.away - 1);
+    } else {
+      camp.garrison = Math.max(0, camp.garrison - 1);
+    }
+    this.tryRemoveEmpty(camp);
+    this.onChanged?.();
+  }
+
+  /**
+   * After a save restore, living-camp garrisons are rebuilt straight from the
+   * real SubjectSystem entities that came back with matching campId/allegiance
+   * (any that were "away" mid-raid have no raid to resume, so they're brought home).
+   */
+  reconcileLivingCamps(): void {
+    if (!this.subjects) return;
+    let changed = false;
+    for (const camp of this.camps) {
+      if (!isLivingCampKind(camp.kind)) continue;
+      const members = this.subjects
+        .listManaged()
+        .filter(
+          (m) => m.data.allegiance === 'camp' && m.data.campId === camp.id
+        );
+      const acts = HOME_ACTIVITIES[camp.kind];
+      camp.roster = members.map((m) => {
+        this.subjects!.setCampMemberAway(m.data.id, false);
+        return {
+          id: m.data.id,
+          name: m.data.name,
+          role: ROSTER_ROLE[camp.kind],
+          status: 'home' as const,
+          activity: acts[Math.floor(Math.random() * acts.length)]!,
+        };
+      });
+      camp.garrison = members.length;
+      camp.away = 0;
+      changed = true;
+    }
+    if (changed) this.onChanged?.();
+  }
+
   /** World-space pick against each camp's sprite bounds (click-to-inspect). */
   pickAt(worldX: number, worldY: number): string | null {
     for (const c of this.camps) {
@@ -356,8 +496,7 @@ export class EncampmentSystem {
       WarBalance.campArrestRange
     );
     if (!guard) return false;
-    camp.garrison -= 1;
-    this.syncRoster(camp);
+    this.shrinkGarrison(camp, 1);
     const bounty = Phase12Balance.arrestBountyGold;
     this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
       amount: bounty,
@@ -412,6 +551,41 @@ export class EncampmentSystem {
           ? 'Marching on the keep'
           : 'Out raiding';
     return { id, name, role: ROSTER_ROLE[camp.kind], status, activity };
+  }
+
+  /** Adds one member to a camp's home garrison, spawning a real subject for living camps. */
+  private growGarrison(camp: CampRecord): void {
+    camp.garrison += 1;
+    if (isLivingCampKind(camp.kind) && this.subjects) {
+      const id = this.subjects.spawnCampMember(camp.id, camp.kind, camp.x, camp.y);
+      const managed = this.subjects.getById(id);
+      const acts = HOME_ACTIVITIES[camp.kind];
+      camp.roster.push({
+        id,
+        name: managed?.data.name ?? 'Unknown',
+        role: ROSTER_ROLE[camp.kind],
+        status: 'home',
+        activity: acts[Math.floor(Math.random() * acts.length)]!,
+      });
+    } else {
+      this.syncRoster(camp);
+    }
+  }
+
+  /** Removes `amount` home garrison members, destroying their subjects for living camps. */
+  private shrinkGarrison(camp: CampRecord, amount: number): void {
+    camp.garrison = Math.max(0, camp.garrison - amount);
+    if (isLivingCampKind(camp.kind) && this.subjects) {
+      const home = camp.roster.filter((u) => u.status === 'home');
+      for (let i = 0; i < amount && home.length; i++) {
+        const u = home.pop()!;
+        const idx = camp.roster.indexOf(u);
+        if (idx >= 0) camp.roster.splice(idx, 1);
+        this.subjects.removeCampMember(u.id);
+      }
+    } else {
+      this.syncRoster(camp);
+    }
   }
 
   /** Keep named roster entries in lockstep with garrison/away counts. */
@@ -503,7 +677,7 @@ export class EncampmentSystem {
   }
 
   /** Called when a raider returns home after looting. */
-  onRaiderReturned(campId: string): void {
+  onRaiderReturned(campId: string, rosterSubjectId?: string | null): void {
     const camp = this.camps.find((c) => c.id === campId);
     if (!camp) return;
     camp.away = Math.max(0, camp.away - 1);
@@ -512,7 +686,17 @@ export class EncampmentSystem {
       camp.garrison + 1
     );
     this.settleLeaderParty(camp);
-    this.syncRoster(camp);
+    if (rosterSubjectId && isLivingCampKind(camp.kind)) {
+      const entry = camp.roster.find((u) => u.id === rosterSubjectId);
+      if (entry) {
+        entry.status = 'home';
+        const acts = HOME_ACTIVITIES[camp.kind];
+        entry.activity = acts[Math.floor(Math.random() * acts.length)]!;
+      }
+      this.subjects?.setCampMemberAway(rosterSubjectId, false);
+    } else {
+      this.syncRoster(camp);
+    }
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `Raiders return to the ${CAMP_LABEL[camp.kind]}.`,
     });
@@ -520,7 +704,11 @@ export class EncampmentSystem {
   }
 
   /** Called when a camp-linked raider dies (or is arrested) away from home. */
-  onRaiderLost(campId: string, wasGeneral = false): void {
+  onRaiderLost(
+    campId: string,
+    wasGeneral = false,
+    rosterSubjectId?: string | null
+  ): void {
     const camp = this.camps.find((c) => c.id === campId);
     if (!camp) return;
     camp.away = Math.max(0, camp.away - 1);
@@ -535,7 +723,13 @@ export class EncampmentSystem {
         message: `${fallen} has fallen! The ${CAMP_LABEL[camp.kind]} reels without a leader...`,
       });
     }
-    this.syncRoster(camp);
+    if (rosterSubjectId && isLivingCampKind(camp.kind)) {
+      const idx = camp.roster.findIndex((u) => u.id === rosterSubjectId);
+      if (idx >= 0) camp.roster.splice(idx, 1);
+      this.subjects?.removeCampMember(rosterSubjectId);
+    } else {
+      this.syncRoster(camp);
+    }
     this.tryRemoveEmpty(camp);
     this.onChanged?.();
   }
@@ -598,11 +792,12 @@ export class EncampmentSystem {
     if (!camp) return false;
     // Kill garrison first, then treat as depleting away via combat elsewhere
     let dmg = damage;
-    while (dmg >= 8 && camp.garrison > 0) {
-      camp.garrison -= 1;
+    let kills = 0;
+    while (dmg >= 8 && camp.garrison - kills > 0) {
+      kills += 1;
       dmg -= 8;
     }
-    this.syncRoster(camp);
+    if (kills > 0) this.shrinkGarrison(camp, kills);
     if (camp.garrison <= 0 && camp.away <= 0) {
       this.removeCamp(camp, true);
       return true;
@@ -674,8 +869,7 @@ export class EncampmentSystem {
       camp.spawnMs -= deltaMs;
       if (camp.spawnMs <= 0) {
         camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
-        camp.garrison += 1;
-        this.syncRoster(camp);
+        this.growGarrison(camp);
         this.onChanged?.();
       }
     }
@@ -736,8 +930,7 @@ export class EncampmentSystem {
       camp.spawnMs -= deltaMs;
       if (camp.spawnMs <= 0) {
         camp.spawnMs = WarBalance.garrisonSpawnMs(camp.kind, this.daysPlayed);
-        camp.garrison += 1;
-        this.syncRoster(camp);
+        this.growGarrison(camp);
         this.onChanged?.();
       }
     }
@@ -828,9 +1021,25 @@ export class EncampmentSystem {
     if (!this.raids || count <= 0) return;
     const send = Math.min(count, camp.garrison);
     if (send <= 0) return;
-    camp.garrison -= send;
-    camp.away += send;
-    this.syncRoster(camp);
+
+    let rosterSubjectIds: string[] | undefined;
+    if (isLivingCampKind(camp.kind) && this.subjects) {
+      const homeEntries = camp.roster
+        .filter((u) => u.status === 'home')
+        .slice(0, send);
+      rosterSubjectIds = homeEntries.map((u) => u.id);
+      for (const u of homeEntries) {
+        u.status = 'away';
+        u.activity = 'Out raiding';
+        this.subjects.setCampMemberAway(u.id, true);
+      }
+      camp.garrison -= send;
+      camp.away += send;
+    } else {
+      camp.garrison -= send;
+      camp.away += send;
+      this.syncRoster(camp);
+    }
 
     // The leader joins a real raid (not proximity aggro) when they're home.
     const leaderLeads =
@@ -865,6 +1074,7 @@ export class EncampmentSystem {
       stealKind: camp.kind === 'thief' ? 'thief' : camp.kind === 'goblin' ? 'goblin' : undefined,
       aggroOnly,
       hasGeneral: leaderLeads,
+      rosterSubjectIds,
       label:
         camp.kind === 'thief'
           ? 'Thieves'
@@ -1170,7 +1380,26 @@ export class EncampmentSystem {
       activityMs: 4_000 + Math.random() * 4_000,
     };
 
-    if (!opts?.roster) this.syncRoster(camp);
+    this.camps.push(camp);
+
+    if (!opts?.roster) {
+      if (isLivingCampKind(kind) && this.subjects) {
+        const acts = HOME_ACTIVITIES[kind];
+        for (let i = 0; i < garrison; i++) {
+          const spawnId = this.subjects.spawnCampMember(camp.id, kind, x, y);
+          const managed = this.subjects.getById(spawnId);
+          camp.roster.push({
+            id: spawnId,
+            name: managed?.data.name ?? 'Unknown',
+            role: ROSTER_ROLE[kind],
+            status: 'home',
+            activity: acts[Math.floor(Math.random() * acts.length)]!,
+          });
+        }
+      } else {
+        this.syncRoster(camp);
+      }
+    }
 
     if (kind === 'siege') {
       const barY = y - sprite.displayHeight - 6;
@@ -1185,7 +1414,6 @@ export class EncampmentSystem {
       this.refreshSupplyBar(camp);
     }
 
-    this.camps.push(camp);
     if (!opts?.quiet) this.onChanged?.();
     return camp;
   }

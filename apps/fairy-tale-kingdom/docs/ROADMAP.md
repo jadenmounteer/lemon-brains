@@ -62,9 +62,9 @@ Checklist:
 - [x] Married prince + princess succession when king & queen die
 - [x] Marketplace / inspector / toasts; non-goals allow general commands only
 
-## Phase 12 — Evolving world (current)
+## Phase 12 — Evolving world (done)
 
-**Design notes:** one king/queen kingdom-wide; extra keeps seat dukes/duchesses; keep influence circles; refresh-safe clock/events; cemetery is civic (funerals)—undead deferred to 12.5+.
+**Design notes:** one king/queen kingdom-wide; extra keeps seat dukes/duchesses; keep influence circles; refresh-safe clock/events; cemetery is civic (funerals); spooky/oceans/manual (originally 12.5+) landed alongside 12A–12C and are folded in below.
 
 ### Wave 12A — Living kingdom
 
@@ -90,16 +90,40 @@ Checklist:
 - [x] Cemetery funerals; gallows + executioner
 - [x] Joust when ≥2 knights; per-role schedules
 
-## Non-goals (for now) / Phase 12.5+
+### Wave 12.5 — Spooky, oceans, manual (done)
 
-- Playing manual (12.5)
-- Necromancers, zombies, ghosts, vampires (spooky cemetery content)
-- Oceans / docks / pirates
+- [x] Necromancers raise zombies at cemeteries; bites spread an outbreak guards quarantine
+- [x] Ghosts haunt homes on death luck; bishops/witch hunters exorcise
+- [x] Vampire castles spawn on the fringe; bats bite women into vampire wives at night; knights/witch hunters/generals can destroy the nest
+- [x] Oceans: docks, fishing boats, warships, harbor festivals
+- [x] Playing manual accessible via the hamburger menu (units, buildings, mechanics)
+
+### Wave 12D — Monster spheres & hunger hunt
+
+- [x] Monsters keep a home point (spawn / cave) with a roaming sphere; wandering clamps to it (dragons may leave briefly to steal keep gold)
+- [x] Hunger climbs over time; past the threshold a monster hunts the nearest subject inside its sphere and toasts once when the hunt begins
+- [x] Selecting a monster draws its territory ring, same as the keep/barracks/dungeon influence overlay
+- [x] Home + hunger persist across saves
+
+### Wave 12E — Vampire castle interiors
+
+- [x] Vampire castles get an interior underlay; the roof hides while a unit (vampire wife) stands in the footprint, same pattern as houses/keep
+- [x] By day, vampire wives path home into the castle footprint; by night they head back out to prowl and bite as before
+
+### Wave 12F — Living camps & defect journeys
+
+- [x] Bandit / thief / gypsy camps spawn real wandering subjects inside an influence sphere; click units for names; camp select draws the ring
+- [x] Miserable peasants walk to a human camp (bandit/thief/gypsy only) and only turn (reskin + hostile) on arrival — soldiers ignore them until then
+- [x] Military auto-engages turned camp hostiles; raids hide/return living roster members
+
+## Non-goals (for now)
+
 - Manual combat orders (except generals commanding detachments)
 - Enemies climbing stairs
 - Manual repair / demolish tools
 - Rebuild destroyed buildings from ashes
 - Multiplayer / auth
+- Fully living sprites for giant/goblin/siege/coven garrisons (those camps still use abstract roster counts; human camps are living)
 
 ## Product north star
 

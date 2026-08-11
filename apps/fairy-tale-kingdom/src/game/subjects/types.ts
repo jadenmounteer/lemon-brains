@@ -154,13 +154,18 @@ export type InterruptKind =
   | 'execute'
   | 'fish'
   | 'crew'
-  | 'exorcise';
+  | 'exorcise'
+  | 'defect';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
   targetId?: string;
   partnerId?: string;
   remainingMs?: number;
+  /** 'defect' — camp the subject is walking toward */
+  campId?: string;
+  targetX?: number;
+  targetY?: number;
 }
 
 export interface ScheduleSlot {
@@ -204,6 +209,10 @@ export interface Subject {
   curse?: CurseKind;
   cursedAsRole?: SubjectRole;
   lowHappyHours?: number;
+  /** Encampment this subject belongs to, when allegiance is 'camp'. */
+  campId?: string | null;
+  /** 'camp' subjects live at a bandit/thief/gypsy camp instead of the kingdom. */
+  allegiance?: 'kingdom' | 'camp';
 }
 
 /** Snapshot sent across the Phaser → React bridge */

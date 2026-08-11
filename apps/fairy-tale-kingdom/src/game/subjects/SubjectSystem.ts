@@ -25,6 +25,7 @@ import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
+import type { EncampmentSystem } from '../war/EncampmentSystem';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { genderForNewSubject, genderLabel } from './gender';
@@ -84,6 +85,7 @@ export class SubjectSystem {
   private buildings: BuildingSystem | null = null;
   private pathGrid: PathGrid | null = null;
   private security: SecuritySystem | null = null;
+  private encampments: EncampmentSystem | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
@@ -110,6 +112,11 @@ export class SubjectSystem {
   /** Wired after construction so peasants softly avoid pathing into an active cordon. */
   setSecurity(security: SecuritySystem): void {
     this.security = security;
+  }
+
+  /** Wired after construction — camp point/radius lookups for living camp garrisons. */
+  setEncampments(encampments: EncampmentSystem): void {
+    this.encampments = encampments;
   }
 
   setOnChanged(cb: () => void): void {
@@ -384,41 +391,93 @@ export class SubjectSystem {
     return id;
   }
 
+  /** Miserable peasants/children walk off to join (or found) a fringe camp. */
   tryDefectMiserable(): void {
     for (const s of [...this.subjects]) {
       if (s.data.role === 'witch' || isMilitaryRole(s.data.role)) continue;
+      if (s.data.allegiance === 'camp') continue;
+      if (s.interrupt?.kind === 'defect') continue;
       if ((s.data.lowHappyHours ?? 0) < Phase12Balance.defectHoursNeeded) {
         continue;
       }
       if (s.data.role !== 'peasant' && s.data.role !== 'child') continue;
-      if (Math.random() < 0.55) {
-        this.transformRole(s.data.id, 'witch', {
-          temporaryPrincess: false,
-        });
-        s.data.houseId = 'coven';
-        s.data.backstory = backstoryFromLifeLog(s.data.lifeLog ?? []);
-        s.data.goal = {
-          kind: 'curse_target',
-          text: 'I will make them pay.',
-        };
-        this.appendLifeLog(
-          s.data.id,
-          'Took up the dark arts and fled the kingdom',
-          'defect'
-        );
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: `${s.data.name} defected and joined a coven!`,
-        });
-      } else {
-        this.appendLifeLog(s.data.id, 'Fled the kingdom in misery', 'defect');
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: `${s.data.name} fled the kingdom`,
-        });
-        this.removeSubject(s);
-      }
-      this.onChanged?.();
+      this.beginDefect(s);
       break;
     }
+  }
+
+  private beginDefect(managed: ManagedSubject): void {
+    if (!this.encampments) return;
+    const camp =
+      this.encampments.nearestCampWithCapacity(
+        managed.sprite.x,
+        managed.sprite.y,
+        ['bandit', 'thief', 'gypsy']
+      ) ?? this.encampments.createFringeCamp('bandit');
+    if (!camp) return;
+    managed.interrupt = {
+      kind: 'defect',
+      campId: camp.id,
+      targetX: camp.x,
+      targetY: camp.y,
+    };
+    managed.data.activity = 'flee';
+    managed.data.activityLabel = 'Slipping away from the kingdom';
+    this.appendLifeLog(
+      managed.data.id,
+      'Slipped away from the kingdom in misery',
+      'defect'
+    );
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${managed.data.name} has gone missing...`,
+    });
+    this.onChanged?.();
+  }
+
+  /** Nudges every defecting subject toward its target camp; completes on arrival. */
+  private tickDefectWalks(): void {
+    for (const managed of this.subjects) {
+      if (managed.interrupt?.kind !== 'defect') continue;
+      const { campId, targetX, targetY } = managed.interrupt;
+      if (!campId || targetX == null || targetY == null) {
+        managed.interrupt = null;
+        continue;
+      }
+      const dist = Phaser.Math.Distance.Between(
+        managed.sprite.x,
+        managed.sprite.y,
+        targetX,
+        targetY
+      );
+      if (dist < 14) {
+        this.completeDefect(managed, campId);
+        continue;
+      }
+      if (!managed.moving) {
+        this.nudgeToward(managed.data.id, targetX, targetY, 45);
+      }
+    }
+  }
+
+  /** Arrived at the camp — transforms into a living camp garrison member. */
+  private completeDefect(managed: ManagedSubject, campId: string): void {
+    managed.interrupt = null;
+    const kind = this.encampments?.getCampKind(campId);
+    if (kind !== 'bandit' && kind !== 'thief' && kind !== 'gypsy') return;
+    this.transformRole(managed.data.id, kind);
+    managed.data.allegiance = 'camp';
+    managed.data.campId = campId;
+    managed.data.houseId = `camp:${campId}`;
+    this.appendLifeLog(
+      managed.data.id,
+      `Joined a ${roleLabel(kind)} camp`,
+      'defect'
+    );
+    this.encampments?.registerDefector(campId, managed.data.id, managed.data.name);
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${managed.data.name} has defected to join a camp!`,
+    });
+    this.onChanged?.();
   }
 
   spawnWitchNear(x: number, y: number): string | null {
@@ -467,6 +526,71 @@ export class SubjectSystem {
     n.data.backstory = backstoryFromLifeLog(n.data.lifeLog ?? []);
     this.onChanged?.();
     return id;
+  }
+
+  /** Spawns (or restores) a living garrison member wandering the given camp's sphere. */
+  spawnCampMember(
+    campId: string,
+    role: 'bandit' | 'thief' | 'gypsy',
+    x: number,
+    y: number,
+    opts?: { id?: string; name?: string }
+  ): string {
+    const id = opts?.id ?? `subject-${this.nextSubjectId++}`;
+    const name = opts?.name ?? pickName(Math.floor(Math.random() * 1_000_000));
+    this.createSubject(role, `camp:${campId}`, id, name, {
+      campId,
+      allegiance: 'camp',
+      ageYears: 20 + Math.floor(Math.random() * 30),
+    });
+    const managed = this.getById(id);
+    if (managed) {
+      managed.sprite.setPosition(
+        x + Phaser.Math.Between(-16, 16),
+        y + Phaser.Math.Between(-16, 16)
+      );
+      managed.sprite.setDepth(20 + managed.sprite.y * 0.01);
+    }
+    this.onChanged?.();
+    return id;
+  }
+
+  /** Hide a camp member's sprite while it's away on a raid; unhide it once home. */
+  setCampMemberAway(id: string, away: boolean): void {
+    const managed = this.getById(id);
+    if (!managed) return;
+    this.scene.tweens.killTweensOf(managed.sprite);
+    managed.moving = false;
+    managed.sprite.setVisible(!away);
+    managed.sprite.setActive(!away);
+  }
+
+  /** Permanently removes a camp garrison member (lost on a raid, arrested, etc). */
+  removeCampMember(id: string): void {
+    const managed = this.getById(id);
+    if (!managed) return;
+    this.removeSubject(managed);
+  }
+
+  /** Nearest hostile living camp member (not mid-defection) for military to engage. */
+  nearestCampHostile(
+    x: number,
+    y: number,
+    radius: number
+  ): ManagedSubject | null {
+    let best: ManagedSubject | null = null;
+    let bestD = radius;
+    for (const s of this.subjects) {
+      if (s.data.allegiance !== 'camp') continue;
+      if (!s.sprite.active) continue;
+      if (s.interrupt?.kind === 'defect') continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
   }
 
   hasRole(role: UnitRole): boolean {
@@ -583,8 +707,9 @@ export class SubjectSystem {
       managed.data.workplaceId = undefined;
       managed.data.job = undefined;
     }
-    managed.sprite.setTexture(role, 0);
-    managed.sprite.play(idleAnimKey(role));
+    const texKey = displayTextureKey(role);
+    managed.sprite.setTexture(texKey, 0);
+    managed.sprite.play(idleAnimKey(texKey));
     managed.interrupt = null;
     managed.data.lifeLog = appendLifeLogEntry(
       managed.data.lifeLog,
@@ -593,6 +718,7 @@ export class SubjectSystem {
       'role'
     );
     this.applyBodyScale(managed);
+    this.applyHpTint(managed);
     this.onChanged?.();
     return true;
   }
@@ -609,6 +735,7 @@ export class SubjectSystem {
 
   markFestivalGather(): void {
     for (const s of this.subjects) {
+      if (s.data.allegiance === 'camp') continue;
       s.data.activity = 'festival';
       s.data.activityLabel = 'Celebrating at the festival';
       s.data.zone = 'keep';
@@ -756,6 +883,7 @@ export class SubjectSystem {
 
   raiseHungerAll(amount: number): void {
     for (const s of [...this.subjects]) {
+      if (s.data.allegiance === 'camp') continue;
       s.data.hunger = Math.min(100, s.data.hunger + amount);
       const wasSick = s.data.sick;
       s.data.sick = s.data.hunger >= 60;
@@ -816,6 +944,7 @@ export class SubjectSystem {
 
   tickHappiness(): void {
     for (const s of this.subjects) {
+      if (s.data.allegiance === 'camp') continue;
       if (s.data.hunger >= 60) {
         s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
       }
@@ -897,8 +1026,8 @@ export class SubjectSystem {
     this.scene.tweens.killTweensOf(b.sprite);
     a.moving = false;
     b.moving = false;
-    a.sprite.play(idleAnimKey(a.data.role));
-    b.sprite.play(idleAnimKey(b.data.role));
+    a.sprite.play(idleAnimKey(displayTextureKey(a.data.role)));
+    b.sprite.play(idleAnimKey(displayTextureKey(b.data.role)));
   }
 
   spawnSeed(): void {
@@ -949,6 +1078,8 @@ export class SubjectSystem {
         zone: s.zone,
         interrupt: s.interrupt ?? null,
         skipBirthLog: true,
+        campId: s.campId,
+        allegiance: s.allegiance,
       });
       const managed = this.getById(s.id);
       if (managed) {
@@ -1006,6 +1137,8 @@ export class SubjectSystem {
       activityLabel: s.data.activityLabel,
       zone: s.data.zone,
       interrupt: s.interrupt,
+      campId: s.data.campId,
+      allegiance: s.data.allegiance,
     }));
   }
 
@@ -1169,6 +1302,9 @@ export class SubjectSystem {
     let best: ManagedSubject | null = null;
     let bestD = radius;
     for (const s of this.subjects) {
+      if (!s.sprite.active) continue;
+      if (s.interrupt?.kind === 'defect') continue;
+      if (s.data.allegiance === 'camp') continue;
       const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
       if (d < bestD) {
         bestD = d;
@@ -1266,6 +1402,8 @@ export class SubjectSystem {
         }
       }
     }
+
+    this.tickDefectWalks();
 
     this.healAccumMs += deltaMs;
     if (this.healAccumMs >= 2500) {
@@ -1443,6 +1581,7 @@ export class SubjectSystem {
 
   applyBodyFromHunger(): void {
     for (const s of this.subjects) {
+      if (s.data.allegiance === 'camp') continue;
       const h = s.data.hunger;
       let body = s.data.body;
       if (h >= 70) {
@@ -1624,7 +1763,8 @@ export class SubjectSystem {
     else if (this.inspired && managed.data.role === 'peasant') moveSpeed *= 1.15;
 
     const dir = facingFromDelta(dx, dy);
-    managed.sprite.play(walkAnimKey(managed.data.role, dir), true);
+    const texKey = displayTextureKey(managed.data.role);
+    managed.sprite.play(walkAnimKey(texKey, dir), true);
     managed.moving = true;
     const dist = Math.hypot(dx, dy);
     const duration = Math.max(200, (dist / moveSpeed) * 1000);
@@ -1641,7 +1781,7 @@ export class SubjectSystem {
       onComplete: () => {
         managed.moving = false;
         if (managed.sprite.active) {
-          managed.sprite.play(idleAnimKey(managed.data.role));
+          managed.sprite.play(idleAnimKey(texKey));
         }
         onArrive?.();
       },
@@ -1652,6 +1792,15 @@ export class SubjectSystem {
     if (!this.selectedId) return null;
     const managed = this.getById(this.selectedId);
     return managed ? this.toSnapshot(managed) : null;
+  }
+
+  /** Camp members' "home" resolves to their camp's location instead of a house. */
+  private homePointFor(houseId: string): Point | null {
+    if (houseId.startsWith('camp:')) {
+      const campId = houseId.slice('camp:'.length);
+      return this.encampments?.getCampPoint(campId) ?? null;
+    }
+    return this.buildings?.getHousePoint(houseId) ?? null;
   }
 
   private createSubject(
@@ -1690,10 +1839,12 @@ export class SubjectSystem {
       zone?: Subject['zone'];
       interrupt?: SubjectInterrupt | null;
       skipBirthLog?: boolean;
+      campId?: string | null;
+      allegiance?: Subject['allegiance'];
     }
   ): void {
     const slot = slotAtHour(role, this.clock.hour);
-    const home = this.buildings?.getHousePoint(houseId) ?? null;
+    const home = this.homePointFor(houseId);
     const start = randomPointInZone(slot.zone, this.world, home);
     const maxHp = opts?.maxHp ?? UNIT_MAX_HP[role];
     const hp = opts?.hp ?? maxHp;
@@ -1705,7 +1856,8 @@ export class SubjectSystem {
     const body = opts?.body ?? 'average';
     const happiness = opts?.happiness ?? 60;
 
-    const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
+    const texKey = displayTextureKey(role);
+    const sprite = this.scene.add.sprite(start.x, start.y, texKey, 0);
     sprite.setDepth(20);
     sprite.setOrigin(0.5, 1);
     sprite.setInteractive(
@@ -1714,7 +1866,7 @@ export class SubjectSystem {
     );
     sprite.input!.cursor = 'pointer';
     sprite.setData('subjectId', id);
-    sprite.play(idleAnimKey(role));
+    sprite.play(idleAnimKey(texKey));
 
     let lifeLog = opts?.lifeLog;
     if (!opts?.skipBirthLog && !lifeLog?.length) {
@@ -1763,6 +1915,8 @@ export class SubjectSystem {
       curse: opts?.curse ?? null,
       cursedAsRole: opts?.cursedAsRole,
       lowHappyHours: opts?.lowHappyHours ?? 0,
+      campId: opts?.campId ?? null,
+      allegiance: opts?.allegiance ?? 'kingdom',
     };
 
     const managed: ManagedSubject = {
@@ -1834,8 +1988,13 @@ export class SubjectSystem {
       return;
     }
     const ratio = managed.data.hp / managed.data.maxHp;
-    if (ratio <= 0.35) managed.sprite.setTint(0xff6666);
-    else managed.sprite.clearTint();
+    if (ratio <= 0.35) {
+      managed.sprite.setTint(0xff6666);
+    } else if (managed.data.role === 'thief') {
+      managed.sprite.setTint(0x4a3a5a);
+    } else {
+      managed.sprite.clearTint();
+    }
   }
 
   private clearSubjects(): void {
@@ -1876,12 +2035,14 @@ export class SubjectSystem {
     managed.data.activityLabel = slot.label;
     managed.data.zone = slot.zone;
 
-    const home = this.buildings?.getHousePoint(managed.data.houseId) ?? null;
+    const home = this.homePointFor(managed.data.houseId);
     const fallback = randomPointInZone(slot.zone, this.world, home);
     let target =
-      slot.activity === 'patrol'
-        ? this.pickPatrolTarget(managed, fallback)
-        : fallback;
+      managed.data.allegiance === 'camp' && managed.data.campId
+        ? this.pickCampWanderTarget(managed.data.campId, home, fallback)
+        : slot.activity === 'patrol'
+          ? this.pickPatrolTarget(managed, fallback)
+          : fallback;
 
     // Soft block: civilians prefer not to path into an active security cordon.
     if (
@@ -1897,6 +2058,24 @@ export class SubjectSystem {
       }
     }
     this.nudgeToward(managed.data.id, target.x, target.y, 40);
+  }
+
+  /** Camp garrison wander freely within their camp's influence sphere. */
+  private pickCampWanderTarget(
+    campId: string,
+    home: Point | null,
+    fallback: Point
+  ): Point {
+    if (!home || !this.encampments) return fallback;
+    const radius = this.encampments.influenceRadius(
+      this.encampments.getCampKind(campId) ?? 'bandit'
+    );
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * radius * 0.8;
+    return {
+      x: home.x + Math.cos(angle) * dist,
+      y: home.y + Math.sin(angle) * dist,
+    };
   }
 
   private static readonly MILITARY_PATROL_ROLES = new Set([
@@ -2040,6 +2219,11 @@ function jobDisplayLabel(managed: ManagedSubject): string {
     }
   }
   return roleLabel(managed.data.role);
+}
+
+/** Thieves reuse the bandit sheet (tinted) instead of a dedicated sprite. */
+function displayTextureKey(role: UnitRole): UnitRole {
+  return role === 'thief' ? 'bandit' : role;
 }
 
 function facingFromDelta(dx: number, dy: number): Direction {

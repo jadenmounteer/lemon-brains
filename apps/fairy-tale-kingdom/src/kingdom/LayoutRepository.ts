@@ -80,6 +80,8 @@ export interface SavedSubject {
   activityLabel?: string;
   zone?: ZoneId;
   interrupt?: SubjectInterrupt | null;
+  campId?: string | null;
+  allegiance?: 'kingdom' | 'camp';
 }
 
 export interface LayoutRoyaltyState {
@@ -242,5 +244,7 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
       typeof s.activityLabel === 'string' ? s.activityLabel : undefined,
     zone: s.zone,
     interrupt: s.interrupt ?? undefined,
+    campId: typeof s.campId === 'string' ? s.campId : undefined,
+    allegiance: s.allegiance === 'camp' ? 'camp' : undefined,
   };
 }

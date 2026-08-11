@@ -247,6 +247,7 @@ export class KingdomScene extends Phaser.Scene {
     this.encampments.setPathGrid(this.pathGrid);
     this.encampments.setOnChanged(() => this.schedulePersist());
     this.raids.setEncampments(this.encampments);
+    this.subjects.setEncampments(this.encampments);
     const initialDays =
       typeof this.registry.get('daysPlayed') === 'number'
         ? (this.registry.get('daysPlayed') as number)
@@ -309,9 +310,15 @@ export class KingdomScene extends Phaser.Scene {
       this.buildings,
       this.security
     );
-    this.subjects.setOnDeath((id, houseId, name) =>
-      this.undead.onSubjectDied(id, houseId, name)
-    );
+    this.subjects.setOnDeath((id, houseId, name) => {
+      this.undead.onSubjectDied(id, houseId, name);
+      if (houseId.startsWith('camp:')) {
+        this.encampments.onGarrisonMemberDied(
+          houseId.slice('camp:'.length),
+          id
+        );
+      }
+    });
     this.naval = new NavalSystem(
       this,
       this.buildings,
@@ -361,6 +368,7 @@ export class KingdomScene extends Phaser.Scene {
       }
       if (saved.encampments && saved.encampments.length > 0) {
         this.encampments.restore(saved.encampments);
+        this.encampments.reconcileLivingCamps();
       } else {
         this.encampments.seedStarterCamps(2);
       }
@@ -534,6 +542,7 @@ export class KingdomScene extends Phaser.Scene {
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishCampSelection(this.encampments.select(hit.id));
+        this.updateCampInfluenceCircle(hit.id);
       } else if (hit?.type === 'building') {
         this.clearFollowCam();
         this.publishSelection(this.subjects.select(null));
@@ -697,6 +706,7 @@ export class KingdomScene extends Phaser.Scene {
       this.security?.clear();
     }
     this.buildings?.updateInteriors(this.subjects.unitBodies());
+    this.undead?.updateCastleInteriors(this.subjects.unitBodies());
     this.applyNightOverlay();
     this.updateFollowCam(delta);
   }
@@ -1028,6 +1038,21 @@ export class KingdomScene extends Phaser.Scene {
     this.influenceGfx.strokeCircle(inf.x, inf.y, inf.radius);
     this.influenceGfx.fillStyle(color, 0.06);
     this.influenceGfx.fillCircle(inf.x, inf.y, inf.radius);
+  }
+
+  /** Draws a camp's influence sphere (garrison wander range / aggro radius) when selected. */
+  private updateCampInfluenceCircle(id: string | null): void {
+    this.clearInfluenceCircle();
+    if (!id) return;
+    const camp = this.encampments.listCamps().find((c) => c.id === id);
+    if (!camp) return;
+    const radius = this.encampments.influenceRadius(camp.kind);
+    const color = 0x8a6a3a;
+    this.influenceGfx = this.add.graphics().setDepth(6);
+    this.influenceGfx.lineStyle(1, color, 0.55);
+    this.influenceGfx.strokeCircle(camp.x, camp.y, radius);
+    this.influenceGfx.fillStyle(color, 0.06);
+    this.influenceGfx.fillCircle(camp.x, camp.y, radius);
   }
 
   private clearInfluenceCircle(): void {
