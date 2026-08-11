@@ -1,0 +1,31 @@
+<div class="options">
+  <button
+    *ngFor="let option of question.options; trackBy: trackByValue"
+    type="button"
+    (click)="onSelect(option)"
+    [class.selected]="selectedAnswer === option.value"
+    [class.wrong]="wrongAnswer === option.value"
+    [disabled]="selectedAnswer !== null"
+    [ngClass]="{
+      'color-option': optionDisplay === 'colorSwatch',
+      'shape-option': optionDisplay === 'shapeSvg',
+      'emoji-option': optionDisplay === 'emoji'
+    }"
+    [style.background-color]="
+      optionDisplay === 'colorSwatch' ? option.colorHex : null
+    "
+  >
+    <span *ngIf="optionDisplay === 'text'">{{ option.label }}</span>
+    <span *ngIf="optionDisplay === 'emoji'" class="emoji-label">{{
+      option.label
+    }}</span>
+    <svg *ngIf="optionDisplay === 'shapeSvg'" viewBox="0 0 100 100">
+      <path
+        [attr.d]="option.svgPath"
+        [attr.fill]="option.fillColor"
+        stroke="#333"
+        stroke-width="2"
+      ></path>
+    </svg>
+  </button>
+</div>

@@ -2,8 +2,10 @@ import { Component, EventEmitter, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AudioService } from '../../services/audio.service';
-import { SettingsService, GameSettings } from '../../services/settings.service';
+import { SettingsService } from '../../services/settings.service';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
+import { AppSettings } from '../../learning/models/app-settings';
+import { CurriculumRegistry } from '../../learning/curriculum-registry.service';
 
 @Component({
   selector: 'app-main-menu',
@@ -14,16 +16,24 @@ import { SpriteAnimationService } from '../../services/sprite-animation.service'
 })
 export class MainMenuComponent {
   @Output() startGame = new EventEmitter<void>();
-  settings: GameSettings;
+  settings: AppSettings;
   showSettings = false;
   isMusicPlaying = false;
 
   constructor(
     private settingsService: SettingsService,
     private audioService: AudioService,
-    private spriteAnimationService: SpriteAnimationService
+    private spriteAnimationService: SpriteAnimationService,
+    private curriculumRegistry: CurriculumRegistry
   ) {
     this.settings = this.settingsService.getCurrentSettings();
+  }
+
+  get currentCurriculumLabel(): string {
+    return (
+      this.curriculumRegistry.get(this.settings.curriculumId)?.label ??
+      this.settings.curriculumId
+    );
   }
 
   onStartGameClick() {
@@ -38,16 +48,11 @@ export class MainMenuComponent {
 
   updateSettings() {
     this.settingsService.updateSettings(this.settings);
+    this.settings = this.settingsService.getCurrentSettings();
   }
 
   isValidSettings(): boolean {
-    const hasQuestionType = Object.values(this.settings.questionTypes).some(
-      (value) => value
-    );
-    const hasNumberRange = Object.values(this.settings.numberRanges).some(
-      (value) => value
-    );
-    return hasQuestionType && hasNumberRange;
+    return this.curriculumRegistry.isConfigured(this.settings);
   }
 
   toggleMusic() {

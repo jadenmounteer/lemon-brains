@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app.component';
+import { provideCurricula } from './learning/provide-curricula';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
+      providers: [provideCurricula()],
     }).compileComponents();
   });
 
@@ -14,16 +16,11 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
-  it(`should have the 'lemon-brains' title`, () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('lemon-brains');
-  });
-
-  it('should render title', () => {
+  it('should start on the main menu', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, lemon-brains');
+    const app = fixture.componentInstance;
+    expect(app.isGameView).toBeFalse();
+    expect(fixture.nativeElement.querySelector('app-main-menu')).toBeTruthy();
   });
 });

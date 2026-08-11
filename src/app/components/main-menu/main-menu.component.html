@@ -41,15 +41,7 @@
 
   <div class="current-learning">
     Currently Learning:
-    <span class="curriculum">{{
-      settings.curriculum === "math"
-        ? "Mathematics"
-        : settings.curriculum === "portuguese"
-        ? "Portuguese"
-        : settings.curriculum === "shapes"
-        ? "Shapes"
-        : "Colors"
-    }}</span>
+    <span class="curriculum">{{ currentCurriculumLabel }}</span>
   </div>
 
   <div class="settings-panel" [class.open]="showSettings">
@@ -61,7 +53,7 @@
         <label>
           <input
             type="radio"
-            [(ngModel)]="settings.curriculum"
+            [(ngModel)]="settings.curriculumId"
             name="curriculum"
             value="math"
             (change)="updateSettings()"
@@ -76,7 +68,7 @@
         <label>
           <input
             type="radio"
-            [(ngModel)]="settings.curriculum"
+            [(ngModel)]="settings.curriculumId"
             name="curriculum"
             value="portuguese"
             (change)="updateSettings()"
@@ -91,7 +83,22 @@
         <label>
           <input
             type="radio"
-            [(ngModel)]="settings.curriculum"
+            [(ngModel)]="settings.curriculumId"
+            name="curriculum"
+            value="reading"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Reading
+            <small class="difficulty-hint"
+              >Letters, CVC words, and sight words</small
+            >
+          </span>
+        </label>
+        <label>
+          <input
+            type="radio"
+            [(ngModel)]="settings.curriculumId"
             name="curriculum"
             value="shapes"
             (change)="updateSettings()"
@@ -106,7 +113,7 @@
         <label>
           <input
             type="radio"
-            [(ngModel)]="settings.curriculum"
+            [(ngModel)]="settings.curriculumId"
             name="curriculum"
             value="colors"
             (change)="updateSettings()"
@@ -121,13 +128,13 @@
       </div>
     </div>
 
-    <div class="settings-group" *ngIf="settings.curriculum === 'math'">
+    <div class="settings-group" *ngIf="settings.curriculumId === 'math'">
       <h3>Question Types</h3>
       <div class="checkbox-group">
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.questionTypes.addition"
+            [(ngModel)]="settings.math.operations.addition"
             (change)="updateSettings()"
           />
           Addition
@@ -135,7 +142,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.questionTypes.subtraction"
+            [(ngModel)]="settings.math.operations.subtraction"
             (change)="updateSettings()"
           />
           Subtraction
@@ -143,7 +150,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.questionTypes.multiplication"
+            [(ngModel)]="settings.math.operations.multiplication"
             (change)="updateSettings()"
           />
           Multiplication
@@ -151,7 +158,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.questionTypes.division"
+            [(ngModel)]="settings.math.operations.division"
             (change)="updateSettings()"
           />
           Division
@@ -159,7 +166,7 @@
       </div>
     </div>
 
-    <div class="settings-group" *ngIf="settings.curriculum === 'math'">
+    <div class="settings-group" *ngIf="settings.curriculumId === 'math'">
       <h3>Number Ranges</h3>
       <p class="difficulty-description">
         Select which number ranges to include in questions:
@@ -168,7 +175,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.numberRanges.range0to5"
+            [(ngModel)]="settings.math.numberRanges.range0to5"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">Numbers 0-5</span>
@@ -176,7 +183,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.numberRanges.range5to10"
+            [(ngModel)]="settings.math.numberRanges.range5to10"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">Numbers 5-10</span>
@@ -184,7 +191,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.numberRanges.range10to20"
+            [(ngModel)]="settings.math.numberRanges.range10to20"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">Numbers 10-20</span>
@@ -192,13 +199,13 @@
       </div>
     </div>
 
-    <div class="settings-group" *ngIf="settings.curriculum === 'portuguese'">
+    <div class="settings-group" *ngIf="settings.curriculumId === 'portuguese'">
       <h3>Portuguese Topics</h3>
       <div class="checkbox-group">
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.portugueseTypes.vocabulary"
+            [(ngModel)]="settings.portuguese.categories.vocabulary"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">
@@ -211,7 +218,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.portugueseTypes.phrases"
+            [(ngModel)]="settings.portuguese.categories.phrases"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">
@@ -224,7 +231,7 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.portugueseTypes.numbers"
+            [(ngModel)]="settings.portuguese.categories.numbers"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">
@@ -235,12 +242,55 @@
         <label>
           <input
             type="checkbox"
-            [(ngModel)]="settings.portugueseTypes.colors"
+            [(ngModel)]="settings.portuguese.categories.colors"
             (change)="updateSettings()"
           />
           <span class="difficulty-label">
             Colors
             <small class="difficulty-hint">Basic colors in Portuguese</small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-group" *ngIf="settings.curriculumId === 'reading'">
+      <h3>Reading Topics</h3>
+      <div class="checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            [(ngModel)]="settings.reading.letterRecognition"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Letter Recognition
+            <small class="difficulty-hint">Find the matching letter</small>
+          </span>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            [(ngModel)]="settings.reading.cvcWords"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            CVC Words
+            <small class="difficulty-hint"
+              >Match short words like cat and sun to pictures</small
+            >
+          </span>
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            [(ngModel)]="settings.reading.sightWords"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Sight Words
+            <small class="difficulty-hint"
+              >Practice common words like the, and, you</small
+            >
           </span>
         </label>
       </div>

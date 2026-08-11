@@ -42,40 +42,14 @@
 
   <div class="game-half question-area">
     <div class="question-container" *ngIf="!isGameOver && currentQuestion">
-      <h2>{{ currentQuestion.question }}</h2>
+      <h2>{{ currentQuestion.prompt }}</h2>
 
-      <div class="options">
-        <button
-          *ngFor="let option of currentQuestion.options"
-          (click)="checkAnswer(getOptionValue(option))"
-          [class.selected]="selectedAnswer === getOptionValue(option)"
-          [class.wrong]="wrongAnswer === getOptionValue(option)"
-          [disabled]="selectedAnswer !== null"
-          [ngClass]="{
-            'color-option': currentQuestion.curriculum === 'colors',
-            'shape-option': currentQuestion.curriculum === 'shapes'
-          }"
-          [style.background-color]="
-            currentQuestion.curriculum === 'colors' ? getColorHex(option) : ''
-          "
-        >
-          <span
-            *ngIf="!['colors', 'shapes'].includes(currentQuestion.curriculum)"
-            >{{ option }}</span
-          >
-          <svg
-            *ngIf="currentQuestion.curriculum === 'shapes'"
-            viewBox="0 0 100 100"
-          >
-            <path
-              [attr.d]="getSvgPath(option)"
-              [attr.fill]="option.color"
-              stroke="#333"
-              stroke-width="2"
-            ></path>
-          </svg>
-        </button>
-      </div>
+      <app-question-options
+        [question]="currentQuestion"
+        [selectedAnswer]="selectedAnswer"
+        [wrongAnswer]="wrongAnswer"
+        (optionSelected)="checkAnswer($event)"
+      ></app-question-options>
     </div>
   </div>
 </div>

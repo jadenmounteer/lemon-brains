@@ -1,56 +1,23 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
+import {
+  AppSettings,
+  DEFAULT_APP_SETTINGS,
+  migrateSettings,
+} from '../learning/models/app-settings';
 
-export interface GameSettings {
-  curriculum: 'math' | 'portuguese' | 'colors' | 'shapes';
-  questionTypes: {
-    addition: boolean;
-    subtraction: boolean;
-    multiplication: boolean;
-    division: boolean;
-  };
-  portugueseTypes: {
-    vocabulary: boolean;
-    phrases: boolean;
-    numbers: boolean;
-    colors: boolean;
-  };
-  numberRanges: {
-    range0to5: boolean;
-    range5to10: boolean;
-    range10to20: boolean;
-  };
-  gameDifficulty: 'easy' | 'normal' | 'hard';
-}
-
-const DEFAULT_SETTINGS: GameSettings = {
-  curriculum: 'math',
-  questionTypes: {
-    addition: true,
-    subtraction: true,
-    multiplication: true,
-    division: true,
-  },
-  portugueseTypes: {
-    vocabulary: true,
-    phrases: true,
-    numbers: true,
-    colors: true,
-  },
-  numberRanges: {
-    range0to5: true,
-    range5to10: false,
-    range10to20: false,
-  },
-  gameDifficulty: 'normal',
-};
+export type { AppSettings };
+/** @deprecated Use AppSettings */
+export type GameSettings = AppSettings;
 
 @Injectable({
   providedIn: 'root',
 })
 export class SettingsService {
-  private settings: GameSettings;
-  private settingsSubject = new BehaviorSubject<GameSettings>(DEFAULT_SETTINGS);
+  private settings: AppSettings;
+  private settingsSubject = new BehaviorSubject<AppSettings>(
+    structuredClone(DEFAULT_APP_SETTINGS)
+  );
 
   constructor() {
     this.settings = this.loadSettings();
@@ -61,36 +28,53 @@ export class SettingsService {
     return this.settingsSubject.asObservable();
   }
 
-  getCurrentSettings(): GameSettings {
+  getCurrentSettings(): AppSettings {
     return this.settings;
   }
 
-  updateSettings(newSettings: Partial<GameSettings>) {
-    this.settings = { ...this.settings, ...newSettings };
+  updateSettings(newSettings: AppSettings | Partial<AppSettings>) {
+    this.settings = migrateSettings({
+      ...this.settings,
+      ...newSettings,
+      math: {
+        ...this.settings.math,
+        ...(newSettings as Partial<AppSettings>).math,
+        operations: {
+          ...this.settings.math.operations,
+          ...(newSettings as Partial<AppSettings>).math?.operations,
+        },
+        numberRanges: {
+          ...this.settings.math.numberRanges,
+          ...(newSettings as Partial<AppSettings>).math?.numberRanges,
+        },
+      },
+      portuguese: {
+        categories: {
+          ...this.settings.portuguese.categories,
+          ...(newSettings as Partial<AppSettings>).portuguese?.categories,
+        },
+      },
+      reading: {
+        ...this.settings.reading,
+        ...(newSettings as Partial<AppSettings>).reading,
+      },
+    });
     this.saveSettings();
     this.settingsSubject.next(this.settings);
   }
 
-  private loadSettings(): GameSettings {
+  private loadSettings(): AppSettings {
     const savedSettings = localStorage.getItem('lemonBrainsSettings');
-    if (savedSettings) {
-      try {
-        const parsed = JSON.parse(savedSettings);
-        // Ensure all required properties exist
-        return {
-          ...DEFAULT_SETTINGS,
-          ...parsed,
-          questionTypes: {
-            ...DEFAULT_SETTINGS.questionTypes,
-            ...parsed.questionTypes,
-          },
-        };
-      } catch (e) {
-        console.warn('Failed to parse settings from localStorage:', e);
-        return DEFAULT_SETTINGS;
-      }
+    if (!savedSettings) {
+      return structuredClone(DEFAULT_APP_SETTINGS);
     }
-    return DEFAULT_SETTINGS;
+
+    try {
+      return migrateSettings(JSON.parse(savedSettings));
+    } catch (e) {
+      console.warn('Failed to parse settings from localStorage:', e);
+      return structuredClone(DEFAULT_APP_SETTINGS);
+    }
   }
 
   private saveSettings() {

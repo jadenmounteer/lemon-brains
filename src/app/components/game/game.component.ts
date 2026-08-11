@@ -9,29 +9,20 @@ import {
   Output,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Router } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { MathService } from '../../services/math.service';
-import { PortugueseService } from '../../services/portuguese.service';
 import { AudioService } from '../../services/audio.service';
 import { SpriteAnimationService } from '../../services/sprite-animation.service';
-import { MathQuestion } from '../../models/math-question.interface';
 import { ZombieState } from '../../models/zombie.interface';
-import { SettingsService, GameSettings } from '../../services/settings.service';
-import { ColorQuestionsService } from '../../services/color-questions.service';
-import { ShapeQuestionsService } from '../../services/shape-questions.service';
-
-interface Question {
-  question: string;
-  answer: string | number;
-  options: any[];
-  curriculum: 'math' | 'portuguese' | 'colors' | 'shapes';
-}
+import { SettingsService } from '../../services/settings.service';
+import { AppSettings, GameDifficulty } from '../../learning/models/app-settings';
+import { LearningQuestion } from '../../learning/models/learning-question';
+import { CurriculumRegistry } from '../../learning/curriculum-registry.service';
+import { QuestionOptionsComponent } from '../question-options/question-options.component';
 
 @Component({
   selector: 'app-game',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, QuestionOptionsComponent],
   templateUrl: './game.component.html',
   styleUrl: './game.component.scss',
   animations: [
@@ -54,7 +45,7 @@ interface Question {
 })
 export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('gameArea') gameAreaRef!: ElementRef;
-  currentQuestion: Question | null = null;
+  currentQuestion: LearningQuestion | null = null;
   wrongAnswer: string | number | null = null;
   selectedAnswer: string | number | null = null;
   zombies: ZombieState[] = [];
@@ -71,7 +62,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private resizeObserver?: ResizeObserver;
   private moveIntervals: Map<number, ReturnType<typeof setInterval>> =
     new Map();
-  settings: GameSettings;
+  settings: AppSettings;
   private correctStreak = 0;
   private powerUpThreshold = 10; // Initial threshold for power-up
 
@@ -80,7 +71,7 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   private minSpawnTimeoutMs: number;
   private spawnRateDecreaseInterval?: ReturnType<typeof setInterval>;
   private difficultySettings: Record<
-    GameSettings['gameDifficulty'],
+    GameDifficulty,
     {
       initialSpawnRate: number;
       minSpawnRate: number;
@@ -139,14 +130,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   @Output() exitGame = new EventEmitter<void>();
 
   constructor(
-    private mathService: MathService,
-    private portugueseService: PortugueseService,
-    private colorQuestionsService: ColorQuestionsService,
+    private curriculumRegistry: CurriculumRegistry,
     private spriteAnimationService: SpriteAnimationService,
-    private router: Router,
     private audioService: AudioService,
-    private settingsService: SettingsService,
-    private shapeQuestionsService: ShapeQuestionsService
+    private settingsService: SettingsService
   ) {
     this.settings = this.settingsService.getCurrentSettings();
     const difficulty = this.difficultySettings[this.settings.gameDifficulty];
@@ -193,48 +180,21 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   generateNewQuestion() {
     this.selectedAnswer = null;
-    switch (this.settings.curriculum) {
-      case 'colors': {
-        const colorQ = this.colorQuestionsService.generateQuestion();
-        this.currentQuestion = {
-          ...colorQ,
-          curriculum: 'colors',
-        };
-        break;
-      }
-      case 'shapes': {
-        const shapeQ = this.shapeQuestionsService.generateQuestion();
-        this.currentQuestion = {
-          ...shapeQ,
-          curriculum: 'shapes',
-        };
-        break;
-      }
-      case 'math': {
-        const mathQ = this.mathService.generateQuestion();
-        this.currentQuestion = {
-          ...mathQ,
-          curriculum: 'math',
-        };
-        break;
-      }
-      case 'portuguese': {
-        const portQ = this.portugueseService.generateQuestion();
-        this.currentQuestion = {
-          ...portQ,
-          curriculum: 'portuguese',
-        };
-        break;
-      }
-    }
+    this.currentQuestion = this.curriculumRegistry.generateQuestion(
+      this.settings
+    );
   }
 
   checkAnswer(answer: string | number) {
+    if (!this.currentQuestion) {
+      return;
+    }
+
     this.selectedAnswer = answer;
-    const isCorrect =
-      this.settings.curriculum === 'shapes'
-        ? answer === this.currentQuestion?.answer
-        : answer === this.currentQuestion?.answer;
+    const isCorrect = this.curriculumRegistry.isCorrect(
+      answer,
+      this.currentQuestion
+    );
 
     if (isCorrect) {
       this.handleCorrectAnswer();
@@ -763,28 +723,6 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   toggleMusic() {
     this.isMusicPlaying = this.audioService.toggle();
-  }
-
-  getColorHex(
-    option: string | number | { name: string; color: string }
-  ): string {
-    if (typeof option === 'object' && 'color' in option) {
-      return option.color;
-    }
-    return this.colorQuestionsService.getColorHex(String(option));
-  }
-
-  getSvgPath(
-    shapeName: string | number | { name: string; color: string }
-  ): string {
-    if (typeof shapeName === 'object' && 'name' in shapeName) {
-      return this.shapeQuestionsService.getShapeSvg(shapeName.name);
-    }
-    return this.shapeQuestionsService.getShapeSvg(String(shapeName));
-  }
-
-  getOptionValue(option: any): string | number {
-    return this.settings.curriculum === 'shapes' ? option.name : option;
   }
 
   private setupResizeObserver() {
