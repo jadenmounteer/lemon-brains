@@ -23,6 +23,11 @@ export const KingdomEvents = {
   PLACE_MODE_CHANGED: 'kingdom:place-mode-changed',
   KINGDOM_STATS: 'kingdom:stats',
   MARKET_TOAST: 'kingdom:market-toast',
+  FOOD_CHANGED: 'kingdom:food-changed',
+  ROYAL_CAPTURED: 'kingdom:royal-captured',
+  PAY_RANSOM: 'kingdom:pay-ransom',
+  TRANSFORM_PEASANT: 'kingdom:transform-peasant',
+  CAPTIVES_CHANGED: 'kingdom:captives-changed',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -61,4 +66,28 @@ export type KingdomStatsPayload = KingdomStats;
 
 export interface MarketToastPayload {
   message: string;
+}
+
+export interface FoodChangedPayload {
+  food: number;
+}
+
+export interface RoyalCapturedPayload {
+  id: string;
+  name: string;
+  role: UnitRole;
+  houseId: string;
+  maxHp: number;
+}
+
+export interface PayRansomPayload {
+  id: string;
+}
+
+export interface TransformPeasantPayload {
+  fgmId: string;
+}
+
+export interface CaptivesChangedPayload {
+  count: number;
 }

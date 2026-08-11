@@ -7,13 +7,21 @@ import {
 } from '../art/assetManifest';
 import { BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatSystem } from '../combat/CombatSystem';
+import { HungerSystem } from '../economy/HungerSystem';
+import {
+  CaptivesRepository,
+  type CaptiveRecord,
+} from '../../kingdom/CaptivesRepository';
 import { LayoutRepository } from '../../kingdom/LayoutRepository';
 import { PathGrid } from '../path/PathGrid';
 import { RaidSystem } from '../raids/RaidSystem';
+import { RoyaltySystem } from '../royalty/RoyaltySystem';
 import {
   KingdomEvents,
   type BeginPlacePayload,
   type HireSubjectPayload,
+  type PayRansomPayload,
+  type TransformPeasantPayload,
 } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
@@ -37,10 +45,15 @@ export class KingdomScene extends Phaser.Scene {
   private raids!: RaidSystem;
   private combat!: CombatSystem;
   private tasks!: TaskSystem;
+  private hunger!: HungerSystem;
+  private royalty!: RoyaltySystem;
   private pathGrid!: PathGrid;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private layoutRepo = new LayoutRepository();
+  private captivesRepo = new CaptivesRepository();
+  private captives: CaptiveRecord[] = [];
   private saveTimer: Phaser.Time.TimerEvent | null = null;
+  private keepPoint = { x: 0, y: 0 };
 
   constructor() {
     super('KingdomScene');
@@ -63,12 +76,14 @@ export class KingdomScene extends Phaser.Scene {
 
     const cx = WORLD_WIDTH / 2;
     const cy = WORLD_HEIGHT / 2;
+    this.keepPoint = { x: cx, y: cy };
     const keepSprite = this.add
       .image(cx, cy, PROP_KEYS.keep)
       .setDepth(10)
       .setOrigin(0.5, 0.85);
 
     this.pathGrid = new PathGrid(WORLD_WIDTH, WORLD_HEIGHT, PATH_TILE);
+    this.captives = this.captivesRepo.loadSync();
 
     this.subjects = new SubjectSystem(this, {
       width: WORLD_WIDTH,
@@ -86,7 +101,7 @@ export class KingdomScene extends Phaser.Scene {
     });
 
     this.buildings.setOnDestroyed((b) => {
-      if (b.kind === 'house') {
+      if (b.kind === 'house' || b.kind === 'manor') {
         this.subjects.onHouseDestroyed(b.id);
       }
       if (b.kind === 'wall') {
@@ -115,6 +130,9 @@ export class KingdomScene extends Phaser.Scene {
       this.raids
     );
     this.tasks = new TaskSystem(this.subjects, this.buildings);
+    this.hunger = new HungerSystem(this, this.subjects);
+    this.tasks.setHunger(this.hunger);
+    this.royalty = new RoyaltySystem(this, this.subjects);
 
     const saved = this.layoutRepo.loadSync();
     if (saved && saved.buildings.length > 0) {
@@ -128,6 +146,7 @@ export class KingdomScene extends Phaser.Scene {
       } else {
         this.subjects.spawnSeed();
       }
+      this.royalty.restoreTimers(saved.princeSpawnMs, saved.fgmCooldownMs);
     } else {
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
       this.subjects.spawnSeed();
@@ -245,10 +264,19 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.HIRE_SUBJECT, this.onHire);
     this.game.events.on(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
     this.game.events.on(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+    this.game.events.on(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
+    this.game.events.on(KingdomEvents.PAY_RANSOM, this.onPayRansom);
+    this.game.events.on(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
       hour: this.subjects.clock.hour,
+    });
+    this.game.events.emit(KingdomEvents.FOOD_CHANGED, {
+      food: this.hunger.currentFood(),
+    });
+    this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+      count: this.captives.length,
     });
     this.emitStats();
     this.emitPlaceMode();
@@ -275,8 +303,15 @@ export class KingdomScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     this.subjects?.update(delta);
     this.raids?.update(delta);
+    this.royalty?.update(delta);
+    const inspired = this.royalty?.isInspired() ?? false;
+    this.subjects?.setInspired(inspired);
+    this.subjects?.setFgmCanTransform(this.royalty?.fgmReady() ?? false);
+    this.combat?.setInspired(inspired);
+    this.tasks?.setInspired(inspired);
     this.combat?.update(delta);
     this.tasks?.update(delta, this.raids?.hasActiveRaiders() ?? false);
+    this.hunger?.update();
     this.applyNightOverlay();
   }
 
@@ -287,6 +322,9 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
     this.game.events.off(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
     this.game.events.off(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+    this.game.events.off(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
+    this.game.events.off(KingdomEvents.PAY_RANSOM, this.onPayRansom);
+    this.game.events.off(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
   }
 
   private onHire = (payload: HireSubjectPayload) => {
@@ -310,6 +348,58 @@ export class KingdomScene extends Phaser.Scene {
     this.emitPlaceMode();
   };
 
+  private onRoyalCaptured = (payload: CaptiveRecord) => {
+    this.captives.push(payload);
+    this.captivesRepo.saveSync(this.captives);
+    this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+      count: this.captives.length,
+    });
+    this.emitStats();
+    this.schedulePersist();
+  };
+
+  private onPayRansom = (payload: PayRansomPayload) => {
+    const idx = this.captives.findIndex((c) => c.id === payload.id);
+    if (idx < 0) return;
+    const [captive] = this.captives.splice(idx, 1);
+    if (!captive) return;
+    this.captivesRepo.saveSync(this.captives);
+    this.subjects.restoreCaptive(
+      {
+        id: captive.id,
+        name: captive.name,
+        role: captive.role,
+        houseId: captive.houseId,
+        hp: captive.maxHp,
+        maxHp: captive.maxHp,
+        hunger: 0,
+        sick: false,
+      },
+      {
+        x: this.keepPoint.x + Phaser.Math.Between(-30, 30),
+        y: this.keepPoint.y + 40,
+      }
+    );
+    this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+      count: this.captives.length,
+    });
+    this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${captive.name} has been ransomed home!`,
+    });
+    this.emitStats();
+    this.schedulePersist();
+  };
+
+  private onTransform = (payload: TransformPeasantPayload) => {
+    this.royalty.tryTransformPeasant(payload.fgmId);
+    this.emitStats();
+    this.schedulePersist();
+    if (this.subjects.getSelectedId()) {
+      const snap = this.subjects.refreshSelectedSnapshot();
+      if (snap) this.publishSelection(snap);
+    }
+  };
+
   private emitPlaceMode() {
     this.game.events.emit(KingdomEvents.PLACE_MODE_CHANGED, {
       active: this.buildings.isPlacing(),
@@ -324,6 +414,8 @@ export class KingdomScene extends Phaser.Scene {
     for (const n of this.subjects.occupantCounts().values()) {
       usedBeds += n;
     }
+    const hasKing = this.subjects.hasRole('king');
+    const hasQueen = this.subjects.hasRole('queen');
     this.game.events.emit(KingdomEvents.KINGDOM_STATS, {
       population,
       capacity,
@@ -331,6 +423,16 @@ export class KingdomScene extends Phaser.Scene {
       houseCount: this.buildings.houseCount(),
       wallCount: this.buildings.wallCount(),
       tavernCount: this.buildings.tavernCount(),
+      fieldCount: this.buildings.fieldCount(),
+      hasKing,
+      hasQueen,
+      hasPrince: this.subjects.hasRole('prince'),
+      hasPrincess: this.subjects.hasRole('princess'),
+      hasFairyGodmother: this.subjects.hasRole('fairy_godmother'),
+      royaltyUnlocked: hasKing && hasQueen,
+      inspired: this.royalty?.isInspired() ?? false,
+      food: this.hunger?.currentFood() ?? 0,
+      captiveCount: this.captives.length,
     });
   }
 
@@ -341,11 +443,14 @@ export class KingdomScene extends Phaser.Scene {
 
   private persistLayout() {
     const keep = this.buildings.serializeKeep();
+    const timers = this.royalty.serializeTimers();
     void this.layoutRepo.save({
       subjects: this.subjects.serialize(),
       buildings: this.buildings.serialize(),
       keepHp: keep.keepHp,
       keepMaxHp: keep.keepMaxHp,
+      princeSpawnMs: timers.princeSpawnMs,
+      fgmCooldownMs: timers.fgmCooldownMs,
     });
   }
 

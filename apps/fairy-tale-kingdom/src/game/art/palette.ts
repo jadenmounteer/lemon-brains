@@ -15,12 +15,21 @@ export const palette = {
   clothPeasant: 0xc4a35a,
   clothGuard: 0x4a6fa5,
   clothArcher: 0x5a8f4a,
+  clothEliteGuard: 0x2a4a7a,
+  clothEliteArcher: 0x3a6f3a,
+  clothKing: 0xb8860b,
+  clothQueen: 0x8b3a6b,
+  clothPrince: 0xc9a227,
+  clothPrincess: 0xd4a0c0,
+  clothFairy: 0x7ec8e3,
   clothBandit: 0x6b3e2e,
   clothGiant: 0x7a6a4a,
   clothEnemyArmy: 0x8b2e2e,
   metal: 0xc0c4c8,
   cream: 0xf4efe4,
   gold: 0xd4a84b,
+  wheat: 0xd4b85a,
+  wheatDark: 0xa89040,
 } as const;
 
 export type PaletteColor = (typeof palette)[keyof typeof palette];

@@ -12,27 +12,29 @@ Long-term phased vision.
 | 4     | Marketplace and buildings  | Hire units into houses; place house/wall/tavern; building effects                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 5     | Combat and defenses        | HP, pathing/breach, drawbridge, stairs, pillage + flee, combat AI                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | 6     | Tasks, repair, keep siege  | Schedule interrupts; peasant repair; army must destroy keep; street chat                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| 7     | Economy and royalty        | Fields/food, sickness, royal units, upgrade buildings. Fairy god mother makes princesses. If you have a king and queen, you can buy better units/buildings. If you have a prince and princess, they make units more effective and production, combat for a short period if they wave to them. Royalty can be captured by enemies and held for ransom until you pay. Fairy god mothers can make peasants into new princesses. A prince appears if you have a king and queen after a short amount of time. |
+| 7     | Economy and royalty        | Fields/food, sickness, royal units, upgrade buildings, capture/ransom, wave buffs                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 8     | Medieval sieges            | Trebuchets, catapults, battering rams, formation siege AI, field burning                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 9     | Monsters                   | Dragons, knights, named roaming monsters with schedules                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
-8 Medeival seiges. Trebucheis, catapults, archers, batter rams, enemy army seige strategies. Your kingdom uses realistic defense strategies as well. Rather than tower defense mode, they line up without the walls and then the enemy uses strategy to focus their efforts on the walls or storm through the gates and raid and pillage and take the keep.
+## Phase 0–6 (done)
 
-## Phase 0–5 (done)
+Foundation through combat, building inspect, interrupts, keep siege, peasant repair.
 
-Foundation through combat: HP, pathing/breach, drawbridge, stairs, pillage, flee, building inspect, HUD pop.
-
-## Phase 6 — Tasks, repair, keep siege (current)
+## Phase 7 — Economy and royalty (current)
 
 Checklist:
 
-- [x] Enemy army must siege keep to 0 HP to win (no instant touch-lose)
-- [x] Bandits/giants still steal gold on keep reach
-- [x] Interrupt priority: flee → combat → repair → chat → schedule
-- [x] Peasants repair damaged buildings and keep; cancel on raid
-- [x] Lightweight peacetime street chat between nearby free subjects
+- [x] Fields + food store/HUD; harvest production; granary bonus
+- [x] Food consumption; hunger → sickness → death; low-food harvest interrupt
+- [x] King, Queen, Prince (auto), Fairy Godmother, Princess (transform)
+- [x] King+Queen unlock barracks, granary, manor, elite troops
+- [x] Prince+Princess wave buffs (food + combat)
+- [x] Army capture royals + ransom panel; persist captives
+- [x] New kingdom resets food/captives; Game Over copy updated
 
-## Phase 7 — next
+## Phase 8 — next
 
-Economy (fields/food) and royalty systems.
+Medieval siege engines and smarter army strategies.
 
 ## Non-goals (for now)
 

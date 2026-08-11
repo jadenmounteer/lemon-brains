@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
+import { EconomyBalance } from '../economy/economy';
 import type { RaidSystem } from '../raids/RaidSystem';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
@@ -11,6 +12,7 @@ import { CombatBalance } from './stats';
  */
 export class CombatSystem {
   private accumMs = 0;
+  private inspired = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -18,6 +20,10 @@ export class CombatSystem {
     private readonly buildings: BuildingSystem,
     private readonly raids: RaidSystem
   ) {}
+
+  setInspired(active: boolean): void {
+    this.inspired = active;
+  }
 
   update(deltaMs: number): void {
     const active = this.raids.hasActiveRaiders();
@@ -39,11 +45,17 @@ export class CombatSystem {
   }
 
   private friendlyFire(): void {
+    let dmgMult = 1;
+    if (this.buildings.hasBarracks()) dmgMult *= EconomyBalance.barracksDamageMult;
+    if (this.inspired) dmgMult *= EconomyBalance.waveCombatMult;
+
     for (const fighter of this.subjects.combatants()) {
+      const isArcher =
+        fighter.data.role === 'archer' || fighter.data.role === 'elite_archer';
       const target = this.raids.nearestRaider(
         fighter.sprite.x,
         fighter.sprite.y,
-        fighter.data.role === 'archer'
+        isArcher
           ? CombatBalance.archerRange *
               (fighter.data.onWall ? CombatBalance.archerWallRangeMult : 1)
           : CombatBalance.aggroRadius
@@ -57,7 +69,7 @@ export class CombatSystem {
         target.sprite.y
       );
 
-      if (fighter.data.role === 'guard') {
+      if (!isArcher) {
         if (dist > CombatBalance.guardRange) {
           this.subjects.nudgeToward(
             fighter.data.id,
@@ -67,16 +79,17 @@ export class CombatSystem {
           );
           continue;
         }
-        const dead = this.raids.damageRaider(
-          target,
-          CombatBalance.guardMelee
-        );
+        const base =
+          fighter.data.role === 'elite_guard'
+            ? CombatBalance.eliteGuardMelee
+            : CombatBalance.guardMelee;
+        const dead = this.raids.damageRaider(target, base * dmgMult);
         if (dead) {
           this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
             message: `${fighter.data.name} struck down a raider`,
           });
         }
-      } else if (fighter.data.role === 'archer') {
+      } else {
         const range =
           CombatBalance.archerRange *
           (fighter.data.onWall ? CombatBalance.archerWallRangeMult : 1);
@@ -86,10 +99,14 @@ export class CombatSystem {
           }
           continue;
         }
-        let dmg = CombatBalance.archerRanged;
+        let dmg =
+          fighter.data.role === 'elite_archer'
+            ? CombatBalance.eliteArcherRanged
+            : CombatBalance.archerRanged;
         if (fighter.data.onWall) {
           dmg *= CombatBalance.archerWallDamageMult;
         }
+        dmg *= dmgMult;
         const dead = this.raids.damageRaider(target, dmg);
         if (dead) {
           this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {

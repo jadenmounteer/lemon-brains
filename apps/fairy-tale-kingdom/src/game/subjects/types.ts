@@ -39,9 +39,13 @@ export type ActivityId =
   | 'fight'
   | 'climb'
   | 'repair'
-  | 'chat';
+  | 'chat'
+  | 'harvest'
+  | 'wave';
 
-export type InterruptKind = 'flee' | 'repair' | 'chat';
+export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
+
+export type InterruptKind = 'flee' | 'repair' | 'chat' | 'harvest';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -50,8 +54,6 @@ export interface SubjectInterrupt {
   partnerId?: string;
   remainingMs?: number;
 }
-
-export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
 export interface ScheduleSlot {
   startHour: number;
@@ -72,6 +74,8 @@ export interface Subject {
   hp: number;
   maxHp: number;
   onWall: boolean;
+  hunger: number;
+  sick: boolean;
 }
 
 /** Snapshot sent across the Phaser → React bridge */
@@ -88,6 +92,10 @@ export interface SubjectSnapshot {
   hp: number;
   maxHp: number;
   onWall: boolean;
+  hunger: number;
+  sick: boolean;
+  inspired?: boolean;
+  canTransformPeasant?: boolean;
 }
 
 export interface DaySnapshot {
@@ -102,4 +110,14 @@ export interface KingdomStats {
   houseCount: number;
   wallCount: number;
   tavernCount: number;
+  fieldCount: number;
+  hasKing: boolean;
+  hasQueen: boolean;
+  hasPrince: boolean;
+  hasPrincess: boolean;
+  hasFairyGodmother: boolean;
+  royaltyUnlocked: boolean;
+  inspired: boolean;
+  food: number;
+  captiveCount: number;
 }

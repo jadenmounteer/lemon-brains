@@ -7,6 +7,7 @@ import type {
   GoldStolenPayload,
   PlaceModePayload,
   RaidWarningPayload,
+  RoyalCapturedPayload,
 } from './game/subjects/events';
 import type {
   BuildingSnapshot,
@@ -15,11 +16,17 @@ import type {
   SubjectSnapshot,
 } from './game/subjects/types';
 import { BuildingInspectorPanel } from './buildings/BuildingInspectorPanel';
+import {
+  CaptivesRepository,
+  type CaptiveRecord,
+} from './kingdom/CaptivesRepository';
 import { GameOverModal } from './kingdom/GameOverModal';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
+import { RansomPanel } from './kingdom/RansomPanel';
 import { useKingdom } from './kingdom/useKingdom';
 import { QuestionPanel } from './learning/QuestionPanel';
+import { useFood } from './learning/useFood';
 import { useGold } from './learning/useGold';
 import { useSettings } from './learning/useSettings';
 import {
@@ -32,6 +39,7 @@ import { InspectorPanel } from './subjects/InspectorPanel';
 import { formatClock } from './utils/formatClock';
 
 const layoutRepo = new LayoutRepository();
+const captivesRepo = new CaptivesRepository();
 
 const DEFAULT_STATS: KingdomStats = {
   population: 0,
@@ -40,16 +48,28 @@ const DEFAULT_STATS: KingdomStats = {
   houseCount: 0,
   wallCount: 0,
   tavernCount: 0,
+  fieldCount: 0,
+  hasKing: false,
+  hasQueen: false,
+  hasPrince: false,
+  hasPrincess: false,
+  hasFairyGodmother: false,
+  royaltyUnlocked: false,
+  inspired: false,
+  food: 0,
+  captiveCount: 0,
 };
 
 export default function App() {
   const { settings, ready } = useSettings();
   const { gold, earnCorrectAnswer, resetGold, stealGold, spend, addGold } =
     useGold();
+  const { food, setFoodAmount, resetFood } = useFood();
   const { kingdom, ready: kingdomReady, needsSetup, startNewKingdom, incrementDay } =
     useKingdom();
   const [showQuestions, setShowQuestions] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
+  const [showRansom, setShowRansom] = useState(false);
   const [selected, setSelected] = useState<SubjectSnapshot | null>(null);
   const [selectedBuilding, setSelectedBuilding] =
     useState<BuildingSnapshot | null>(null);
@@ -63,6 +83,9 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [namingAfterLoss, setNamingAfterLoss] = useState(false);
   const [stats, setStats] = useState<KingdomStats>(DEFAULT_STATS);
+  const [captives, setCaptives] = useState<CaptiveRecord[]>(() =>
+    captivesRepo.loadSync()
+  );
   const [placeMode, setPlaceMode] = useState<PlaceModePayload>({
     active: false,
     kind: null,
@@ -75,12 +98,21 @@ export default function App() {
     seq: number;
     kind: BuildKind;
   } | null>(null);
+  const [ransomRequest, setRansomRequest] = useState<{
+    seq: number;
+    id: string;
+  } | null>(null);
+  const [transformRequest, setTransformRequest] = useState<{
+    seq: number;
+    fgmId: string;
+  } | null>(null);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
   const showSide =
     showQuestions ||
     showMarket ||
+    showRansom ||
     selected !== null ||
     selectedBuilding !== null;
 
@@ -89,21 +121,29 @@ export default function App() {
     window.setTimeout(() => setToast(null), 3200);
   }, []);
 
+  const refreshCaptives = useCallback(() => {
+    setCaptives(captivesRepo.loadSync());
+  }, []);
+
   const handleNewKingdom = useCallback(
     async (name: string) => {
       await startNewKingdom(name);
       await resetGold();
+      await resetFood();
       await layoutRepo.reset();
+      await captivesRepo.reset();
+      setCaptives([]);
       setGameOver(null);
       setNamingAfterLoss(false);
       setSelected(null);
       setSelectedBuilding(null);
       setPlaceMode({ active: false, kind: null });
       setPendingPlaceCost(null);
+      setShowRansom(false);
       setStats(DEFAULT_STATS);
       setRemountKey((n) => n + 1);
     },
-    [resetGold, startNewKingdom]
+    [resetFood, resetGold, startNewKingdom]
   );
 
   const handleHire = useCallback(
@@ -114,6 +154,10 @@ export default function App() {
         flash('No free beds — build a house first');
         return;
       }
+      if (item.requiresRoyalty && !stats.royaltyUnlocked) {
+        flash('Requires King & Queen');
+        return;
+      }
       const ok = await spend(item.cost);
       if (!ok) {
         flash('Not enough gold');
@@ -121,13 +165,17 @@ export default function App() {
       }
       setHireRequest({ seq: Date.now(), role });
     },
-    [flash, spend, stats.freeBeds]
+    [flash, spend, stats.freeBeds, stats.royaltyUnlocked]
   );
 
   const handleBuyBuilding = useCallback(
     async (kind: BuildKind) => {
       const item = BUILD_CATALOG.find((b) => b.kind === kind);
       if (!item) return;
+      if (item.requiresRoyalty && !stats.royaltyUnlocked) {
+        flash('Requires King & Queen');
+        return;
+      }
       const ok = await spend(item.cost);
       if (!ok) {
         flash('Not enough gold');
@@ -137,7 +185,7 @@ export default function App() {
       setPlaceRequest({ seq: Date.now(), kind });
       flash(`Place your ${item.name.toLowerCase()} on empty ground`);
     },
-    [flash, spend]
+    [flash, spend, stats.royaltyUnlocked]
   );
 
   const refundPendingPlace = useCallback(
@@ -150,6 +198,19 @@ export default function App() {
       }
     },
     [addGold, flash, pendingPlaceCost]
+  );
+
+  const handleRansom = useCallback(
+    async (id: string, cost: number) => {
+      const ok = await spend(cost);
+      if (!ok) {
+        flash('Not enough gold');
+        return;
+      }
+      setRansomRequest({ seq: Date.now(), id });
+      window.setTimeout(() => refreshCaptives(), 100);
+    },
+    [flash, refreshCaptives, spend]
   );
 
   const showSidePanels = kingdomReady && !needsSetup && !namingAfterLoss;
@@ -165,6 +226,7 @@ export default function App() {
             {kingdom.name
               ? `${kingdom.name} · Day ${kingdom.daysPlayed}`
               : 'Name your kingdom to begin'}
+            {stats.inspired ? ' · Inspired!' : ''}
           </p>
         </div>
         <div className="hud-actions">
@@ -173,6 +235,9 @@ export default function App() {
           </div>
           {showSidePanels && (
             <>
+              <div className="food" aria-live="polite">
+                Food: <strong>{food}</strong>
+              </div>
               <div
                 className="pop"
                 aria-live="polite"
@@ -187,6 +252,13 @@ export default function App() {
               <button type="button" onClick={() => setShowMarket((v) => !v)}>
                 {showMarket ? 'Hide market' : 'Marketplace'}
               </button>
+              {(captives.length > 0 || showRansom) && (
+                <button type="button" onClick={() => setShowRansom((v) => !v)}>
+                  {showRansom
+                    ? 'Hide ransom'
+                    : `Ransom (${captives.length})`}
+                </button>
+              )}
             </>
           )}
           <a className="back" href={config.hostUrl}>
@@ -217,6 +289,8 @@ export default function App() {
             hireRequest={hireRequest}
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
+            ransomRequest={ransomRequest}
+            transformRequest={transformRequest}
             onSubjectSelected={setSelected}
             onBuildingSelected={setSelectedBuilding}
             onDayTick={setDay}
@@ -242,6 +316,14 @@ export default function App() {
             }}
             onKingdomStats={setStats}
             onPlaceMode={setPlaceMode}
+            onFoodChanged={setFoodAmount}
+            onRoyalCaptured={(_payload: RoyalCapturedPayload) => {
+              refreshCaptives();
+              setShowRansom(true);
+            }}
+            onCaptivesChanged={() => {
+              refreshCaptives();
+            }}
             onMarketToast={(message) => {
               if (message === 'Building placed') {
                 setPendingPlaceCost(null);
@@ -279,6 +361,12 @@ export default function App() {
                   setSelected(null);
                   setDeselectToken((n) => n + 1);
                 }}
+                onTransformPeasant={() => {
+                  setTransformRequest({
+                    seq: Date.now(),
+                    fgmId: selected.id,
+                  });
+                }}
               />
             )}
             {selectedBuilding && (
@@ -288,6 +376,16 @@ export default function App() {
                   setSelectedBuilding(null);
                   setDeselectToken((n) => n + 1);
                 }}
+              />
+            )}
+            {showRansom && (
+              <RansomPanel
+                captives={captives}
+                gold={gold}
+                onRansom={(id, cost) => {
+                  void handleRansom(id, cost);
+                }}
+                onClose={() => setShowRansom(false)}
               />
             )}
             {showQuestions && (

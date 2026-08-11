@@ -7,6 +7,10 @@ export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   tavern: 35,
   drawbridge: 50,
   stairs: 25,
+  field: 25,
+  granary: 40,
+  barracks: 45,
+  manor: 35,
   keep: 200,
 };
 
@@ -14,6 +18,13 @@ export const UNIT_MAX_HP: Record<UnitRole, number> = {
   peasant: 20,
   guard: 40,
   archer: 30,
+  elite_guard: 55,
+  elite_archer: 40,
+  king: 45,
+  queen: 40,
+  prince: 35,
+  princess: 35,
+  fairy_godmother: 30,
 };
 
 export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
@@ -25,6 +36,8 @@ export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
 export const CombatBalance = {
   guardMelee: 8,
   archerRanged: 5,
+  eliteGuardMelee: 12,
+  eliteArcherRanged: 8,
   archerWallRangeMult: 1.5,
   archerWallDamageMult: 1.25,
   raiderMelee: 6,
@@ -45,11 +58,23 @@ export const CombatBalance = {
 } as const;
 
 export function isBurnable(kind: BuildKind): boolean {
-  return kind === 'house' || kind === 'tavern' || kind === 'stairs';
+  return (
+    kind === 'house' ||
+    kind === 'tavern' ||
+    kind === 'stairs' ||
+    kind === 'field' ||
+    kind === 'granary' ||
+    kind === 'barracks' ||
+    kind === 'manor'
+  );
 }
 
 export function isBlockingKind(kind: BuildKind, drawbridgeClosed: boolean): boolean {
   if (kind === 'wall') return true;
   if (kind === 'drawbridge') return drawbridgeClosed;
   return false;
+}
+
+export function isDwelling(kind: BuildKind): boolean {
+  return kind === 'house' || kind === 'manor';
 }

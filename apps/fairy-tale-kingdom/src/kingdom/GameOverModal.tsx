@@ -10,8 +10,8 @@ export function GameOverModal({ reason, onNewKingdom }: GameOverModalProps) {
         <h2>Keep captured</h2>
         <p>{reason}</p>
         <p className="muted">
-          Bandits and giants only steal gold — a rival army ending at your keep
-          ends the game.
+          Bandits and giants only steal gold — a rival army must destroy your
+          keep (0 HP) to conquer the kingdom.
         </p>
         <button type="button" className="menu-action" onClick={onNewKingdom}>
           Start a new kingdom

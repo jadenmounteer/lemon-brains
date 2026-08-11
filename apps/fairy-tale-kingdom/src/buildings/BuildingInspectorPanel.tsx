@@ -25,7 +25,7 @@ export function BuildingInspectorPanel({
         ) : null}
       </p>
       <p>{building.blurb}</p>
-      {building.kind === 'house' && (
+      {(building.kind === 'house' || building.kind === 'manor') && (
         <>
           <p>
             <span className="muted">Beds</span>{' '}
@@ -53,6 +53,7 @@ export function BuildingInspectorPanel({
 function kindTitle(kind: BuildingSnapshot['kind']): string {
   switch (kind) {
     case 'house':
+    case 'manor':
       return 'Dwelling';
     case 'wall':
       return 'Fortification';
@@ -62,6 +63,12 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
       return 'Gate';
     case 'tavern':
       return 'Amenity';
+    case 'field':
+      return 'Farmland';
+    case 'granary':
+      return 'Storage';
+    case 'barracks':
+      return 'Military';
     case 'keep':
       return 'Seat of power';
   }

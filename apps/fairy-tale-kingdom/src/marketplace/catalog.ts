@@ -1,6 +1,15 @@
 import type { UnitRole } from '../game/art/assetManifest';
 
-export type BuildKind = 'house' | 'wall' | 'tavern' | 'drawbridge' | 'stairs';
+export type BuildKind =
+  | 'house'
+  | 'wall'
+  | 'tavern'
+  | 'drawbridge'
+  | 'stairs'
+  | 'field'
+  | 'granary'
+  | 'barracks'
+  | 'manor';
 
 export const BEDS_PER_HOUSE = 3;
 
@@ -9,6 +18,10 @@ export interface HireCatalogItem {
   name: string;
   blurb: string;
   cost: number;
+  /** Requires king & queen present */
+  requiresRoyalty?: boolean;
+  /** At most one of this role */
+  unique?: boolean;
 }
 
 export interface BuildCatalogItem {
@@ -16,6 +29,7 @@ export interface BuildCatalogItem {
   name: string;
   blurb: string;
   cost: number;
+  requiresRoyalty?: boolean;
 }
 
 export const HIRE_CATALOG: HireCatalogItem[] = [
@@ -37,6 +51,41 @@ export const HIRE_CATALOG: HireCatalogItem[] = [
     blurb: 'Ranged fighter. Deadlier from the wall-top. Needs a free bed.',
     cost: 25,
   },
+  {
+    role: 'elite_guard',
+    name: 'Elite Guard',
+    blurb: 'Hardened melee fighter. Requires King & Queen.',
+    cost: 35,
+    requiresRoyalty: true,
+  },
+  {
+    role: 'elite_archer',
+    name: 'Elite Archer',
+    blurb: 'Master bowman. Requires King & Queen.',
+    cost: 40,
+    requiresRoyalty: true,
+  },
+  {
+    role: 'king',
+    name: 'King',
+    blurb: 'With a Queen, unlocks royal buildings and elite troops. Unique.',
+    cost: 80,
+    unique: true,
+  },
+  {
+    role: 'queen',
+    name: 'Queen',
+    blurb: 'With a King, a Prince will be born. Unique.',
+    cost: 80,
+    unique: true,
+  },
+  {
+    role: 'fairy_godmother',
+    name: 'Fairy Godmother',
+    blurb: 'Can turn peasants into Princesses. Unique.',
+    cost: 60,
+    unique: true,
+  },
 ];
 
 export const BUILD_CATALOG: BuildCatalogItem[] = [
@@ -45,6 +94,12 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     name: 'House',
     blurb: '+3 beds. New hires live here. Can be burned in raids.',
     cost: 30,
+  },
+  {
+    kind: 'field',
+    name: 'Field',
+    blurb: 'Peasants harvest food here. Burnable.',
+    cost: 25,
   },
   {
     kind: 'wall',
@@ -69,5 +124,26 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     name: 'Tavern',
     blurb: 'Cuts gold stolen by bandits and giants by 25%. Can be burned.',
     cost: 40,
+  },
+  {
+    kind: 'granary',
+    name: 'Granary',
+    blurb: '+50% food harvest while standing. Requires King & Queen. Burnable.',
+    cost: 45,
+    requiresRoyalty: true,
+  },
+  {
+    kind: 'barracks',
+    name: 'Barracks',
+    blurb: '+15% guard & archer damage. Requires King & Queen. Burnable.',
+    cost: 60,
+    requiresRoyalty: true,
+  },
+  {
+    kind: 'manor',
+    name: 'Manor',
+    blurb: 'Fine home with 2 beds. Requires King & Queen. Burnable.',
+    cost: 70,
+    requiresRoyalty: true,
   },
 ];

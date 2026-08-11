@@ -34,8 +34,13 @@ export function MarketplacePanel({
         </span>
       </p>
       <p className="muted market-note">
-        Each house has 3 beds. New hires need a free bed in a house.
+        Houses have 3 beds; manors have 2. Royalty unlocks elite goods.
       </p>
+      {stats.royaltyUnlocked ? (
+        <p className="muted">Royal court active — tier-2 goods unlocked.</p>
+      ) : (
+        <p className="muted">Hire a King and Queen to unlock royal goods.</p>
+      )}
 
       {placeMode.active && (
         <div className="place-banner">
@@ -54,16 +59,30 @@ export function MarketplacePanel({
       <h3 className="inspector-subhead">Hire</h3>
       <ul className="market-list">
         {HIRE_CATALOG.map((item) => {
+          const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
+          const uniqueTaken =
+            item.unique &&
+            ((item.role === 'king' && stats.hasKing) ||
+              (item.role === 'queen' && stats.hasQueen) ||
+              (item.role === 'fairy_godmother' && stats.hasFairyGodmother));
           const disabled =
             placeMode.active ||
             gold < item.cost ||
-            stats.freeBeds <= 0;
+            stats.freeBeds <= 0 ||
+            locked ||
+            uniqueTaken;
           return (
             <li key={item.role} className="market-row">
               <div>
                 <strong>{item.name}</strong>
                 <span className="muted"> · {item.cost}g</span>
                 <p className="muted">{item.blurb}</p>
+                {locked && (
+                  <p className="muted">Requires King &amp; Queen</p>
+                )}
+                {uniqueTaken && (
+                  <p className="muted">Already in your kingdom</p>
+                )}
               </div>
               <button
                 type="button"
@@ -78,19 +97,23 @@ export function MarketplacePanel({
         })}
       </ul>
       {stats.freeBeds <= 0 && (
-        <p className="muted">Build a house for more beds.</p>
+        <p className="muted">Build a house or manor for more beds.</p>
       )}
 
       <h3 className="inspector-subhead">Build</h3>
       <ul className="market-list">
         {BUILD_CATALOG.map((item) => {
-          const disabled = placeMode.active || gold < item.cost;
+          const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
+          const disabled = placeMode.active || gold < item.cost || locked;
           return (
             <li key={item.kind} className="market-row">
               <div>
                 <strong>{item.name}</strong>
                 <span className="muted"> · {item.cost}g</span>
                 <p className="muted">{item.blurb}</p>
+                {locked && (
+                  <p className="muted">Requires King &amp; Queen</p>
+                )}
               </div>
               <button
                 type="button"

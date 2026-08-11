@@ -90,6 +90,14 @@ a {
   opacity: 0.75;
 }
 
+.food {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(212, 184, 90, 0.16);
+  border: 1px solid #c4a35a;
+  color: #f0e2b0;
+}
+
 
 .hud-actions button,
 .back {

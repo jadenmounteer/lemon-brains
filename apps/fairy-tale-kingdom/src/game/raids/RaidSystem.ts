@@ -5,6 +5,7 @@ import {
   type Direction,
   type EnemyRole,
 } from '../art/assetManifest';
+import { isRoyalRole } from '../art/assetManifest';
 import type { BuildingRecord, BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance, RAIDER_MAX_HP } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
@@ -296,9 +297,16 @@ export class RaidSystem {
         } else {
           this.faceToward(raider, target.sprite.x, target.sprite.y);
           raider.sprite.play(idleAnimKey(raider.kind), true);
-          let dmg = CombatBalance.raiderMelee;
-          if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
-          this.subjects?.damageSubject(target.data.id, dmg);
+          if (
+            raider.kind === 'enemy_army' &&
+            isRoyalRole(target.data.role)
+          ) {
+            this.captureRoyal(target.data.id);
+          } else {
+            let dmg = CombatBalance.raiderMelee;
+            if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
+            this.subjects?.damageSubject(target.data.id, dmg);
+          }
         }
         return;
       }
@@ -482,6 +490,21 @@ export class RaidSystem {
     if (destroyed) {
       this.triggerGameOver();
     }
+  }
+
+  private captureRoyal(subjectId: string): void {
+    const saved = this.subjects?.extractCaptive(subjectId);
+    if (!saved) return;
+    this.scene.game.events.emit(KingdomEvents.ROYAL_CAPTURED, {
+      id: saved.id,
+      name: saved.name,
+      role: saved.role,
+      houseId: saved.houseId,
+      maxHp: saved.maxHp,
+    });
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${saved.name} was captured for ransom!`,
+    });
   }
 
   private onReachedKeep(raider: ActiveRaider): void {

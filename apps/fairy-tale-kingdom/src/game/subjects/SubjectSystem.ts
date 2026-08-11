@@ -52,6 +52,8 @@ export class SubjectSystem {
   private nextSubjectId = 0;
   private buildings: BuildingSystem | null = null;
   private raidMode = false;
+  private inspired = false;
+  private fgmCanTransform = false;
   private onChanged: (() => void) | null = null;
 
   constructor(
@@ -67,11 +69,19 @@ export class SubjectSystem {
     this.onChanged = cb;
   }
 
+  setInspired(active: boolean): void {
+    this.inspired = active;
+  }
+
+  setFgmCanTransform(ready: boolean): void {
+    this.fgmCanTransform = ready;
+  }
+
   setRaidMode(active: boolean): void {
     const was = this.raidMode;
     this.raidMode = active;
     if (active && !was) {
-      this.cancelInterrupts(['repair', 'chat']);
+      this.cancelInterrupts(['repair', 'chat', 'harvest']);
     }
   }
 
@@ -111,13 +121,13 @@ export class SubjectSystem {
     }
   }
 
-  /** Free peasant for repair (no interrupt, not on wall). */
+  /** Free healthy peasant for repair/harvest (no interrupt, not on wall). */
   closestFreePeasant(x: number, y: number): string | null {
     let best: ManagedSubject | null = null;
     let bestD = Infinity;
     for (const s of this.subjects) {
       if (s.data.role !== 'peasant') continue;
-      if (s.interrupt || s.data.onWall) continue;
+      if (s.interrupt || s.data.onWall || s.data.sick) continue;
       const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
       if (d < bestD) {
         bestD = d;
@@ -129,16 +139,134 @@ export class SubjectSystem {
 
   beginRepair(subjectId: string, targetId: string, label: string): void {
     const managed = this.getById(subjectId);
-    if (!managed) return;
+    if (!managed || managed.data.sick) return;
     managed.interrupt = { kind: 'repair', targetId };
     managed.data.activity = 'repair';
     managed.data.activityLabel = `Repairing ${label}`;
   }
 
+  beginHarvest(subjectId: string, fieldId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed || managed.data.sick) return;
+    managed.interrupt = { kind: 'harvest', targetId: fieldId };
+    managed.data.activity = 'harvest';
+    managed.data.activityLabel = 'Harvesting the fields';
+  }
+
   listFreeForChat(): ManagedSubject[] {
     return this.subjects.filter(
-      (s) => !s.interrupt && !s.data.onWall && !s.moving
+      (s) => !s.interrupt && !s.data.onWall && !s.moving && !s.data.sick
     );
+  }
+
+  listManaged(): ManagedSubject[] {
+    return this.subjects;
+  }
+
+  hasRole(role: UnitRole): boolean {
+    return this.subjects.some((s) => s.data.role === role);
+  }
+
+  countRole(role: UnitRole): number {
+    return this.subjects.filter((s) => s.data.role === role).length;
+  }
+
+  nearestPeasant(
+    x: number,
+    y: number,
+    radius: number
+  ): ManagedSubject | null {
+    let best: ManagedSubject | null = null;
+    let bestD = radius;
+    for (const s of this.subjects) {
+      if (s.data.role !== 'peasant' || s.data.sick) continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  transformRole(id: string, role: UnitRole): boolean {
+    const managed = this.getById(id);
+    if (!managed) return false;
+    managed.data.role = role;
+    managed.data.maxHp = UNIT_MAX_HP[role];
+    managed.data.hp = Math.min(managed.data.hp, managed.data.maxHp);
+    managed.sprite.setTexture(role, 0);
+    managed.sprite.play(idleAnimKey(role));
+    managed.interrupt = null;
+    this.onChanged?.();
+    return true;
+  }
+
+  applyStarvation(amount: number): void {
+    for (const s of [...this.subjects]) {
+      s.data.hunger = Math.min(100, s.data.hunger + amount);
+      const wasSick = s.data.sick;
+      s.data.sick = s.data.hunger >= 60;
+      if (s.data.sick && !wasSick) {
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${s.data.name} fell sick from hunger`,
+        });
+        if (s.interrupt?.kind === 'repair' || s.interrupt?.kind === 'harvest') {
+          s.interrupt = null;
+        }
+      }
+      this.applyHpTint(s);
+      if (s.data.hunger >= 100) {
+        const name = s.data.name;
+        this.removeSubject(s);
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${name} starved`,
+        });
+        this.onChanged?.();
+      }
+    }
+  }
+
+  recoverHunger(amount: number): void {
+    for (const s of this.subjects) {
+      s.data.hunger = Math.max(0, s.data.hunger - amount);
+      s.data.sick = s.data.hunger >= 60;
+      this.applyHpTint(s);
+    }
+  }
+
+  extractCaptive(id: string): SavedSubject | null {
+    const managed = this.getById(id);
+    if (!managed) return null;
+    const saved: SavedSubject = {
+      id: managed.data.id,
+      name: managed.data.name,
+      role: managed.data.role,
+      houseId: managed.data.houseId,
+      hp: managed.data.maxHp,
+      maxHp: managed.data.maxHp,
+      onWall: false,
+      hunger: 0,
+      sick: false,
+    };
+    this.removeSubject(managed);
+    this.onChanged?.();
+    return saved;
+  }
+
+  restoreCaptive(saved: SavedSubject, at: { x: number; y: number }): void {
+    this.createSubject(saved.role, saved.houseId, saved.id, saved.name, {
+      hp: saved.maxHp,
+      maxHp: saved.maxHp,
+      onWall: false,
+      hunger: 0,
+      sick: false,
+    });
+    const managed = this.getById(saved.id);
+    if (managed) {
+      managed.sprite.setPosition(at.x, at.y);
+    }
+    this.onChanged?.();
   }
 
   beginChat(aId: string, bId: string, durationMs: number): void {
@@ -188,6 +316,8 @@ export class SubjectSystem {
         hp: s.hp,
         maxHp: s.maxHp,
         onWall: s.onWall,
+        hunger: s.hunger,
+        sick: s.sick,
       });
       const match = /^subject-(\d+)$/.exec(s.id);
       if (match) {
@@ -206,6 +336,8 @@ export class SubjectSystem {
       hp: s.data.hp,
       maxHp: s.data.maxHp,
       onWall: s.data.onWall,
+      hunger: s.data.hunger,
+      sick: s.data.sick,
     }));
   }
 
@@ -233,6 +365,18 @@ export class SubjectSystem {
 
   hire(role: UnitRole): boolean {
     if (!this.buildings) return false;
+    if (
+      (role === 'king' ||
+        role === 'queen' ||
+        role === 'prince' ||
+        role === 'fairy_godmother') &&
+      this.hasRole(role)
+    ) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `You already have a ${roleLabel(role)}`,
+      });
+      return false;
+    }
     const houseId = this.buildings.pickHouseForHire(this.occupantCounts());
     if (!houseId) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -241,7 +385,10 @@ export class SubjectSystem {
       return false;
     }
     const id = `subject-${this.nextSubjectId++}`;
-    const name = pickName(2000 + this.nextSubjectId * 41);
+    const name =
+      role === 'prince'
+        ? pickName(9000 + this.nextSubjectId * 17)
+        : pickName(2000 + this.nextSubjectId * 41);
     this.createSubject(role, houseId, id, name);
     const managed = this.subjects[this.subjects.length - 1]!;
     this.scene.time.delayedCall(200, () => this.nudgeTowardSchedule(managed));
@@ -265,7 +412,12 @@ export class SubjectSystem {
 
   combatants(): ManagedSubject[] {
     return this.subjects.filter(
-      (s) => s.data.role === 'guard' || s.data.role === 'archer'
+      (s) =>
+        !s.data.sick &&
+        (s.data.role === 'guard' ||
+          s.data.role === 'archer' ||
+          s.data.role === 'elite_guard' ||
+          s.data.role === 'elite_archer')
     );
   }
 
@@ -518,11 +670,15 @@ export class SubjectSystem {
     this.scene.tweens.killTweensOf(managed.sprite);
     managed.moving = false;
 
+    let moveSpeed = speed;
+    if (managed.data.sick) moveSpeed *= 0.55;
+    else if (this.inspired && managed.data.role === 'peasant') moveSpeed *= 1.15;
+
     const dir = facingFromDelta(dx, dy);
     managed.sprite.play(walkAnimKey(managed.data.role, dir), true);
     managed.moving = true;
     const dist = Math.hypot(dx, dy);
-    const duration = Math.max(300, (dist / speed) * 1000);
+    const duration = Math.max(300, (dist / moveSpeed) * 1000);
 
     this.scene.tweens.add({
       targets: managed.sprite,
@@ -554,13 +710,20 @@ export class SubjectSystem {
     houseId: string,
     id: string,
     name: string,
-    opts?: { hp?: number; maxHp?: number; onWall?: boolean }
+    opts?: {
+      hp?: number;
+      maxHp?: number;
+      onWall?: boolean;
+      hunger?: number;
+      sick?: boolean;
+    }
   ): void {
     const slot = slotAtHour(role, this.clock.hour);
     const home = this.buildings?.getHousePoint(houseId) ?? null;
     const start = randomPointInZone(slot.zone, this.world, home);
     const maxHp = opts?.maxHp ?? UNIT_MAX_HP[role];
     const hp = opts?.hp ?? maxHp;
+    const hunger = opts?.hunger ?? 0;
 
     const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
     sprite.setDepth(20);
@@ -584,6 +747,8 @@ export class SubjectSystem {
       hp,
       maxHp,
       onWall: Boolean(opts?.onWall),
+      hunger,
+      sick: opts?.sick ?? hunger >= 60,
     };
 
     const managed: ManagedSubject = {
@@ -608,6 +773,10 @@ export class SubjectSystem {
 
   private applyHpTint(managed: ManagedSubject): void {
     if (this.selectedId === managed.data.id) return;
+    if (managed.data.sick) {
+      managed.sprite.setTint(0xa0d080);
+      return;
+    }
     const ratio = managed.data.hp / managed.data.maxHp;
     if (ratio <= 0.35) managed.sprite.setTint(0xff6666);
     else managed.sprite.clearTint();
@@ -662,7 +831,9 @@ export class SubjectSystem {
       name: managed.data.name,
       role: managed.data.role,
       roleLabel: roleLabel(managed.data.role),
-      activityLabel: managed.data.activityLabel,
+      activityLabel: managed.data.sick
+        ? `${managed.data.activityLabel} (sick)`
+        : managed.data.activityLabel,
       homeLabel: managed.data.houseId
         ? (this.buildings?.houseLabel(managed.data.houseId) ?? 'a house')
         : 'no house (orphaned)',
@@ -672,6 +843,11 @@ export class SubjectSystem {
       hp: managed.data.hp,
       maxHp: managed.data.maxHp,
       onWall: managed.data.onWall,
+      hunger: managed.data.hunger,
+      sick: managed.data.sick,
+      inspired: this.inspired,
+      canTransformPeasant:
+        managed.data.role === 'fairy_godmother' && this.fgmCanTransform,
     };
   }
 }

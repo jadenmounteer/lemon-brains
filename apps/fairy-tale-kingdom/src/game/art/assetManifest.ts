@@ -11,7 +11,18 @@ export const UNIT_HEIGHT = 24;
 export const DIRECTIONS = ['down', 'left', 'right', 'up'] as const;
 export type Direction = (typeof DIRECTIONS)[number];
 
-export const UNIT_ROLES = ['peasant', 'guard', 'archer'] as const;
+export const UNIT_ROLES = [
+  'peasant',
+  'guard',
+  'archer',
+  'elite_guard',
+  'elite_archer',
+  'king',
+  'queen',
+  'prince',
+  'princess',
+  'fairy_godmother',
+] as const;
 export type UnitRole = (typeof UNIT_ROLES)[number];
 
 /** Hostile units (procedural sheets, same frame layout as friendly cast) */
@@ -37,6 +48,10 @@ export const PROP_KEYS = {
   drawbridge: 'prop-drawbridge',
   drawbridgeClosed: 'prop-drawbridge-closed',
   stairs: 'prop-stairs',
+  field: 'prop-field',
+  granary: 'prop-granary',
+  barracks: 'prop-barracks',
+  manor: 'prop-manor',
 } as const;
 
 /** Future drop-in paths relative to public/ (assetUrl) */
@@ -51,6 +66,10 @@ export const dropInPaths = {
   tavern: 'assets/props/tavern.png',
   drawbridge: 'assets/props/drawbridge.png',
   stairs: 'assets/props/stairs.png',
+  field: 'assets/props/field.png',
+  granary: 'assets/props/granary.png',
+  barracks: 'assets/props/barracks.png',
+  manor: 'assets/props/manor.png',
 } as const;
 
 /** Frame index layout per unit sheet (16×24 frames in a row) */
@@ -83,4 +102,23 @@ export function walkFramesFor(dir: Direction): readonly number[] {
     case 'up':
       return UnitFrame.walkUp;
   }
+}
+
+export function isRoyalRole(role: UnitRole): boolean {
+  return (
+    role === 'king' ||
+    role === 'queen' ||
+    role === 'prince' ||
+    role === 'princess' ||
+    role === 'fairy_godmother'
+  );
+}
+
+export function isMilitaryRole(role: UnitRole): boolean {
+  return (
+    role === 'guard' ||
+    role === 'archer' ||
+    role === 'elite_guard' ||
+    role === 'elite_archer'
+  );
 }

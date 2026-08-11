@@ -97,6 +97,20 @@ function clothFor(role: AnimRole): number {
       return palette.clothGuard;
     case 'archer':
       return palette.clothArcher;
+    case 'elite_guard':
+      return palette.clothEliteGuard;
+    case 'elite_archer':
+      return palette.clothEliteArcher;
+    case 'king':
+      return palette.clothKing;
+    case 'queen':
+      return palette.clothQueen;
+    case 'prince':
+      return palette.clothPrince;
+    case 'princess':
+      return palette.clothPrincess;
+    case 'fairy_godmother':
+      return palette.clothFairy;
     case 'bandit':
       return palette.clothBandit;
     case 'giant':
@@ -136,12 +150,23 @@ function drawUnitFrame(
   fillRect(ctx, originX + 11, 4 + baseY + tall, 1, 6, palette.ink);
   fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 1, palette.ink);
 
-  if (role === 'guard' || role === 'enemy_army') {
+  if (role === 'guard' || role === 'elite_guard' || role === 'enemy_army') {
     fillRect(ctx, originX + 5, 3 + baseY + tall, 6, 2, palette.metal);
     fillRect(ctx, originX + 12, 11 + baseY + tall, 2, 6, palette.metal);
-  } else if (role === 'archer') {
+    if (role === 'elite_guard') {
+      fillRect(ctx, originX + 6, 4 + baseY + tall, 4, 1, palette.gold);
+    }
+  } else if (role === 'archer' || role === 'elite_archer') {
     fillRect(ctx, originX + 3, 11 + baseY, 1, 7, palette.wood);
     fillRect(ctx, originX + 2, 12 + baseY, 1, 5, palette.woodDark);
+    if (role === 'elite_archer') {
+      fillRect(ctx, originX + 5, 3 + baseY, 6, 1, palette.gold);
+    }
+  } else if (role === 'king' || role === 'queen' || role === 'prince' || role === 'princess') {
+    fillRect(ctx, originX + 5, 2 + baseY + tall, 6, 2, palette.gold);
+  } else if (role === 'fairy_godmother') {
+    fillRect(ctx, originX + 12, 8 + baseY, 2, 8, palette.wood);
+    pixel(ctx, originX + 13, 7 + baseY, palette.gold);
   } else if (role === 'bandit') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
@@ -302,6 +327,65 @@ function drawStairs(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawField(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 28;
+  const tex = createCanvas(scene, PROP_KEYS.field, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 2, 10, 36, 16, palette.dirt);
+  for (let i = 0; i < 6; i++) {
+    fillRect(ctx, 4 + i * 6, 8, 3, 14, palette.wheat);
+    fillRect(ctx, 4 + i * 6, 6, 3, 3, palette.wheatDark);
+  }
+  tex.refresh();
+}
+
+function drawGranary(scene: Phaser.Scene) {
+  const w = 36;
+  const h = 36;
+  const tex = createCanvas(scene, PROP_KEYS.granary, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 12, 24, 20, palette.wood);
+  fillRect(ctx, 6, 12, 24, 1, palette.ink);
+  for (let row = 0; row < 6; row++) {
+    fillRect(ctx, 8 + row, 6 + row, 20 - row * 2, 1, palette.roof);
+  }
+  fillRect(ctx, 14, 22, 8, 10, palette.woodDark);
+  fillRect(ctx, 22, 16, 6, 6, palette.wheat);
+  tex.refresh();
+}
+
+function drawBarracks(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 32;
+  const tex = createCanvas(scene, PROP_KEYS.barracks, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 10, 32, 20, palette.stone);
+  fillRect(ctx, 4, 10, 32, 1, palette.ink);
+  fillRect(ctx, 16, 20, 8, 10, palette.woodDark);
+  fillRect(ctx, 8, 14, 4, 4, palette.cream);
+  fillRect(ctx, 28, 14, 4, 4, palette.cream);
+  fillRect(ctx, 30, 6, 2, 8, palette.metal);
+  tex.refresh();
+}
+
+function drawManor(scene: Phaser.Scene) {
+  const w = 40;
+  const h = 36;
+  const tex = createCanvas(scene, PROP_KEYS.manor, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 14, 32, 18, palette.stone);
+  fillRect(ctx, 4, 14, 32, 1, palette.ink);
+  for (let row = 0; row < 8; row++) {
+    fillRect(ctx, 4 + row, 6 + row, 32 - row * 2, 1, palette.roof);
+  }
+  fillRect(ctx, 16, 22, 8, 10, palette.woodDark);
+  fillRect(ctx, 8, 18, 4, 4, palette.cream);
+  fillRect(ctx, 28, 18, 4, 4, palette.cream);
+  fillRect(ctx, 18, 8, 4, 4, palette.gold);
+  tex.refresh();
+}
+
 /**
  * Generate all Phase 1 textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
@@ -318,6 +402,10 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.drawbridge,
     PROP_KEYS.drawbridgeClosed,
     PROP_KEYS.stairs,
+    PROP_KEYS.field,
+    PROP_KEYS.granary,
+    PROP_KEYS.barracks,
+    PROP_KEYS.manor,
   ]) {
     if (scene.textures.exists(key)) {
       scene.textures.remove(key);
@@ -337,6 +425,10 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawTavern(scene);
   drawDrawbridge(scene);
   drawStairs(scene);
+  drawField(scene);
+  drawGranary(scene);
+  drawBarracks(scene);
+  drawManor(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
   for (let i = 0; i < 4; i++) {

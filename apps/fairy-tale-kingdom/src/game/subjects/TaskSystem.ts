@@ -1,34 +1,85 @@
 import Phaser from 'phaser';
 import { KEEP_ID, type BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance } from '../combat/stats';
+import { EconomyBalance } from '../economy/economy';
+import type { HungerSystem } from '../economy/HungerSystem';
 import type { SubjectSystem } from './SubjectSystem';
 
 /**
- * Peacetime interrupts: peasant repair + street chat.
+ * Peacetime interrupts: harvest, peasant repair + street chat.
  * Flee / combat stay in SubjectSystem + CombatSystem (higher priority).
  */
 export class TaskSystem {
   private repairAccumMs = 0;
+  private harvestAccumMs = 0;
   private chatRollAccumMs = 0;
+  private hunger: HungerSystem | null = null;
+  private inspired = false;
 
   constructor(
     private readonly subjects: SubjectSystem,
     private readonly buildings: BuildingSystem
   ) {}
 
+  setHunger(hunger: HungerSystem): void {
+    this.hunger = hunger;
+  }
+
+  setInspired(active: boolean): void {
+    this.inspired = active;
+  }
+
   update(deltaMs: number, raidActive: boolean): void {
     if (raidActive) {
-      this.subjects.cancelInterrupts(['repair', 'chat']);
+      this.subjects.cancelInterrupts(['repair', 'chat', 'harvest']);
       this.repairAccumMs = 0;
+      this.harvestAccumMs = 0;
       this.chatRollAccumMs = 0;
       return;
     }
 
     this.subjects.clearFleeInterrupts();
+    this.assignHarvest();
     this.assignRepairs();
+    this.tickHarvest(deltaMs);
     this.tickRepairs(deltaMs);
     this.tickChats(deltaMs);
     this.maybeStartChat(deltaMs);
+  }
+
+  private foodLow(): boolean {
+    if (!this.hunger) return false;
+    const food = this.hunger.currentFood();
+    const pop = Math.max(1, this.subjects.count());
+    return food < pop * EconomyBalance.lowFoodMult;
+  }
+
+  private assignHarvest(): void {
+    if (!this.foodLow() && this.buildings.fieldCount() === 0) return;
+    if (this.buildings.fieldCount() === 0) return;
+
+    // Also harvest during normal field work when food not critical — assign if low food
+    if (!this.foodLow()) return;
+
+    const claimed = new Set(
+      this.subjects
+        .listInterrupts('harvest')
+        .map((i) => i.targetId)
+        .filter(Boolean) as string[]
+    );
+
+    for (const managed of this.subjects.listManaged()) {
+      if (managed.data.role !== 'peasant') continue;
+      if (managed.interrupt || managed.data.sick || managed.data.onWall) continue;
+      const field = this.buildings.nearestField(
+        managed.sprite.x,
+        managed.sprite.y
+      );
+      if (!field) break;
+      if (claimed.has(field.id)) continue;
+      this.subjects.beginHarvest(managed.data.id, field.id);
+      claimed.add(field.id);
+    }
   }
 
   private assignRepairs(): void {
@@ -48,6 +99,65 @@ export class TaskSystem {
       if (!peasant) break;
       this.subjects.beginRepair(peasant, target.id, target.label);
       claimed.add(target.id);
+    }
+  }
+
+  private tickHarvest(deltaMs: number): void {
+    this.harvestAccumMs += deltaMs;
+    if (this.harvestAccumMs < EconomyBalance.harvestTickMs) return;
+    this.harvestAccumMs = 0;
+
+    let mult = 1;
+    if (this.buildings.hasGranary()) mult *= EconomyBalance.granaryHarvestMult;
+    if (this.inspired) mult *= EconomyBalance.waveHarvestMult;
+
+    for (const managed of this.subjects.withInterrupt('harvest')) {
+      const fieldId = managed.interrupt?.targetId;
+      if (!fieldId) continue;
+      const field = this.buildings.getById(fieldId);
+      if (!field || field.kind !== 'field') {
+        this.subjects.clearInterrupt(managed.data.id);
+        continue;
+      }
+
+      managed.data.activity = 'harvest';
+      managed.data.activityLabel = 'Harvesting the fields';
+
+      const dist = Phaser.Math.Distance.Between(
+        managed.sprite.x,
+        managed.sprite.y,
+        field.x,
+        field.y
+      );
+      if (dist > EconomyBalance.harvestRange) {
+        this.subjects.nudgeToward(managed.data.id, field.x, field.y, 45);
+        continue;
+      }
+
+      const amount = Math.max(1, Math.round(EconomyBalance.foodPerHarvestTick * mult));
+      this.hunger?.addFood(amount);
+
+      // Passive schedule peasants near fields also produce when not interrupted
+    }
+
+    // Passive harvest: peasants on field work near a field
+    for (const managed of this.subjects.listManaged()) {
+      if (managed.data.role !== 'peasant' || managed.data.sick) continue;
+      if (managed.interrupt) continue;
+      if (managed.data.zone !== 'field' && managed.data.activity !== 'work') {
+        continue;
+      }
+      const field = this.buildings.nearestField(
+        managed.sprite.x,
+        managed.sprite.y,
+        EconomyBalance.harvestRange
+      );
+      if (!field) continue;
+      const amount = Math.max(
+        1,
+        Math.round(EconomyBalance.foodPerHarvestTick * mult * 0.5)
+      );
+      this.hunger?.addFood(amount);
     }
   }
 
@@ -71,20 +181,18 @@ export class TaskSystem {
         continue;
       }
 
-      const x = pos.x;
-      const y = pos.y;
       const dist = Phaser.Math.Distance.Between(
         managed.sprite.x,
         managed.sprite.y,
-        x,
-        y
+        pos.x,
+        pos.y
       );
 
       managed.data.activity = 'repair';
       managed.data.activityLabel = `Repairing ${label}`;
 
       if (dist > CombatBalance.repairRange) {
-        this.subjects.nudgeToward(managed.data.id, x, y, 45);
+        this.subjects.nudgeToward(managed.data.id, pos.x, pos.y, 45);
         continue;
       }
 

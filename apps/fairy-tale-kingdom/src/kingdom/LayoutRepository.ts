@@ -24,6 +24,8 @@ export interface SavedSubject {
   hp: number;
   maxHp: number;
   onWall?: boolean;
+  hunger?: number;
+  sick?: boolean;
 }
 
 export interface LayoutSave {
@@ -31,6 +33,8 @@ export interface LayoutSave {
   buildings: SavedBuilding[];
   keepHp?: number;
   keepMaxHp?: number;
+  princeSpawnMs?: number;
+  fgmCooldownMs?: number;
 }
 
 export class LayoutRepository {
@@ -93,5 +97,7 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
     hp,
     maxHp,
     onWall: Boolean(s.onWall),
+    hunger: typeof s.hunger === 'number' ? s.hunger : 0,
+    sick: Boolean(s.sick),
   };
 }

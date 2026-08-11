@@ -5,11 +5,14 @@ import type { UnitRole } from './art/assetManifest';
 import { createGame } from './createGame';
 import {
   KingdomEvents,
+  type CaptivesChangedPayload,
+  type FoodChangedPayload,
   type GameOverPayload,
   type GoldStolenPayload,
   type MarketToastPayload,
   type PlaceModePayload,
   type RaidWarningPayload,
+  type RoyalCapturedPayload,
 } from './subjects/events';
 import type {
   BuildingSnapshot,
@@ -23,6 +26,8 @@ interface PhaserGameProps {
   hireRequest: { seq: number; role: UnitRole } | null;
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
+  ransomRequest: { seq: number; id: string } | null;
+  transformRequest: { seq: number; fgmId: string } | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onDayTick: (day: DaySnapshot) => void;
@@ -33,6 +38,9 @@ interface PhaserGameProps {
   onKingdomStats: (stats: KingdomStats) => void;
   onPlaceMode: (mode: PlaceModePayload) => void;
   onMarketToast: (message: string) => void;
+  onFoodChanged: (food: number) => void;
+  onRoyalCaptured: (payload: RoyalCapturedPayload) => void;
+  onCaptivesChanged: (count: number) => void;
   deselectToken: number;
 }
 
@@ -41,6 +49,8 @@ export function PhaserGame({
   hireRequest,
   placeRequest,
   cancelPlaceToken,
+  ransomRequest,
+  transformRequest,
   onSubjectSelected,
   onBuildingSelected,
   onDayTick,
@@ -51,6 +61,9 @@ export function PhaserGame({
   onKingdomStats,
   onPlaceMode,
   onMarketToast,
+  onFoodChanged,
+  onRoyalCaptured,
+  onCaptivesChanged,
   deselectToken,
 }: PhaserGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -65,6 +78,9 @@ export function PhaserGame({
   const onStatsRef = useRef(onKingdomStats);
   const onPlaceRef = useRef(onPlaceMode);
   const onToastRef = useRef(onMarketToast);
+  const onFoodRef = useRef(onFoodChanged);
+  const onCaptureRef = useRef(onRoyalCaptured);
+  const onCaptivesRef = useRef(onCaptivesChanged);
 
   onSelectRef.current = onSubjectSelected;
   onBuildingRef.current = onBuildingSelected;
@@ -76,6 +92,9 @@ export function PhaserGame({
   onStatsRef.current = onKingdomStats;
   onPlaceRef.current = onPlaceMode;
   onToastRef.current = onMarketToast;
+  onFoodRef.current = onFoodChanged;
+  onCaptureRef.current = onRoyalCaptured;
+  onCaptivesRef.current = onCaptivesChanged;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -119,6 +138,15 @@ export function PhaserGame({
     const handleToast = (payload: MarketToastPayload) => {
       onToastRef.current(payload.message);
     };
+    const handleFood = (payload: FoodChangedPayload) => {
+      onFoodRef.current(payload.food);
+    };
+    const handleCapture = (payload: RoyalCapturedPayload) => {
+      onCaptureRef.current(payload);
+    };
+    const handleCaptives = (payload: CaptivesChangedPayload) => {
+      onCaptivesRef.current(payload.count);
+    };
 
     game.events.on(KingdomEvents.SUBJECT_SELECTED, handleSelect);
     game.events.on(KingdomEvents.BUILDING_SELECTED, handleBuilding);
@@ -130,6 +158,9 @@ export function PhaserGame({
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
     game.events.on(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
     game.events.on(KingdomEvents.MARKET_TOAST, handleToast);
+    game.events.on(KingdomEvents.FOOD_CHANGED, handleFood);
+    game.events.on(KingdomEvents.ROYAL_CAPTURED, handleCapture);
+    game.events.on(KingdomEvents.CAPTIVES_CHANGED, handleCaptives);
 
     return () => {
       game.events.off(KingdomEvents.SUBJECT_SELECTED, handleSelect);
@@ -142,6 +173,9 @@ export function PhaserGame({
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
       game.events.off(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
       game.events.off(KingdomEvents.MARKET_TOAST, handleToast);
+      game.events.off(KingdomEvents.FOOD_CHANGED, handleFood);
+      game.events.off(KingdomEvents.ROYAL_CAPTURED, handleCapture);
+      game.events.off(KingdomEvents.CAPTIVES_CHANGED, handleCaptives);
       game.destroy(true);
       gameRef.current = null;
     };
@@ -170,6 +204,20 @@ export function PhaserGame({
     if (cancelPlaceToken === 0) return;
     gameRef.current?.events.emit(KingdomEvents.CANCEL_PLACE);
   }, [cancelPlaceToken]);
+
+  useEffect(() => {
+    if (!ransomRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.PAY_RANSOM, {
+      id: ransomRequest.id,
+    });
+  }, [ransomRequest]);
+
+  useEffect(() => {
+    if (!transformRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.TRANSFORM_PEASANT, {
+      fgmId: transformRequest.fgmId,
+    });
+  }, [transformRequest]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

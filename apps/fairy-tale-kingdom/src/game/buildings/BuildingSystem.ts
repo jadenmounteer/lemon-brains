@@ -6,10 +6,12 @@ import {
   BUILD_CATALOG,
   type BuildKind,
 } from '../../marketplace/catalog';
+import { BEDS_PER_MANOR } from '../economy/economy';
 import {
   BUILDING_MAX_HP,
   isBlockingKind,
   isBurnable,
+  isDwelling,
 } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
 import type {
@@ -50,6 +52,10 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   tavern: { w: 36, h: 30 },
   drawbridge: { w: 32, h: 22 },
   stairs: { w: 20, h: 26 },
+  field: { w: 40, h: 26 },
+  granary: { w: 36, h: 34 },
+  barracks: { w: 40, h: 30 },
+  manor: { w: 40, h: 34 },
   keep: { w: 48, h: 44 },
 };
 
@@ -183,44 +189,82 @@ export class BuildingSystem {
     return this.buildings.filter((b) => b.kind === 'tavern').length;
   }
 
+  fieldCount(): number {
+    return this.buildings.filter((b) => b.kind === 'field').length;
+  }
+
   bedCapacity(): number {
-    return this.houseCount() * BEDS_PER_HOUSE;
+    let caps = 0;
+    for (const b of this.buildings) {
+      if (b.kind === 'house') caps += BEDS_PER_HOUSE;
+      if (b.kind === 'manor') caps += BEDS_PER_MANOR;
+    }
+    return caps;
+  }
+
+  bedsFor(kind: BuildKind): number {
+    if (kind === 'house') return BEDS_PER_HOUSE;
+    if (kind === 'manor') return BEDS_PER_MANOR;
+    return 0;
   }
 
   hasTavern(): boolean {
     return this.tavernCount() > 0;
   }
 
+  hasGranary(): boolean {
+    return this.buildings.some((b) => b.kind === 'granary');
+  }
+
+  hasBarracks(): boolean {
+    return this.buildings.some((b) => b.kind === 'barracks');
+  }
+
   getHousePoint(houseId: string): Point | null {
     const house = this.buildings.find(
-      (b) => b.kind === 'house' && b.id === houseId
+      (b) => isDwelling(b.kind) && b.id === houseId
     );
     return house ? { x: house.x, y: house.y } : null;
   }
 
   houseLabel(houseId: string): string {
     const house = this.buildings.find(
-      (b) => b.kind === 'house' && b.id === houseId
+      (b) => isDwelling(b.kind) && b.id === houseId
     );
-    if (!house) return 'Unknown house';
+    if (!house) return 'Unknown home';
+    if (house.kind === 'manor') return `Manor ${house.labelIndex}`;
     return `House ${house.labelIndex}`;
   }
 
   pickHouseForHire(occupantCounts: Map<string, number>): string | null {
-    const houses = this.buildings
-      .filter((b) => b.kind === 'house')
+    const dwellings = this.buildings
+      .filter((b) => isDwelling(b.kind))
       .sort((a, b) => a.id.localeCompare(b.id));
     let best: BuildingRecord | null = null;
     let bestFree = -1;
-    for (const h of houses) {
+    for (const h of dwellings) {
       const used = occupantCounts.get(h.id) ?? 0;
-      const free = BEDS_PER_HOUSE - used;
+      const free = this.bedsFor(h.kind) - used;
       if (free > bestFree) {
         bestFree = free;
         best = h;
       }
     }
     return best && bestFree > 0 ? best.id : null;
+  }
+
+  nearestField(x: number, y: number, radius = Infinity): BuildingRecord | null {
+    let best: BuildingRecord | null = null;
+    let bestD = radius;
+    for (const b of this.buildings) {
+      if (b.kind !== 'field') continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
   }
 
   list(): BuildingRecord[] {
@@ -486,6 +530,7 @@ export class BuildingSystem {
 
   private displayName(b: BuildingRecord): string {
     if (b.kind === 'house') return `House ${b.labelIndex}`;
+    if (b.kind === 'manor') return `Manor ${b.labelIndex}`;
     return BUILD_CATALOG.find((c) => c.kind === b.kind)?.name ?? b.kind;
   }
 
@@ -516,13 +561,17 @@ export class BuildingSystem {
     this.removeRecord(b);
     this.rebuildPathGrid();
     if (burned) {
+      const messages: Partial<Record<BuildKind, string>> = {
+        house: 'A house burned down!',
+        manor: 'A manor burned down!',
+        tavern: 'The tavern burned!',
+        stairs: 'Stairs collapsed!',
+        field: 'A field burned!',
+        granary: 'The granary burned!',
+        barracks: 'The barracks burned!',
+      };
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message:
-          b.kind === 'house'
-            ? 'A house burned down!'
-            : b.kind === 'tavern'
-              ? 'The tavern burned!'
-              : 'Stairs collapsed!',
+        message: messages[b.kind] ?? 'A building was destroyed!',
       });
     }
     this.onLayoutChanged?.();
@@ -554,8 +603,7 @@ export class BuildingSystem {
     const b = this.getById(id);
     if (!b) return null;
     const catalog = BUILD_CATALOG.find((c) => c.kind === b.kind);
-    const name =
-      b.kind === 'house' ? `House ${b.labelIndex}` : (catalog?.name ?? b.kind);
+    const name = this.displayName(b);
     const snap: BuildingSnapshot = {
       id: b.id,
       kind: b.kind,
@@ -570,8 +618,8 @@ export class BuildingSystem {
     if (b.kind === 'stairs' && b.attachedWallId) {
       snap.statusLabel = 'Attached to a wall';
     }
-    if (b.kind === 'house') {
-      snap.bedsCapacity = BEDS_PER_HOUSE;
+    if (isDwelling(b.kind)) {
+      snap.bedsCapacity = this.bedsFor(b.kind);
       snap.bedsUsed = residents.length;
       snap.residents = residents;
     }
@@ -665,6 +713,12 @@ export class BuildingSystem {
     houses.forEach((h, i) => {
       h.labelIndex = i + 1;
     });
+    const manors = this.buildings
+      .filter((b) => b.kind === 'manor')
+      .sort((a, b) => a.id.localeCompare(b.id));
+    manors.forEach((h, i) => {
+      h.labelIndex = i + 1;
+    });
   }
 
   private findWallSnap(
@@ -728,6 +782,14 @@ function textureFor(kind: BuildKind, closed: boolean): string {
       return closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge;
     case 'stairs':
       return PROP_KEYS.stairs;
+    case 'field':
+      return PROP_KEYS.field;
+    case 'granary':
+      return PROP_KEYS.granary;
+    case 'barracks':
+      return PROP_KEYS.barracks;
+    case 'manor':
+      return PROP_KEYS.manor;
   }
 }
 
