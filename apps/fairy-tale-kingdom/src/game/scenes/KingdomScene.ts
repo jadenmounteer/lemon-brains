@@ -433,13 +433,13 @@ export class KingdomScene extends Phaser.Scene {
     );
 
     this.input.keyboard?.on('keydown-PLUS', () => {
-      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, ZOOM_KEY_FACTOR);
+      this.applyZoomAt(this.cameras.main.width / 2, this.cameras.main.height / 2, ZOOM_KEY_FACTOR);
     });
     this.input.keyboard?.on('keydown-EQUALS', () => {
-      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, ZOOM_KEY_FACTOR);
+      this.applyZoomAt(this.cameras.main.width / 2, this.cameras.main.height / 2, ZOOM_KEY_FACTOR);
     });
     this.input.keyboard?.on('keydown-MINUS', () => {
-      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, 1 / ZOOM_KEY_FACTOR);
+      this.applyZoomAt(this.cameras.main.width / 2, this.cameras.main.height / 2, 1 / ZOOM_KEY_FACTOR);
     });
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -1190,14 +1190,18 @@ export class KingdomScene extends Phaser.Scene {
       this.followSubjectId = null;
       cam.stopFollow();
     }
-    const before = cam.getWorldPoint(screenX, screenY);
     const clamped = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
-    const next = Phaser.Math.Clamp(cam.zoom * clamped, ZOOM_MIN, ZOOM_MAX);
-    if (Math.abs(next - cam.zoom) < 0.0005) return;
-    cam.setZoom(next);
-    const after = cam.getWorldPoint(screenX, screenY);
-    cam.scrollX += before.x - after.x;
-    cam.scrollY += before.y - after.y;
+    const prevZoom = cam.zoom;
+    const nextZoom = Phaser.Math.Clamp(prevZoom * clamped, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(nextZoom - prevZoom) < 0.0005) return;
+
+    // Keep the world point under the cursor fixed. Phaser world = scroll + screen/zoom
+    // (zoom is around the view center, which cancels out algebraically).
+    const worldX = cam.scrollX + screenX / prevZoom;
+    const worldY = cam.scrollY + screenY / prevZoom;
+    cam.setZoom(nextZoom);
+    cam.scrollX = worldX - screenX / nextZoom;
+    cam.scrollY = worldY - screenY / nextZoom;
   }
 
   private publishSelection(

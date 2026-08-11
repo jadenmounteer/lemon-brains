@@ -192,8 +192,13 @@ export default function App() {
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
-  const todosVisible =
-    showCareerTodos && (stats.careerTodos?.length ?? 0) > 0;
+  const careerTodoCount = stats.careerTodos?.length ?? 0;
+  const todosVisible = showCareerTodos && careerTodoCount > 0;
+
+  const setCareerTodosVisible = useCallback((on: boolean) => {
+    setShowCareerTodos(on);
+    saveShowCareerTodos(on);
+  }, []);
 
   const showSide =
     showQuestions ||
@@ -483,6 +488,17 @@ export default function App() {
               <button type="button" onClick={() => setShowMarket((v) => !v)}>
                 {showMarket ? 'Hide market' : 'Marketplace'}
               </button>
+              {careerTodoCount > 0 && (
+                <button
+                  type="button"
+                  aria-pressed={showCareerTodos}
+                  onClick={() => setCareerTodosVisible(!showCareerTodos)}
+                >
+                  {showCareerTodos
+                    ? 'Hide wishes'
+                    : `Wishes (${careerTodoCount})`}
+                </button>
+              )}
               {(captives.length > 0 || showRansom) && (
                 <button type="button" onClick={() => setShowRansom((v) => !v)}>
                   {showRansom
@@ -511,10 +527,7 @@ export default function App() {
               infiniteGold={infiniteGold}
               onToggleInfiniteGold={setCheatInfiniteGold}
               showCareerTodos={showCareerTodos}
-              onToggleShowCareerTodos={(on) => {
-                setShowCareerTodos(on);
-                saveShowCareerTodos(on);
-              }}
+              onToggleShowCareerTodos={setCareerTodosVisible}
               sandboxSettings={sandboxSettings}
               onSandboxSettingsChange={updateSandboxSettings}
               onSandboxSettingsReset={resetSandboxSettings}
@@ -620,6 +633,7 @@ export default function App() {
                 onHire={(todo) => {
                   void handleCareerHire(todo);
                 }}
+                onHide={() => setCareerTodosVisible(false)}
               />
             )}
             {selected && (

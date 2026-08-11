@@ -7,7 +7,7 @@ export type CampKindEnable = Record<CampKind, boolean>;
 export type MonsterKindEnable = Record<MonsterKind, boolean>;
 
 export interface SandboxSettings {
-  version: 2;
+  version: 1 | 2;
   war: {
     /** 0–2 overall war intensity (1 = default). */
     intensity: number;
@@ -100,10 +100,20 @@ export function normalizeSandboxSettings(
   raw: Partial<SandboxSettings> | null | undefined
 ): SandboxSettings {
   const d = DEFAULT_SANDBOX_SETTINGS;
-  if (!raw || raw.version !== 1) return structuredClone(d);
+  if (!raw || (raw.version !== 1 && raw.version !== 2)) {
+    return structuredClone(d);
+  }
+
+  // v1 → v2: adopt calmer sickness defaults when the player still had stock values
+  let hungerRise = raw.sickness?.hungerRise ?? d.sickness.hungerRise;
+  let sickAtHunger = raw.sickness?.sickAtHunger ?? d.sickness.sickAtHunger;
+  if (raw.version === 1) {
+    if (hungerRise === 1) hungerRise = d.sickness.hungerRise;
+    if (sickAtHunger === 75) sickAtHunger = d.sickness.sickAtHunger;
+  }
 
   return {
-    version: 1,
+    version: 2,
     war: {
       intensity: clampMult(raw.war?.intensity ?? d.war.intensity),
       campSpawnRate: clampMult(raw.war?.campSpawnRate ?? d.war.campSpawnRate),
@@ -129,12 +139,8 @@ export function normalizeSandboxSettings(
       },
     },
     sickness: {
-      hungerRise: clampMult(raw.sickness?.hungerRise ?? d.sickness.hungerRise),
-      sickAtHunger: clamp(
-        Math.round(raw.sickness?.sickAtHunger ?? d.sickness.sickAtHunger),
-        40,
-        100
-      ),
+      hungerRise: clampMult(hungerRise),
+      sickAtHunger: clamp(Math.round(sickAtHunger), 40, 100),
       witchCurse: clampMult(raw.sickness?.witchCurse ?? d.sickness.witchCurse),
     },
     undead: {
