@@ -5,7 +5,10 @@ import {
   type Direction,
   type EnemyRole,
 } from '../art/assetManifest';
-import type { BuildingSystem } from '../buildings/BuildingSystem';
+import type { BuildingRecord, BuildingSystem } from '../buildings/BuildingSystem';
+import { CombatBalance, RAIDER_MAX_HP } from '../combat/stats';
+import type { PathGrid } from '../path/PathGrid';
+import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
 
 export interface KeepPoint {
@@ -15,10 +18,20 @@ export interface KeepPoint {
 
 type RaidKind = EnemyRole;
 
-interface ActiveRaider {
+type RaiderState = 'pathing' | 'fighting' | 'breaching' | 'burning' | 'done';
+
+export interface ActiveRaider {
   kind: RaidKind;
   sprite: Phaser.GameObjects.Sprite;
-  tween?: Phaser.Tweens.Tween;
+  hp: number;
+  maxHp: number;
+  path: { x: number; y: number }[];
+  pathIndex: number;
+  state: RaiderState;
+  targetSubjectId: string | null;
+  targetBuildingId: string | null;
+  thinkAccumMs: number;
+  camp?: Phaser.GameObjects.Arc;
 }
 
 const STEAL_AMOUNTS: Record<Exclude<RaidKind, 'enemy_army'>, number> = {
@@ -35,6 +48,11 @@ const LABELS: Record<RaidKind, string> = {
 const GRACE_MS = 40_000;
 const RAID_INTERVAL_MS = 55_000;
 const KEEP_REACH_PX = 28;
+const MOVE_SPEED: Record<RaidKind, number> = {
+  bandit: 42,
+  giant: 28,
+  enemy_army: 36,
+};
 
 export class RaidSystem {
   private raiders: ActiveRaider[] = [];
@@ -43,6 +61,9 @@ export class RaidSystem {
   private gameOver = false;
   private raidCount = 0;
   private buildings: BuildingSystem | null = null;
+  private subjects: SubjectSystem | null = null;
+  private pathGrid: PathGrid | null = null;
+  private onChanged: (() => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -54,8 +75,55 @@ export class RaidSystem {
     this.buildings = buildings;
   }
 
+  setSubjects(subjects: SubjectSystem): void {
+    this.subjects = subjects;
+  }
+
+  setPathGrid(grid: PathGrid): void {
+    this.pathGrid = grid;
+  }
+
+  setOnChanged(cb: () => void): void {
+    this.onChanged = cb;
+  }
+
   get isGameOver(): boolean {
     return this.gameOver;
+  }
+
+  hasActiveRaiders(): boolean {
+    return this.raiders.some((r) => r.state !== 'done' && r.sprite.active);
+  }
+
+  nearestRaider(
+    x: number,
+    y: number,
+    radius: number
+  ): ActiveRaider | null {
+    let best: ActiveRaider | null = null;
+    let bestD = radius;
+    for (const r of this.raiders) {
+      if (!r.sprite.active || r.state === 'done') continue;
+      const d = Phaser.Math.Distance.Between(x, y, r.sprite.x, r.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = r;
+      }
+    }
+    return best;
+  }
+
+  damageRaider(raider: ActiveRaider, amount: number): boolean {
+    if (!raider.sprite.active || raider.state === 'done') return false;
+    const mult = raider.kind === 'giant' ? 1 : 1;
+    raider.hp = Math.max(0, raider.hp - amount * mult);
+    const ratio = raider.hp / raider.maxHp;
+    if (ratio <= 0.35) raider.sprite.setTint(0xff6666);
+    if (raider.hp <= 0) {
+      this.killRaider(raider);
+      return true;
+    }
+    return false;
   }
 
   update(deltaMs: number): void {
@@ -66,11 +134,16 @@ export class RaidSystem {
       this.nextRaidAt = this.elapsedMs + RAID_INTERVAL_MS;
       this.spawnRaid();
     }
+
+    for (const raider of [...this.raiders]) {
+      if (!raider.sprite.active || raider.state === 'done') continue;
+      this.tickRaider(raider, deltaMs);
+    }
   }
 
   clear(): void {
     for (const r of this.raiders) {
-      r.tween?.stop();
+      r.camp?.destroy();
       r.sprite.destroy();
     }
     this.raiders = [];
@@ -95,11 +168,18 @@ export class RaidSystem {
       label: LABELS[kind],
     });
 
+    this.buildings?.setRaidActive(true);
+
     const edge = this.randomEdgeSpawn();
+    const camp = this.scene.add
+      .circle(edge.x, edge.y, 10, 0x6b3e2e, 0.55)
+      .setStrokeStyle(1, 0x1c241c)
+      .setDepth(5);
+
     for (let i = 0; i < count; i++) {
       const ox = edge.x + Phaser.Math.Between(-20, 20);
       const oy = edge.y + Phaser.Math.Between(-20, 20);
-      this.launchRaider(kind, ox, oy, i * 180);
+      this.launchRaider(kind, ox, oy, i === 0 ? camp : undefined);
     }
   }
 
@@ -107,7 +187,7 @@ export class RaidSystem {
     kind: RaidKind,
     x: number,
     y: number,
-    delayMs: number
+    camp?: Phaser.GameObjects.Arc
   ): void {
     const sprite = this.scene.add.sprite(x, y, kind, 0);
     sprite.setDepth(25);
@@ -117,66 +197,256 @@ export class RaidSystem {
     }
     sprite.play(idleAnimKey(kind));
 
-    const raider: ActiveRaider = { kind, sprite };
+    const maxHp = RAIDER_MAX_HP[kind];
+    const raider: ActiveRaider = {
+      kind,
+      sprite,
+      hp: maxHp,
+      maxHp,
+      path: [],
+      pathIndex: 0,
+      state: 'pathing',
+      targetSubjectId: null,
+      targetBuildingId: null,
+      thinkAccumMs: 0,
+      camp,
+    };
     this.raiders.push(raider);
-
-    this.scene.time.delayedCall(delayMs, () => {
-      if (this.gameOver || !sprite.active) return;
-      this.marchToKeep(raider);
-    });
+    this.repath(raider);
   }
 
-  private marchToKeep(raider: ActiveRaider): void {
-    const { sprite, kind } = raider;
-    if (!sprite.active) return;
+  private tickRaider(raider: ActiveRaider, deltaMs: number): void {
+    raider.thinkAccumMs += deltaMs;
+    const think = raider.thinkAccumMs >= CombatBalance.tickMs;
+    if (think) raider.thinkAccumMs = 0;
 
-    const dx = this.keep.x - sprite.x;
-    const dy = this.keep.y - sprite.y;
+    if (
+      Phaser.Math.Distance.Between(
+        raider.sprite.x,
+        raider.sprite.y,
+        this.keep.x,
+        this.keep.y
+      ) < KEEP_REACH_PX
+    ) {
+      this.onReachedKeep(raider);
+      return;
+    }
+
+    if (think) {
+      const unit = this.subjects?.nearestSubject(
+        raider.sprite.x,
+        raider.sprite.y,
+        CombatBalance.pillageRadius
+      );
+      if (unit) {
+        raider.state = 'fighting';
+        raider.targetSubjectId = unit.data.id;
+        raider.targetBuildingId = null;
+      } else {
+        const burn = this.buildings?.burnablesNear(
+          raider.sprite.x,
+          raider.sprite.y,
+          CombatBalance.pillageRadius
+        );
+        if (burn) {
+          raider.state = 'burning';
+          raider.targetBuildingId = burn.id;
+          raider.targetSubjectId = null;
+        } else if (raider.state === 'fighting' || raider.state === 'burning') {
+          raider.state = 'pathing';
+          raider.targetSubjectId = null;
+          raider.targetBuildingId = null;
+          this.repath(raider);
+        }
+      }
+    }
+
+    if (raider.state === 'fighting' && raider.targetSubjectId && think) {
+      const target = this.subjects?.getById(raider.targetSubjectId);
+      if (!target) {
+        raider.state = 'pathing';
+        raider.targetSubjectId = null;
+        this.repath(raider);
+      } else {
+        const dist = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          target.sprite.x,
+          target.sprite.y
+        );
+        if (dist > CombatBalance.guardRange + 8) {
+          this.stepToward(raider, target.sprite.x, target.sprite.y, deltaMs);
+        } else {
+          this.faceToward(raider, target.sprite.x, target.sprite.y);
+          raider.sprite.play(idleAnimKey(raider.kind), true);
+          let dmg = CombatBalance.raiderMelee;
+          if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
+          this.subjects?.damageSubject(target.data.id, dmg);
+        }
+        return;
+      }
+    }
+
+    if (raider.state === 'burning' && raider.targetBuildingId && think) {
+      const b = this.buildings?.getById(raider.targetBuildingId);
+      if (!b) {
+        raider.state = 'pathing';
+        raider.targetBuildingId = null;
+        this.repath(raider);
+      } else {
+        const dist = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          b.x,
+          b.y
+        );
+        if (dist > 36) {
+          this.stepToward(raider, b.x, b.y, deltaMs);
+        } else {
+          this.faceToward(raider, b.x, b.y);
+          raider.sprite.play(idleAnimKey(raider.kind), true);
+          b.sprite.setTint(0xff5522);
+          let dmg = CombatBalance.raiderBurn;
+          if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
+          const destroyed = this.buildings?.damageBuilding(b.id, dmg);
+          if (destroyed && b.kind === 'house') {
+            this.subjects?.onHouseDestroyed(b.id);
+          }
+          if (destroyed && b.kind === 'wall') {
+            this.subjects?.dropFromWall(b.id);
+          }
+        }
+        return;
+      }
+    }
+
+    // Path / breach
+    if (!raider.path.length || raider.pathIndex >= raider.path.length) {
+      this.repath(raider);
+    }
+
+    if (!raider.path.length) {
+      // Completely blocked — breach nearest wall/bridge ahead
+      const blocker = this.buildings?.findBlockingAhead(
+        raider.sprite.x,
+        raider.sprite.y,
+        this.keep.x,
+        this.keep.y
+      );
+      if (blocker && think) {
+        raider.state = 'breaching';
+        this.breach(raider, blocker);
+      } else {
+        this.stepToward(raider, this.keep.x, this.keep.y + 20, deltaMs);
+      }
+      return;
+    }
+
+    const waypoint = raider.path[raider.pathIndex]!;
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      waypoint.x,
+      waypoint.y
+    );
+    if (dist < 10) {
+      raider.pathIndex += 1;
+      return;
+    }
+
+    // If next step is into a blocker (grid stale), breach
+    const blocker = this.buildings?.findBlockingAhead(
+      raider.sprite.x,
+      raider.sprite.y,
+      waypoint.x,
+      waypoint.y
+    );
+    if (blocker && dist < 40) {
+      if (think) {
+        raider.state = 'breaching';
+        this.breach(raider, blocker);
+      }
+      return;
+    }
+
+    raider.state = 'pathing';
+    this.stepToward(raider, waypoint.x, waypoint.y, deltaMs);
+  }
+
+  private breach(raider: ActiveRaider, building: BuildingRecord): void {
+    this.faceToward(raider, building.x, building.y);
+    raider.sprite.play(idleAnimKey(raider.kind), true);
+    let dmg = CombatBalance.raiderBreach;
+    if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
+    const destroyed = this.buildings?.damageBuilding(building.id, dmg);
+    if (destroyed) {
+      if (building.kind === 'wall') {
+        this.subjects?.dropFromWall(building.id);
+      }
+      this.repath(raider);
+      raider.state = 'pathing';
+    }
+  }
+
+  private repath(raider: ActiveRaider): void {
+    if (!this.pathGrid) {
+      raider.path = [{ x: this.keep.x, y: this.keep.y + 20 }];
+      raider.pathIndex = 0;
+      return;
+    }
+    const path = this.pathGrid.findPath(
+      { x: raider.sprite.x, y: raider.sprite.y },
+      { x: this.keep.x, y: this.keep.y + 20 }
+    );
+    raider.path = path ?? [];
+    raider.pathIndex = 0;
+  }
+
+  private stepToward(
+    raider: ActiveRaider,
+    tx: number,
+    ty: number,
+    deltaMs: number
+  ): void {
+    const dx = tx - raider.sprite.x;
+    const dy = ty - raider.sprite.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = MOVE_SPEED[raider.kind];
+    const step = (speed * deltaMs) / 1000;
+    const nx = raider.sprite.x + (dx / dist) * Math.min(step, dist);
+    const ny = raider.sprite.y + (dy / dist) * Math.min(step, dist);
+    this.faceToward(raider, tx, ty);
     const dir = facingFromDelta(dx, dy);
-    sprite.play(walkAnimKey(kind, dir), true);
+    raider.sprite.play(walkAnimKey(raider.kind, dir), true);
+    raider.sprite.setPosition(nx, ny);
+    raider.sprite.setDepth(25 + ny * 0.01);
+  }
 
-    const dist = Math.hypot(dx, dy);
-    let speed = kind === 'giant' ? 28 : kind === 'enemy_army' ? 36 : 42;
-    const midX = (sprite.x + this.keep.x) / 2;
-    const midY = (sprite.y + this.keep.y) / 2;
-    speed *= this.buildings?.raidSpeedMultiplier(midX, midY) ?? 1;
-    // Also check start/end near walls
-    speed *= this.buildings?.raidSpeedMultiplier(sprite.x, sprite.y) ?? 1;
-    speed = Math.max(12, speed);
+  private faceToward(raider: ActiveRaider, tx: number, ty: number): void {
+    void facingFromDelta(tx - raider.sprite.x, ty - raider.sprite.y);
+  }
 
-    const duration = Math.max(4000, (dist / speed) * 1000);
-
-    raider.tween = this.scene.tweens.add({
-      targets: sprite,
-      x: this.keep.x + Phaser.Math.Between(-8, 8),
-      y: this.keep.y + 20 + Phaser.Math.Between(-6, 6),
-      duration,
-      ease: 'Linear',
-      onUpdate: () => {
-        sprite.setDepth(25 + sprite.y * 0.01);
-        if (
-          !this.gameOver &&
-          Phaser.Math.Distance.Between(
-            sprite.x,
-            sprite.y,
-            this.keep.x,
-            this.keep.y
-          ) < KEEP_REACH_PX
-        ) {
-          raider.tween?.stop();
-          this.onReachedKeep(raider);
-        }
-      },
+  private killRaider(raider: ActiveRaider): void {
+    raider.state = 'done';
+    raider.camp?.destroy();
+    raider.camp = undefined;
+    this.scene.tweens.add({
+      targets: raider.sprite,
+      alpha: 0,
+      duration: 280,
       onComplete: () => {
-        if (!this.gameOver && sprite.active) {
-          this.onReachedKeep(raider);
+        raider.sprite.destroy();
+        this.raiders = this.raiders.filter((r) => r !== raider);
+        if (!this.hasActiveRaiders()) {
+          this.buildings?.setRaidActive(false);
         }
+        this.onChanged?.();
       },
     });
   }
 
   private onReachedKeep(raider: ActiveRaider): void {
-    if (!raider.sprite.active) return;
+    if (!raider.sprite.active || raider.state === 'done') return;
 
     if (raider.kind === 'enemy_army') {
       this.triggerGameOver();
@@ -193,25 +463,16 @@ export class RaidSystem {
       label: LABELS[raider.kind],
     });
 
-    raider.sprite.play(idleAnimKey(raider.kind));
-    this.scene.tweens.add({
-      targets: raider.sprite,
-      alpha: 0,
-      duration: 400,
-      onComplete: () => {
-        raider.sprite.destroy();
-        this.raiders = this.raiders.filter((r) => r !== raider);
-      },
-    });
+    this.killRaider(raider);
   }
 
   private triggerGameOver(): void {
     if (this.gameOver) return;
     this.gameOver = true;
     for (const r of this.raiders) {
-      r.tween?.stop();
       if (r.sprite.active) {
         r.sprite.play(idleAnimKey(r.kind));
+        r.state = 'done';
       }
     }
     this.scene.game.events.emit(KingdomEvents.GAME_OVER, {

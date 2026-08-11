@@ -263,6 +263,45 @@ function drawTavern(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawDrawbridge(scene: Phaser.Scene) {
+  const w = 32;
+  const h = 24;
+  const open = createCanvas(scene, PROP_KEYS.drawbridge, w, h);
+  const octx = open.getContext();
+  fillRect(octx, 2, 10, 28, 10, palette.wood);
+  fillRect(octx, 2, 10, 28, 1, palette.ink);
+  fillRect(octx, 4, 12, 2, 6, palette.woodDark);
+  fillRect(octx, 14, 12, 2, 6, palette.woodDark);
+  fillRect(octx, 24, 12, 2, 6, palette.woodDark);
+  fillRect(octx, 0, 8, 4, 4, palette.metal);
+  fillRect(octx, 28, 8, 4, 4, palette.metal);
+  open.refresh();
+
+  const closed = createCanvas(scene, PROP_KEYS.drawbridgeClosed, w, h);
+  const cctx = closed.getContext();
+  fillRect(cctx, 6, 2, 20, 18, palette.wood);
+  fillRect(cctx, 6, 2, 20, 1, palette.ink);
+  fillRect(cctx, 8, 4, 2, 14, palette.woodDark);
+  fillRect(cctx, 15, 4, 2, 14, palette.woodDark);
+  fillRect(cctx, 22, 4, 2, 14, palette.woodDark);
+  fillRect(cctx, 4, 0, 4, 4, palette.metal);
+  fillRect(cctx, 24, 0, 4, 4, palette.metal);
+  closed.refresh();
+}
+
+function drawStairs(scene: Phaser.Scene) {
+  const w = 20;
+  const h = 28;
+  const tex = createCanvas(scene, PROP_KEYS.stairs, w, h);
+  const ctx = tex.getContext();
+  for (let i = 0; i < 5; i++) {
+    fillRect(ctx, 2 + i, 22 - i * 4, 16 - i * 2, 4, palette.stone);
+    fillRect(ctx, 2 + i, 22 - i * 4, 16 - i * 2, 1, palette.ink);
+  }
+  fillRect(ctx, 8, 0, 4, 4, palette.stoneDark);
+  tex.refresh();
+}
+
 /**
  * Generate all Phase 1 textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
@@ -276,6 +315,9 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.house,
     PROP_KEYS.wall,
     PROP_KEYS.tavern,
+    PROP_KEYS.drawbridge,
+    PROP_KEYS.drawbridgeClosed,
+    PROP_KEYS.stairs,
   ]) {
     if (scene.textures.exists(key)) {
       scene.textures.remove(key);
@@ -293,6 +335,8 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawHouse(scene);
   drawWall(scene);
   drawTavern(scene);
+  drawDrawbridge(scene);
+  drawStairs(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
   for (let i = 0; i < 4; i++) {

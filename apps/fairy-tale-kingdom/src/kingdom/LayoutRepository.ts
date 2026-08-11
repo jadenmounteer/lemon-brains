@@ -1,5 +1,6 @@
 import { LocalStorageAdapter, type StoragePort } from '@knowledge-quest/storage';
 import type { UnitRole } from '../game/art/assetManifest';
+import { BUILDING_MAX_HP, UNIT_MAX_HP } from '../game/combat/stats';
 import type { BuildKind } from '../marketplace/catalog';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
@@ -9,6 +10,10 @@ export interface SavedBuilding {
   kind: BuildKind;
   x: number;
   y: number;
+  hp: number;
+  maxHp: number;
+  /** Stairs only — wall they snap to */
+  attachedWallId?: string;
 }
 
 export interface SavedSubject {
@@ -16,11 +21,16 @@ export interface SavedSubject {
   name: string;
   role: UnitRole;
   houseId: string;
+  hp: number;
+  maxHp: number;
+  onWall?: boolean;
 }
 
 export interface LayoutSave {
   subjects: SavedSubject[];
   buildings: SavedBuilding[];
+  keepHp?: number;
+  keepMaxHp?: number;
 }
 
 export class LayoutRepository {
@@ -42,7 +52,11 @@ export class LayoutRepository {
       if (!Array.isArray(parsed.subjects) || !Array.isArray(parsed.buildings)) {
         return null;
       }
-      return parsed;
+      return {
+        ...parsed,
+        buildings: parsed.buildings.map(normalizeBuilding),
+        subjects: parsed.subjects.map(normalizeSubject),
+      };
     } catch {
       return null;
     }
@@ -55,4 +69,29 @@ export class LayoutRepository {
   async reset(): Promise<void> {
     await this.storage.removeItem(this.key);
   }
+}
+
+function normalizeBuilding(b: SavedBuilding): SavedBuilding {
+  const maxHp =
+    typeof b.maxHp === 'number'
+      ? b.maxHp
+      : (BUILDING_MAX_HP[b.kind] ?? 30);
+  const hp = typeof b.hp === 'number' ? b.hp : maxHp;
+  return {
+    ...b,
+    hp,
+    maxHp,
+  };
+}
+
+function normalizeSubject(s: SavedSubject): SavedSubject {
+  const maxHp =
+    typeof s.maxHp === 'number' ? s.maxHp : (UNIT_MAX_HP[s.role] ?? 20);
+  const hp = typeof s.hp === 'number' ? s.hp : maxHp;
+  return {
+    ...s,
+    hp,
+    maxHp,
+    onWall: Boolean(s.onWall),
+  };
 }

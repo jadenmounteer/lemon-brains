@@ -40,8 +40,10 @@ export function MarketplacePanel({
       {placeMode.active && (
         <div className="place-banner">
           <p>
-            Placing <strong>{placeMode.kind}</strong> — click empty ground (not
-            on other objects).
+            Placing <strong>{placeMode.kind}</strong>
+            {placeMode.kind === 'stairs'
+              ? ' — snap to a wall.'
+              : ' — click empty ground (not on other objects).'}
           </p>
           <button type="button" className="inspector-close" onClick={onCancelPlace}>
             Cancel

@@ -16,6 +16,12 @@ export function InspectorPanel({ subject, onClose }: InspectorPanelProps) {
       </div>
       <p className="inspector-role">{subject.roleLabel}</p>
       <p>
+        <span className="muted">Health</span> {subject.hp} / {subject.maxHp}
+        {subject.onWall ? (
+          <span className="muted"> · On the wall</span>
+        ) : null}
+      </p>
+      <p>
         <span className="muted">Lives at</span> {subject.homeLabel}
       </p>
       <p>

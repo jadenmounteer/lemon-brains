@@ -1,16 +1,40 @@
 import Phaser from 'phaser';
 import { PROP_KEYS } from '../art/assetManifest';
 import type { SavedBuilding } from '../../kingdom/LayoutRepository';
-import { BEDS_PER_HOUSE, type BuildKind } from '../../marketplace/catalog';
+import {
+  BEDS_PER_HOUSE,
+  BUILD_CATALOG,
+  type BuildKind,
+} from '../../marketplace/catalog';
+import {
+  BUILDING_MAX_HP,
+  isBlockingKind,
+  isBurnable,
+} from '../combat/stats';
+import type { PathGrid } from '../path/PathGrid';
+import type {
+  BuildingResident,
+  BuildingSnapshot,
+} from '../subjects/types';
 import type { Point } from '../subjects/zones';
+import { KingdomEvents } from '../subjects/events';
+
+export const KEEP_ID = 'keep';
+
+const KEEP_BLURB =
+  'Your seat of power. If a rival army reaches it, the kingdom falls.';
 
 export interface BuildingRecord {
   id: string;
   kind: BuildKind;
   x: number;
   y: number;
+  hp: number;
+  maxHp: number;
   sprite: Phaser.GameObjects.Image;
   labelIndex: number;
+  attachedWallId?: string;
+  closed?: boolean;
 }
 
 export interface Aabb {
@@ -24,16 +48,12 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   house: { w: 32, h: 28 },
   wall: { w: 16, h: 30 },
   tavern: { w: 36, h: 30 },
+  drawbridge: { w: 32, h: 22 },
+  stairs: { w: 20, h: 26 },
   keep: { w: 48, h: 44 },
 };
 
-const TEXTURE: Record<BuildKind, string> = {
-  house: PROP_KEYS.house,
-  wall: PROP_KEYS.wall,
-  tavern: PROP_KEYS.tavern,
-};
-
-const WALL_SLOW_RADIUS = 56;
+const STAIR_SNAP_DIST = 28;
 
 export class BuildingSystem {
   private buildings: BuildingRecord[] = [];
@@ -41,12 +61,64 @@ export class BuildingSystem {
   private placeKind: BuildKind | null = null;
   private ghost: Phaser.GameObjects.Image | null = null;
   private ghostValid = false;
+  private ghostWallId: string | null = null;
+  private raidActive = false;
+  private pathGrid: PathGrid | null = null;
+  private keepHp: number;
+  private keepMaxHp: number;
+  private keepSprite: Phaser.GameObjects.Image | null = null;
+  private onDestroyed: ((b: BuildingRecord) => void) | null = null;
+  private selectedId: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly keep: Point,
-    private readonly getUnitBodies: () => Aabb[]
-  ) {}
+    private readonly getUnitBodies: () => Aabb[],
+    private readonly onLayoutChanged?: () => void
+  ) {
+    this.keepMaxHp = BUILDING_MAX_HP.keep;
+    this.keepHp = this.keepMaxHp;
+  }
+
+  setOnDestroyed(cb: (b: BuildingRecord) => void): void {
+    this.onDestroyed = cb;
+  }
+
+  setPathGrid(grid: PathGrid): void {
+    this.pathGrid = grid;
+    this.rebuildPathGrid();
+  }
+
+  setKeepSprite(sprite: Phaser.GameObjects.Image): void {
+    this.keepSprite = sprite;
+    this.makeInteractive(sprite, KEEP_ID, 'keep');
+  }
+
+  getSelectedId(): string | null {
+    return this.selectedId;
+  }
+
+  select(
+    id: string | null,
+    residents: BuildingResident[] = []
+  ): BuildingSnapshot | null {
+    this.selectedId = id;
+    this.applySelectionVisuals();
+    if (!id) return null;
+    return this.toSnapshot(id, residents);
+  }
+
+  refreshSelectedSnapshot(
+    residents: BuildingResident[] = []
+  ): BuildingSnapshot | null {
+    if (!this.selectedId) return null;
+    if (this.selectedId !== KEEP_ID && !this.getById(this.selectedId)) {
+      this.selectedId = null;
+      this.applySelectionVisuals();
+      return null;
+    }
+    return this.toSnapshot(this.selectedId, residents);
+  }
 
   seedStarters(worldW: number, worldH: number): void {
     const cx = worldW / 2;
@@ -57,15 +129,30 @@ export class BuildingSystem {
       if (i === 0) continue;
       this.addBuilding('wall', cx + i * 18, cy - 40);
     }
+    this.rebuildPathGrid();
   }
 
-  restore(saved: SavedBuilding[]): void {
+  restore(
+    saved: SavedBuilding[],
+    keepHp?: number,
+    keepMaxHp?: number
+  ): void {
     this.clearSpritesOnly();
     this.buildings = [];
+    if (typeof keepMaxHp === 'number') this.keepMaxHp = keepMaxHp;
+    if (typeof keepHp === 'number') this.keepHp = keepHp;
+    else this.keepHp = this.keepMaxHp;
+
     for (const b of saved) {
-      this.addBuilding(b.kind, b.x, b.y, b.id);
+      this.addBuilding(b.kind, b.x, b.y, b.id, {
+        hp: b.hp,
+        maxHp: b.maxHp,
+        attachedWallId: b.attachedWallId,
+      });
     }
     this.recomputeHouseLabels();
+    this.applyDrawbridgeState();
+    this.rebuildPathGrid();
   }
 
   serialize(): SavedBuilding[] {
@@ -74,7 +161,14 @@ export class BuildingSystem {
       kind: b.kind,
       x: b.x,
       y: b.y,
+      hp: b.hp,
+      maxHp: b.maxHp,
+      attachedWallId: b.attachedWallId,
     }));
+  }
+
+  serializeKeep(): { keepHp: number; keepMaxHp: number } {
+    return { keepHp: this.keepHp, keepMaxHp: this.keepMaxHp };
   }
 
   houseCount(): number {
@@ -112,7 +206,6 @@ export class BuildingSystem {
     return `House ${house.labelIndex}`;
   }
 
-  /** Houses ordered by id with free-bed counts via occupant map. */
   pickHouseForHire(occupantCounts: Map<string, number>): string | null {
     const houses = this.buildings
       .filter((b) => b.kind === 'house')
@@ -130,27 +223,109 @@ export class BuildingSystem {
     return best && bestFree > 0 ? best.id : null;
   }
 
+  list(): BuildingRecord[] {
+    return this.buildings;
+  }
+
+  getById(id: string): BuildingRecord | undefined {
+    return this.buildings.find((b) => b.id === id);
+  }
+
   wallPoints(): Point[] {
     return this.buildings
       .filter((b) => b.kind === 'wall')
       .map((b) => ({ x: b.x, y: b.y }));
   }
 
-  /** Speed multiplier for a raider at (x,y); <1 near walls. */
-  raidSpeedMultiplier(x: number, y: number): number {
-    for (const w of this.wallPoints()) {
-      if (Phaser.Math.Distance.Between(x, y, w.x, w.y) < WALL_SLOW_RADIUS) {
-        return 0.6;
+  stairsNear(x: number, y: number, radius: number): BuildingRecord | null {
+    let best: BuildingRecord | null = null;
+    let bestD = radius;
+    for (const b of this.buildings) {
+      if (b.kind !== 'stairs') continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
       }
     }
-    return 1;
+    return best;
+  }
+
+  wallForStairs(stairs: BuildingRecord): BuildingRecord | null {
+    if (!stairs.attachedWallId) return null;
+    return this.getById(stairs.attachedWallId) ?? null;
+  }
+
+  burnablesNear(x: number, y: number, radius: number): BuildingRecord | null {
+    let best: BuildingRecord | null = null;
+    let bestD = radius;
+    for (const b of this.buildings) {
+      if (!isBurnable(b.kind)) continue;
+      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (d < bestD) {
+        bestD = d;
+        best = b;
+      }
+    }
+    return best;
+  }
+
+  /** Closest blocking building on a short segment toward the keep. */
+  findBlockingAhead(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number
+  ): BuildingRecord | null {
+    const steps = 8;
+    let best: BuildingRecord | null = null;
+    let bestD = Infinity;
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const x = fromX + (toX - fromX) * t;
+      const y = fromY + (toY - fromY) * t;
+      for (const b of this.buildings) {
+        if (!isBlockingKind(b.kind, Boolean(b.closed))) continue;
+        const box = footprintAabb(b.kind, b.x, b.y);
+        if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) {
+          const d = Phaser.Math.Distance.Between(fromX, fromY, b.x, b.y);
+          if (d < bestD) {
+            bestD = d;
+            best = b;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  setRaidActive(active: boolean): void {
+    if (this.raidActive === active) return;
+    this.raidActive = active;
+    this.applyDrawbridgeState();
+    this.rebuildPathGrid();
+  }
+
+  isRaidActive(): boolean {
+    return this.raidActive;
+  }
+
+  rebuildPathGrid(): void {
+    if (!this.pathGrid) return;
+    this.pathGrid.clear();
+    for (const b of this.buildings) {
+      if (isBlockingKind(b.kind, Boolean(b.closed))) {
+        this.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
+      }
+    }
   }
 
   beginPlace(kind: BuildKind): void {
     this.cancelPlace();
     this.placeKind = kind;
+    const tex = textureFor(kind, false);
     this.ghost = this.scene.add
-      .image(this.keep.x, this.keep.y + 80, TEXTURE[kind])
+      .image(this.keep.x, this.keep.y + 80, tex)
       .setDepth(50)
       .setOrigin(0.5, 0.85)
       .setAlpha(0.65);
@@ -161,6 +336,7 @@ export class BuildingSystem {
     this.ghost?.destroy();
     this.ghost = null;
     this.ghostValid = false;
+    this.ghostWallId = null;
   }
 
   isPlacing(): boolean {
@@ -173,10 +349,25 @@ export class BuildingSystem {
 
   updateGhost(worldX: number, worldY: number): void {
     if (!this.ghost || !this.placeKind) return;
-    const x = snap(worldX);
-    const y = snap(worldY);
-    this.ghost.setPosition(x, y);
-    this.ghostValid = this.canPlaceAt(this.placeKind, x, y);
+
+    if (this.placeKind === 'stairs') {
+      const snap = this.findWallSnap(worldX, worldY);
+      if (snap) {
+        this.ghost.setPosition(snap.x, snap.y);
+        this.ghostWallId = snap.wallId;
+        this.ghostValid = this.canPlaceAt('stairs', snap.x, snap.y, snap.wallId);
+      } else {
+        this.ghost.setPosition(snapCoord(worldX), snapCoord(worldY));
+        this.ghostWallId = null;
+        this.ghostValid = false;
+      }
+    } else {
+      const x = snapCoord(worldX);
+      const y = snapCoord(worldY);
+      this.ghost.setPosition(x, y);
+      this.ghostWallId = null;
+      this.ghostValid = this.canPlaceAt(this.placeKind, x, y);
+    }
     this.ghost.setTint(this.ghostValid ? 0xffffff : 0xff5555);
   }
 
@@ -185,38 +376,205 @@ export class BuildingSystem {
     const kind = this.placeKind;
     const x = this.ghost.x;
     const y = this.ghost.y;
+    const wallId = this.ghostWallId ?? undefined;
     this.cancelPlace();
-    this.addBuilding(kind, x, y);
+    this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId });
     this.recomputeHouseLabels();
+    this.applyDrawbridgeState();
+    this.rebuildPathGrid();
+    this.onLayoutChanged?.();
     return true;
+  }
+
+  damageBuilding(id: string, amount: number): boolean {
+    const b = this.getById(id);
+    if (!b) return false;
+    b.hp = Math.max(0, b.hp - amount);
+    this.tintByHp(b);
+    if (b.hp <= 0) {
+      this.destroyBuilding(b);
+      return true;
+    }
+    return false;
+  }
+
+  damageKeep(amount: number): boolean {
+    this.keepHp = Math.max(0, this.keepHp - amount);
+    if (this.keepSprite) {
+      const ratio = this.keepHp / this.keepMaxHp;
+      this.keepSprite.setTint(ratio < 0.35 ? 0xff6666 : 0xffffff);
+    }
+    return this.keepHp <= 0;
+  }
+
+  getKeepHp(): number {
+    return this.keepHp;
+  }
+
+  private destroyBuilding(b: BuildingRecord): void {
+    const burned = isBurnable(b.kind);
+    if (b.kind === 'wall') {
+      const stairs = this.buildings.filter(
+        (s) => s.kind === 'stairs' && s.attachedWallId === b.id
+      );
+      for (const s of stairs) {
+        this.onDestroyed?.(s);
+        this.removeRecord(s);
+      }
+    }
+    this.onDestroyed?.(b);
+    this.removeRecord(b);
+    this.rebuildPathGrid();
+    if (burned) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message:
+          b.kind === 'house'
+            ? 'A house burned down!'
+            : b.kind === 'tavern'
+              ? 'The tavern burned!'
+              : 'Stairs collapsed!',
+      });
+    }
+    this.onLayoutChanged?.();
+  }
+
+  private removeRecord(b: BuildingRecord): void {
+    if (this.selectedId === b.id) {
+      this.selectedId = null;
+    }
+    b.sprite.destroy();
+    this.buildings = this.buildings.filter((x) => x.id !== b.id);
+    this.recomputeHouseLabels();
+  }
+
+  private toSnapshot(
+    id: string,
+    residents: BuildingResident[]
+  ): BuildingSnapshot | null {
+    if (id === KEEP_ID) {
+      return {
+        id: KEEP_ID,
+        kind: 'keep',
+        name: 'The Keep',
+        blurb: KEEP_BLURB,
+        hp: this.keepHp,
+        maxHp: this.keepMaxHp,
+      };
+    }
+    const b = this.getById(id);
+    if (!b) return null;
+    const catalog = BUILD_CATALOG.find((c) => c.kind === b.kind);
+    const name =
+      b.kind === 'house' ? `House ${b.labelIndex}` : (catalog?.name ?? b.kind);
+    const snap: BuildingSnapshot = {
+      id: b.id,
+      kind: b.kind,
+      name,
+      blurb: catalog?.blurb ?? '',
+      hp: b.hp,
+      maxHp: b.maxHp,
+    };
+    if (b.kind === 'drawbridge') {
+      snap.statusLabel = b.closed ? 'Closed (raid)' : 'Open';
+    }
+    if (b.kind === 'stairs' && b.attachedWallId) {
+      snap.statusLabel = 'Attached to a wall';
+    }
+    if (b.kind === 'house') {
+      snap.bedsCapacity = BEDS_PER_HOUSE;
+      snap.bedsUsed = residents.length;
+      snap.residents = residents;
+    }
+    return snap;
+  }
+
+  private makeInteractive(
+    sprite: Phaser.GameObjects.Image,
+    id: string,
+    kind: BuildKind | 'keep'
+  ): void {
+    const { w, h } = FOOTPRINT[kind];
+    sprite.setInteractive(
+      new Phaser.Geom.Rectangle(-w / 2, -h, w, h),
+      Phaser.Geom.Rectangle.Contains
+    );
+    sprite.input!.cursor = 'pointer';
+    sprite.setData('buildingId', id);
+  }
+
+  private applySelectionVisuals(): void {
+    if (this.keepSprite) {
+      if (this.selectedId === KEEP_ID) {
+        this.keepSprite.setTint(0xfff0c0);
+      } else {
+        const ratio = this.keepHp / this.keepMaxHp;
+        this.keepSprite.setTint(ratio < 0.35 ? 0xff6666 : 0xffffff);
+        if (ratio >= 0.35) this.keepSprite.clearTint();
+      }
+    }
+    for (const b of this.buildings) {
+      if (b.id === this.selectedId) {
+        b.sprite.setTint(0xfff0c0);
+      } else {
+        this.tintByHp(b);
+      }
+    }
+  }
+
+  private applyDrawbridgeState(): void {
+    for (const b of this.buildings) {
+      if (b.kind !== 'drawbridge') continue;
+      b.closed = this.raidActive;
+      b.sprite.setTexture(
+        b.closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge
+      );
+    }
   }
 
   private addBuilding(
     kind: BuildKind,
     x: number,
     y: number,
-    forcedId?: string
+    forcedId?: string,
+    opts?: { hp?: number; maxHp?: number; attachedWallId?: string }
   ): BuildingRecord {
     const id = forcedId ?? `${kind}-${this.nextId++}`;
     const match = /^.*?(\d+)$/.exec(id);
     if (match) {
       this.nextId = Math.max(this.nextId, Number(match[1]) + 1);
     }
+    const maxHp = opts?.maxHp ?? BUILDING_MAX_HP[kind];
+    const hp = opts?.hp ?? maxHp;
+    const closed = kind === 'drawbridge' ? this.raidActive : undefined;
     const sprite = this.scene.add
-      .image(x, y, TEXTURE[kind])
-      .setDepth(kind === 'wall' ? 9 : 8)
+      .image(x, y, textureFor(kind, Boolean(closed)))
+      .setDepth(kind === 'wall' || kind === 'stairs' ? 9 : 8)
       .setOrigin(0.5, 0.85);
+    this.makeInteractive(sprite, id, kind);
     const record: BuildingRecord = {
       id,
       kind,
       x,
       y,
+      hp,
+      maxHp,
       sprite,
       labelIndex: 0,
+      attachedWallId: opts?.attachedWallId,
+      closed,
     };
     this.buildings.push(record);
+    this.tintByHp(record);
     this.recomputeHouseLabels();
     return record;
+  }
+
+  private tintByHp(b: BuildingRecord): void {
+    if (this.selectedId === b.id) return;
+    const ratio = b.hp / b.maxHp;
+    if (ratio <= 0.35) b.sprite.setTint(0xff6666);
+    else if (ratio <= 0.65) b.sprite.setTint(0xffcc88);
+    else b.sprite.clearTint();
   }
 
   private recomputeHouseLabels(): void {
@@ -228,7 +586,35 @@ export class BuildingSystem {
     });
   }
 
-  private canPlaceAt(kind: BuildKind, x: number, y: number): boolean {
+  private findWallSnap(
+    worldX: number,
+    worldY: number
+  ): { x: number; y: number; wallId: string } | null {
+    let best: BuildingRecord | null = null;
+    let bestD = STAIR_SNAP_DIST;
+    for (const w of this.buildings) {
+      if (w.kind !== 'wall') continue;
+      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
+      if (d < bestD) {
+        bestD = d;
+        best = w;
+      }
+    }
+    if (!best) return null;
+    return {
+      x: snapCoord(best.x + 14),
+      y: snapCoord(best.y + 4),
+      wallId: best.id,
+    };
+  }
+
+  private canPlaceAt(
+    kind: BuildKind,
+    x: number,
+    y: number,
+    wallId?: string | null
+  ): boolean {
+    if (kind === 'stairs' && !wallId) return false;
     const candidate = footprintAabb(kind, x, y);
     const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
     if (intersects(candidate, keepBox)) return false;
@@ -249,7 +635,22 @@ export class BuildingSystem {
   }
 }
 
-function snap(n: number): number {
+function textureFor(kind: BuildKind, closed: boolean): string {
+  switch (kind) {
+    case 'house':
+      return PROP_KEYS.house;
+    case 'wall':
+      return PROP_KEYS.wall;
+    case 'tavern':
+      return PROP_KEYS.tavern;
+    case 'drawbridge':
+      return closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge;
+    case 'stairs':
+      return PROP_KEYS.stairs;
+  }
+}
+
+function snapCoord(n: number): number {
   return Math.round(n / 8) * 8;
 }
 

@@ -9,10 +9,12 @@ import type {
   RaidWarningPayload,
 } from './game/subjects/events';
 import type {
+  BuildingSnapshot,
   DaySnapshot,
   KingdomStats,
   SubjectSnapshot,
 } from './game/subjects/types';
+import { BuildingInspectorPanel } from './buildings/BuildingInspectorPanel';
 import { GameOverModal } from './kingdom/GameOverModal';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
@@ -49,6 +51,8 @@ export default function App() {
   const [showQuestions, setShowQuestions] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
   const [selected, setSelected] = useState<SubjectSnapshot | null>(null);
+  const [selectedBuilding, setSelectedBuilding] =
+    useState<BuildingSnapshot | null>(null);
   const [day, setDay] = useState<DaySnapshot>({
     dayPhase: 'Night',
     hour: 0,
@@ -75,7 +79,10 @@ export default function App() {
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
   const showSide =
-    showQuestions || showMarket || selected !== null;
+    showQuestions ||
+    showMarket ||
+    selected !== null ||
+    selectedBuilding !== null;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -90,6 +97,7 @@ export default function App() {
       setGameOver(null);
       setNamingAfterLoss(false);
       setSelected(null);
+      setSelectedBuilding(null);
       setPlaceMode({ active: false, kind: null });
       setPendingPlaceCost(null);
       setStats(DEFAULT_STATS);
@@ -202,6 +210,7 @@ export default function App() {
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
             onSubjectSelected={setSelected}
+            onBuildingSelected={setSelectedBuilding}
             onDayTick={setDay}
             onDayRolled={() => {
               void incrementDay();
@@ -260,6 +269,15 @@ export default function App() {
                 subject={selected}
                 onClose={() => {
                   setSelected(null);
+                  setDeselectToken((n) => n + 1);
+                }}
+              />
+            )}
+            {selectedBuilding && (
+              <BuildingInspectorPanel
+                building={selectedBuilding}
+                onClose={() => {
+                  setSelectedBuilding(null);
                   setDeselectToken((n) => n + 1);
                 }}
               />

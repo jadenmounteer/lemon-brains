@@ -34,6 +34,9 @@ export const PROP_KEYS = {
   house: 'prop-house',
   wall: 'prop-wall',
   tavern: 'prop-tavern',
+  drawbridge: 'prop-drawbridge',
+  drawbridgeClosed: 'prop-drawbridge-closed',
+  stairs: 'prop-stairs',
 } as const;
 
 /** Future drop-in paths relative to public/ (assetUrl) */
@@ -46,6 +49,8 @@ export const dropInPaths = {
   house: 'assets/props/house.png',
   wall: 'assets/props/wall.png',
   tavern: 'assets/props/tavern.png',
+  drawbridge: 'assets/props/drawbridge.png',
+  stairs: 'assets/props/stairs.png',
 } as const;
 
 /** Frame index layout per unit sheet (16×24 frames in a row) */

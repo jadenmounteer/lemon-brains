@@ -6,7 +6,9 @@ import {
   TerrainTile,
 } from '../art/assetManifest';
 import { BuildingSystem } from '../buildings/BuildingSystem';
+import { CombatSystem } from '../combat/CombatSystem';
 import { LayoutRepository } from '../../kingdom/LayoutRepository';
+import { PathGrid } from '../path/PathGrid';
 import { RaidSystem } from '../raids/RaidSystem';
 import {
   KingdomEvents,
@@ -23,6 +25,7 @@ const WORLD_HEIGHT = MAP_ROWS * TILE_SIZE;
 const CAMERA_ZOOM = 2;
 const PAN_THRESHOLD_PX = 6;
 const NIGHT_TINT = 0x0a1520;
+const PATH_TILE = 16;
 
 export class KingdomScene extends Phaser.Scene {
   private dragStart: Phaser.Math.Vector2 | null = null;
@@ -31,6 +34,8 @@ export class KingdomScene extends Phaser.Scene {
   private subjects!: SubjectSystem;
   private buildings!: BuildingSystem;
   private raids!: RaidSystem;
+  private combat!: CombatSystem;
+  private pathGrid!: PathGrid;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
   private layoutRepo = new LayoutRepository();
   private saveTimer: Phaser.Time.TimerEvent | null = null;
@@ -56,7 +61,12 @@ export class KingdomScene extends Phaser.Scene {
 
     const cx = WORLD_WIDTH / 2;
     const cy = WORLD_HEIGHT / 2;
-    this.add.image(cx, cy, PROP_KEYS.keep).setDepth(10).setOrigin(0.5, 0.85);
+    const keepSprite = this.add
+      .image(cx, cy, PROP_KEYS.keep)
+      .setDepth(10)
+      .setOrigin(0.5, 0.85);
+
+    this.pathGrid = new PathGrid(WORLD_WIDTH, WORLD_HEIGHT, PATH_TILE);
 
     this.subjects = new SubjectSystem(this, {
       width: WORLD_WIDTH,
@@ -64,8 +74,27 @@ export class KingdomScene extends Phaser.Scene {
     });
     this.buildings = new BuildingSystem(this, { x: cx, y: cy }, () =>
       this.subjects.unitBodies()
-    );
+    , () => this.schedulePersist());
+    this.buildings.setKeepSprite(keepSprite);
+    this.buildings.setPathGrid(this.pathGrid);
     this.subjects.setBuildings(this.buildings);
+    this.subjects.setOnChanged(() => {
+      this.emitStats();
+      this.schedulePersist();
+    });
+
+    this.buildings.setOnDestroyed((b) => {
+      if (b.kind === 'house') {
+        this.subjects.onHouseDestroyed(b.id);
+      }
+      if (b.kind === 'wall') {
+        this.subjects.dropFromWall(b.id);
+      }
+      if (this.registry.get('selectedBuildingId') === b.id) {
+        this.publishBuildingSelection(null);
+      }
+      this.emitStats();
+    });
 
     this.raids = new RaidSystem(
       this,
@@ -73,10 +102,24 @@ export class KingdomScene extends Phaser.Scene {
       { x: cx, y: cy }
     );
     this.raids.setBuildings(this.buildings);
+    this.raids.setSubjects(this.subjects);
+    this.raids.setPathGrid(this.pathGrid);
+    this.raids.setOnChanged(() => this.schedulePersist());
+
+    this.combat = new CombatSystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.raids
+    );
 
     const saved = this.layoutRepo.loadSync();
     if (saved && saved.buildings.length > 0) {
-      this.buildings.restore(saved.buildings);
+      this.buildings.restore(
+        saved.buildings,
+        saved.keepHp,
+        saved.keepMaxHp
+      );
       if (saved.subjects.length > 0) {
         this.subjects.restore(saved.subjects);
       } else {
@@ -103,7 +146,7 @@ export class KingdomScene extends Phaser.Scene {
     this.applyNightOverlay();
 
     this.add
-      .text(12, 12, 'Drag to look · click a subject', {
+      .text(12, 12, 'Drag to look · click a subject or building', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -146,7 +189,6 @@ export class KingdomScene extends Phaser.Scene {
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
       const wasPan = this.pointerMoved;
-      const hitId = this.resolveHitSubject(pointer);
       this.dragStart = null;
       this.cameraStart = null;
       this.pointerMoved = false;
@@ -163,16 +205,26 @@ export class KingdomScene extends Phaser.Scene {
           });
         } else {
           this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-            message: 'Cannot place on another object',
+            message:
+              this.buildings.placingKind() === 'stairs'
+                ? 'Stairs must snap to a wall'
+                : 'Cannot place on another object',
           });
         }
         return;
       }
 
-      if (hitId) {
-        this.publishSelection(this.subjects.select(hitId));
+      const hit = this.resolveHit(pointer);
+      if (hit?.type === 'subject') {
+        this.publishBuildingSelection(this.buildings.select(null));
+        this.publishSelection(this.subjects.select(hit.id));
+      } else if (hit?.type === 'building') {
+        this.publishSelection(this.subjects.select(null));
+        const residents = this.subjects.residentsOf(hit.id);
+        this.publishBuildingSelection(this.buildings.select(hit.id, residents));
       } else {
         this.publishSelection(this.subjects.select(null));
+        this.publishBuildingSelection(this.buildings.select(null));
       }
     });
 
@@ -202,9 +254,17 @@ export class KingdomScene extends Phaser.Scene {
       delay: 1000,
       loop: true,
       callback: () => {
-        if (!this.subjects.getSelectedId()) return;
-        const snap = this.subjects.refreshSelectedSnapshot();
-        if (snap) this.publishSelection(snap);
+        if (this.subjects.getSelectedId()) {
+          const snap = this.subjects.refreshSelectedSnapshot();
+          if (snap) this.publishSelection(snap);
+        }
+        if (this.buildings.getSelectedId()) {
+          const id = this.buildings.getSelectedId()!;
+          const residents = this.subjects.residentsOf(id);
+          const snap = this.buildings.refreshSelectedSnapshot(residents);
+          if (snap) this.publishBuildingSelection(snap);
+          else this.publishBuildingSelection(null);
+        }
       },
     });
   }
@@ -212,6 +272,7 @@ export class KingdomScene extends Phaser.Scene {
   update(_time: number, delta: number) {
     this.subjects?.update(delta);
     this.raids?.update(delta);
+    this.combat?.update(delta);
     this.applyNightOverlay();
   }
 
@@ -255,10 +316,14 @@ export class KingdomScene extends Phaser.Scene {
   private emitStats() {
     const population = this.subjects.count();
     const capacity = this.buildings.bedCapacity();
+    let usedBeds = 0;
+    for (const n of this.subjects.occupantCounts().values()) {
+      usedBeds += n;
+    }
     this.game.events.emit(KingdomEvents.KINGDOM_STATS, {
       population,
       capacity,
-      freeBeds: Math.max(0, capacity - population),
+      freeBeds: Math.max(0, capacity - usedBeds),
       houseCount: this.buildings.houseCount(),
       wallCount: this.buildings.wallCount(),
       tavernCount: this.buildings.tavernCount(),
@@ -271,9 +336,12 @@ export class KingdomScene extends Phaser.Scene {
   }
 
   private persistLayout() {
+    const keep = this.buildings.serializeKeep();
     void this.layoutRepo.save({
       subjects: this.subjects.serialize(),
       buildings: this.buildings.serialize(),
+      keepHp: keep.keepHp,
+      keepMaxHp: keep.keepMaxHp,
     });
   }
 
@@ -290,6 +358,7 @@ export class KingdomScene extends Phaser.Scene {
 
   private onClearSelection = () => {
     this.publishSelection(this.subjects.select(null));
+    this.publishBuildingSelection(this.buildings.select(null));
   };
 
   private publishSelection(
@@ -299,13 +368,25 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.SUBJECT_SELECTED, snap);
   }
 
-  private resolveHitSubject(pointer: Phaser.Input.Pointer): string | null {
+  private publishBuildingSelection(
+    snap: ReturnType<BuildingSystem['select']>
+  ): void {
+    this.registry.set('selectedBuildingId', snap?.id ?? null);
+    this.game.events.emit(KingdomEvents.BUILDING_SELECTED, snap);
+  }
+
+  private resolveHit(
+    pointer: Phaser.Input.Pointer
+  ): { type: 'subject' | 'building'; id: string } | null {
     const hits = this.input.hitTestPointer(pointer);
+    let buildingId: string | null = null;
     for (const obj of hits) {
-      const id = obj.getData('subjectId') as string | undefined;
-      if (id) return id;
+      const subjectId = obj.getData('subjectId') as string | undefined;
+      if (subjectId) return { type: 'subject', id: subjectId };
+      const bid = obj.getData('buildingId') as string | undefined;
+      if (bid && !buildingId) buildingId = bid;
     }
-    return null;
+    return buildingId ? { type: 'building', id: buildingId } : null;
   }
 }
 

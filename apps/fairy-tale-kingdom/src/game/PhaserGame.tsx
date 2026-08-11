@@ -12,6 +12,7 @@ import {
   type RaidWarningPayload,
 } from './subjects/events';
 import type {
+  BuildingSnapshot,
   DaySnapshot,
   KingdomStats,
   SubjectSnapshot,
@@ -23,6 +24,7 @@ interface PhaserGameProps {
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
+  onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onDayTick: (day: DaySnapshot) => void;
   onDayRolled: () => void;
   onGoldStolen: (payload: GoldStolenPayload) => void;
@@ -40,6 +42,7 @@ export function PhaserGame({
   placeRequest,
   cancelPlaceToken,
   onSubjectSelected,
+  onBuildingSelected,
   onDayTick,
   onDayRolled,
   onGoldStolen,
@@ -53,6 +56,7 @@ export function PhaserGame({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const onSelectRef = useRef(onSubjectSelected);
+  const onBuildingRef = useRef(onBuildingSelected);
   const onDayRef = useRef(onDayTick);
   const onRolledRef = useRef(onDayRolled);
   const onStolenRef = useRef(onGoldStolen);
@@ -63,6 +67,7 @@ export function PhaserGame({
   const onToastRef = useRef(onMarketToast);
 
   onSelectRef.current = onSubjectSelected;
+  onBuildingRef.current = onBuildingSelected;
   onDayRef.current = onDayTick;
   onRolledRef.current = onDayRolled;
   onStolenRef.current = onGoldStolen;
@@ -86,6 +91,9 @@ export function PhaserGame({
 
     const handleSelect = (snap: SubjectSnapshot | null) => {
       onSelectRef.current(snap);
+    };
+    const handleBuilding = (snap: BuildingSnapshot | null) => {
+      onBuildingRef.current(snap);
     };
     const handleDay = (day: DaySnapshot) => {
       onDayRef.current(day);
@@ -113,6 +121,7 @@ export function PhaserGame({
     };
 
     game.events.on(KingdomEvents.SUBJECT_SELECTED, handleSelect);
+    game.events.on(KingdomEvents.BUILDING_SELECTED, handleBuilding);
     game.events.on(KingdomEvents.DAY_TICK, handleDay);
     game.events.on(KingdomEvents.DAY_ROLLED, handleRolled);
     game.events.on(KingdomEvents.GOLD_STOLEN, handleStolen);
@@ -124,6 +133,7 @@ export function PhaserGame({
 
     return () => {
       game.events.off(KingdomEvents.SUBJECT_SELECTED, handleSelect);
+      game.events.off(KingdomEvents.BUILDING_SELECTED, handleBuilding);
       game.events.off(KingdomEvents.DAY_TICK, handleDay);
       game.events.off(KingdomEvents.DAY_ROLLED, handleRolled);
       game.events.off(KingdomEvents.GOLD_STOLEN, handleStolen);
