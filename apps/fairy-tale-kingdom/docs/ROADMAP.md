@@ -9,35 +9,35 @@ Long-term phased vision.
 | 2 | Living subjects | Named people, roles, schedules, click-to-inspect (Stronghold-style inspector) |
 | 3 | Learn-to-earn | Question panel via `@knowledge-quest/learning`; gold rewards; persist gold |
 | 3.5 | Kingdom meta + danger lite | Named kingdom, days played, new-kingdom menu, raids (steal gold / army lose) |
-| 4 | Marketplace and buildings | Buy peasants/guards/archers/etc. and place houses/walls/tavern/keep |
+| 4 | Marketplace and buildings | Hire units into houses; place house/wall/tavern; building effects |
 | 5 | Living world and danger | Richer camps, defense that matters, deeper raid AI |
-| 6 | Depth and polish | Richer schedules, more roles, save kingdom layout, audio, UX |
+| 6 | Depth and polish | Richer schedules, more roles, save polish, audio, UX |
 
-## Phase 0–3 (done)
+## Phase 0–3.5 (done)
 
-Foundation, graphics, living subjects, learn-to-earn (questions + gold + night HUD).
+Foundation through kingdom meta, night HUD, learn-to-earn, and danger-lite raids.
 
-## Phase 3.5 — Kingdom meta + danger lite (current)
+## Phase 4 — Marketplace and buildings (current)
 
 Checklist:
 
-- [x] Persist kingdom name + days played (`fairyTaleKingdom.kingdom`)
-- [x] Show name + day count in the HUD tagline
-- [x] Hamburger menu to start a new kingdom (resets gold + days)
-- [x] First-run naming gate before the map loads
-- [x] Day clock rollover increments days played
-- [x] Bandits / giants march on the keep and steal gold
-- [x] Rival kingdom army reaching the keep = game over
+- [x] Live Marketplace hire/build catalog with prices
+- [x] Gold `spend` API
+- [x] Houses provide 3 beds; hire requires a free bed in a specific house
+- [x] Subjects store `houseId`; home schedule + inspector “Lives at House N”
+- [x] Free placement with overlap rejection (keep / buildings / units)
+- [x] Walls slow raiders; taverns cut steal by 25%
+- [x] Layout persistence (`fairyTaleKingdom.layout`); cleared on new kingdom
 
-## Phase 4 — Marketplace (next)
+## Phase 5 — next
 
-Hire units and place buildings with gold.
+Richer camps, intercept/defense that matters.
 
 ## Non-goals (for now)
 
-- Full combat / intercepting raids with your guards (Phase 5)
+- Killing raiders / full combat AI
+- Extra keep / demolishing houses
 - Multiplayer / auth
-- Hand-drawn PNG production
 
 ## Product north star
 

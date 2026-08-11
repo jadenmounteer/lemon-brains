@@ -33,6 +33,7 @@ export const PROP_KEYS = {
   keep: 'prop-keep',
   house: 'prop-house',
   wall: 'prop-wall',
+  tavern: 'prop-tavern',
 } as const;
 
 /** Future drop-in paths relative to public/ (assetUrl) */
@@ -44,6 +45,7 @@ export const dropInPaths = {
   keep: 'assets/props/keep.png',
   house: 'assets/props/house.png',
   wall: 'assets/props/wall.png',
+  tavern: 'assets/props/tavern.png',
 } as const;
 
 /** Frame index layout per unit sheet (16×24 frames in a row) */

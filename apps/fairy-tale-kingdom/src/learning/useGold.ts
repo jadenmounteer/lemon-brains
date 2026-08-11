@@ -39,6 +39,14 @@ export function useGold() {
     return addGold(-Math.abs(amount));
   }, [addGold]);
 
+  const spend = useCallback(async (amount: number) => {
+    const ok = await repository.spend(amount);
+    if (ok) {
+      setGold(await repository.load());
+    }
+    return ok;
+  }, []);
+
   return {
     gold,
     ready,
@@ -46,6 +54,7 @@ export function useGold() {
     earnCorrectAnswer,
     resetGold,
     stealGold,
+    spend,
     rewardAmount: GOLD_PER_CORRECT,
   };
 }

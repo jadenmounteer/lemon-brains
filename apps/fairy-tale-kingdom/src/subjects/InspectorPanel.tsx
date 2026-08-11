@@ -16,6 +16,9 @@ export function InspectorPanel({ subject, onClose }: InspectorPanelProps) {
       </div>
       <p className="inspector-role">{subject.roleLabel}</p>
       <p>
+        <span className="muted">Lives at</span> {subject.homeLabel}
+      </p>
+      <p>
         <span className="muted">Now:</span> {subject.activityLabel}
       </p>
       <h3 className="inspector-subhead">Today’s schedule</h3>

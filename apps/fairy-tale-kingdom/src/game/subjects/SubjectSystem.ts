@@ -7,6 +7,8 @@ import {
   type Direction,
   type UnitRole,
 } from '../art/assetManifest';
+import type { SavedSubject } from '../../kingdom/LayoutRepository';
+import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { pickName } from './names';
@@ -20,6 +22,7 @@ export type ManagedSubject = {
   moving: boolean;
 };
 
+/** Three residents per starter house (house-0 then house-1). */
 const SEED_ROLES: UnitRole[] = [
   'peasant',
   'peasant',
@@ -35,54 +38,85 @@ export class SubjectSystem {
   private selectedId: string | null = null;
   private marker: Phaser.GameObjects.Arc | null = null;
   private dayEmitAccumMs = 0;
+  private nextSubjectId = 0;
+  private buildings: BuildingSystem | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly world: WorldBounds
   ) {}
 
-  spawn(): void {
+  setBuildings(buildings: BuildingSystem): void {
+    this.buildings = buildings;
+  }
+
+  spawnSeed(): void {
+    // 3 + 3 across starter houses
     SEED_ROLES.forEach((role, index) => {
-      const homeIndex = index % 2;
-      const id = `subject-${index}`;
-      const name = pickName(1000 + index * 97);
-      const slot = slotAtHour(role, this.clock.hour);
-      const start = randomPointInZone(slot.zone, homeIndex, this.world);
-
-      const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
-      sprite.setDepth(20);
-      sprite.setOrigin(0.5, 1);
-      // Generous hit box — small pixels are hard to click at zoom 2
-      sprite.setInteractive(
-        new Phaser.Geom.Rectangle(-6, -4, UNIT_WIDTH + 12, UNIT_HEIGHT + 8),
-        Phaser.Geom.Rectangle.Contains
-      );
-      sprite.input!.cursor = 'pointer';
-      sprite.setData('subjectId', id);
-      sprite.play(idleAnimKey(role));
-
-      const data: Subject = {
-        id,
-        name,
-        role,
-        homeIndex,
-        activity: slot.activity,
-        activityLabel: slot.label,
-        zone: slot.zone,
-      };
-
-      this.subjects.push({ data, sprite, moving: false });
-
-      this.scene.time.delayedCall(300 + index * 250, () => {
-        this.nudgeTowardSchedule(this.subjects[index]!);
-      });
+      const houseId = index < 3 ? 'house-0' : 'house-1';
+      this.createSubject(role, houseId, `subject-${index}`, pickName(1000 + index * 97));
     });
+    this.nextSubjectId = SEED_ROLES.length;
+    this.ensureMarker();
+  }
 
-    this.marker = this.scene.add
-      .circle(0, 0, 6, 0xf4efe4, 0.35)
-      .setStrokeStyle(1, 0xd4a84b)
-      .setDepth(19)
-      .setVisible(false);
+  restore(saved: SavedSubject[]): void {
+    this.clearSubjects();
+    for (const s of saved) {
+      this.createSubject(s.role, s.houseId, s.id, s.name);
+      const match = /^subject-(\d+)$/.exec(s.id);
+      if (match) {
+        this.nextSubjectId = Math.max(this.nextSubjectId, Number(match[1]) + 1);
+      }
+    }
+    this.ensureMarker();
+  }
+
+  serialize(): SavedSubject[] {
+    return this.subjects.map((s) => ({
+      id: s.data.id,
+      name: s.data.name,
+      role: s.data.role,
+      houseId: s.data.houseId,
+    }));
+  }
+
+  count(): number {
+    return this.subjects.length;
+  }
+
+  occupantCounts(): Map<string, number> {
+    const map = new Map<string, number>();
+    for (const s of this.subjects) {
+      map.set(s.data.houseId, (map.get(s.data.houseId) ?? 0) + 1);
+    }
+    return map;
+  }
+
+  unitBodies(): Aabb[] {
+    return this.subjects.map((s) => ({
+      left: s.sprite.x - UNIT_WIDTH / 2 - 2,
+      right: s.sprite.x + UNIT_WIDTH / 2 + 2,
+      top: s.sprite.y - UNIT_HEIGHT,
+      bottom: s.sprite.y,
+    }));
+  }
+
+  hire(role: UnitRole): boolean {
+    if (!this.buildings) return false;
+    const houseId = this.buildings.pickHouseForHire(this.occupantCounts());
+    if (!houseId) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No free beds — build a house first',
+      });
+      return false;
+    }
+    const id = `subject-${this.nextSubjectId++}`;
+    const name = pickName(2000 + this.nextSubjectId * 41);
+    this.createSubject(role, houseId, id, name);
+    const managed = this.subjects[this.subjects.length - 1]!;
+    this.scene.time.delayedCall(200, () => this.nudgeTowardSchedule(managed));
+    return true;
   }
 
   list(): Subject[] {
@@ -129,7 +163,6 @@ export class SubjectSystem {
     return this.toSnapshot(managed);
   }
 
-  /** Advance clock and refresh activities; move idle subjects toward schedule zones. */
   update(deltaMs: number): void {
     const rolled = this.clock.tick(deltaMs);
     this.syncActivities();
@@ -138,7 +171,6 @@ export class SubjectSystem {
       this.scene.game.events.emit(KingdomEvents.DAY_ROLLED);
     }
 
-    // Smooth HUD clock (~1s) + night overlay consumers
     this.dayEmitAccumMs += deltaMs;
     if (this.dayEmitAccumMs >= 1000) {
       this.dayEmitAccumMs = 0;
@@ -148,7 +180,6 @@ export class SubjectSystem {
       });
     }
 
-    // Periodically nudge non-moving subjects
     for (const managed of this.subjects) {
       if (!managed.moving && Math.random() < deltaMs * 0.0004) {
         this.nudgeTowardSchedule(managed);
@@ -169,6 +200,58 @@ export class SubjectSystem {
     return managed ? this.toSnapshot(managed) : null;
   }
 
+  private createSubject(
+    role: UnitRole,
+    houseId: string,
+    id: string,
+    name: string
+  ): void {
+    const slot = slotAtHour(role, this.clock.hour);
+    const home = this.buildings?.getHousePoint(houseId) ?? null;
+    const start = randomPointInZone(slot.zone, this.world, home);
+
+    const sprite = this.scene.add.sprite(start.x, start.y, role, 0);
+    sprite.setDepth(20);
+    sprite.setOrigin(0.5, 1);
+    sprite.setInteractive(
+      new Phaser.Geom.Rectangle(-6, -4, UNIT_WIDTH + 12, UNIT_HEIGHT + 8),
+      Phaser.Geom.Rectangle.Contains
+    );
+    sprite.input!.cursor = 'pointer';
+    sprite.setData('subjectId', id);
+    sprite.play(idleAnimKey(role));
+
+    const data: Subject = {
+      id,
+      name,
+      role,
+      houseId,
+      activity: slot.activity,
+      activityLabel: slot.label,
+      zone: slot.zone,
+    };
+
+    this.subjects.push({ data, sprite, moving: false });
+  }
+
+  private clearSubjects(): void {
+    for (const s of this.subjects) {
+      s.sprite.destroy();
+    }
+    this.subjects = [];
+    this.selectedId = null;
+    this.marker?.setVisible(false);
+  }
+
+  private ensureMarker(): void {
+    if (this.marker) return;
+    this.marker = this.scene.add
+      .circle(0, 0, 6, 0xf4efe4, 0.35)
+      .setStrokeStyle(1, 0xd4a84b)
+      .setDepth(19)
+      .setVisible(false);
+  }
+
   private syncActivities(): void {
     for (const managed of this.subjects) {
       const slot = slotAtHour(managed.data.role, this.clock.hour);
@@ -186,11 +269,8 @@ export class SubjectSystem {
     managed.data.activityLabel = slot.label;
     managed.data.zone = slot.zone;
 
-    const target = randomPointInZone(
-      slot.zone,
-      managed.data.homeIndex,
-      this.world
-    );
+    const home = this.buildings?.getHousePoint(managed.data.houseId) ?? null;
+    const target = randomPointInZone(slot.zone, this.world, home);
     const pad = 32;
     const targetX = Phaser.Math.Clamp(target.x, pad, this.world.width - pad);
     const targetY = Phaser.Math.Clamp(target.y, pad, this.world.height - pad);
@@ -234,6 +314,7 @@ export class SubjectSystem {
       role: managed.data.role,
       roleLabel: roleLabel(managed.data.role),
       activityLabel: managed.data.activityLabel,
+      homeLabel: this.buildings?.houseLabel(managed.data.houseId) ?? 'a house',
       scheduleSummary: scheduleSummary(managed.data.role),
       dayPhase: this.clock.phase,
       hour: this.clock.hour,

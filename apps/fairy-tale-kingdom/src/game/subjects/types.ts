@@ -26,7 +26,7 @@ export interface Subject {
   id: string;
   name: string;
   role: SubjectRole;
-  homeIndex: number;
+  houseId: string;
   activity: ActivityId;
   activityLabel: string;
   zone: ZoneId;
@@ -39,6 +39,7 @@ export interface SubjectSnapshot {
   role: SubjectRole;
   roleLabel: string;
   activityLabel: string;
+  homeLabel: string;
   scheduleSummary: string[];
   dayPhase: DayPhase;
   hour: number;
@@ -47,4 +48,13 @@ export interface SubjectSnapshot {
 export interface DaySnapshot {
   dayPhase: DayPhase;
   hour: number;
+}
+
+export interface KingdomStats {
+  population: number;
+  capacity: number;
+  freeBeds: number;
+  houseCount: number;
+  wallCount: number;
+  tavernCount: number;
 }

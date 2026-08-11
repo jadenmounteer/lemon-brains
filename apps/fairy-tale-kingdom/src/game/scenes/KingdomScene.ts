@@ -5,8 +5,14 @@ import {
   TILE_SIZE,
   TerrainTile,
 } from '../art/assetManifest';
+import { BuildingSystem } from '../buildings/BuildingSystem';
+import { LayoutRepository } from '../../kingdom/LayoutRepository';
 import { RaidSystem } from '../raids/RaidSystem';
-import { KingdomEvents } from '../subjects/events';
+import {
+  KingdomEvents,
+  type BeginPlacePayload,
+  type HireSubjectPayload,
+} from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 
@@ -23,8 +29,11 @@ export class KingdomScene extends Phaser.Scene {
   private cameraStart: Phaser.Math.Vector2 | null = null;
   private pointerMoved = false;
   private subjects!: SubjectSystem;
+  private buildings!: BuildingSystem;
   private raids!: RaidSystem;
   private nightOverlay!: Phaser.GameObjects.Rectangle;
+  private layoutRepo = new LayoutRepository();
+  private saveTimer: Phaser.Time.TimerEvent | null = null;
 
   constructor() {
     super('KingdomScene');
@@ -43,30 +52,48 @@ export class KingdomScene extends Phaser.Scene {
       TILE_SIZE,
       TILE_SIZE
     )!;
-    const ground = map.createLayer(0, tileset, 0, 0)!;
-    ground.setDepth(0);
+    map.createLayer(0, tileset, 0, 0)!.setDepth(0);
 
-    this.placeProps();
+    const cx = WORLD_WIDTH / 2;
+    const cy = WORLD_HEIGHT / 2;
+    this.add.image(cx, cy, PROP_KEYS.keep).setDepth(10).setOrigin(0.5, 0.85);
 
     this.subjects = new SubjectSystem(this, {
       width: WORLD_WIDTH,
       height: WORLD_HEIGHT,
     });
-    this.subjects.spawn();
+    this.buildings = new BuildingSystem(this, { x: cx, y: cy }, () =>
+      this.subjects.unitBodies()
+    );
+    this.subjects.setBuildings(this.buildings);
 
     this.raids = new RaidSystem(
       this,
       { width: WORLD_WIDTH, height: WORLD_HEIGHT },
-      { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 }
+      { x: cx, y: cy }
     );
+    this.raids.setBuildings(this.buildings);
+
+    const saved = this.layoutRepo.loadSync();
+    if (saved && saved.buildings.length > 0) {
+      this.buildings.restore(saved.buildings);
+      if (saved.subjects.length > 0) {
+        this.subjects.restore(saved.subjects);
+      } else {
+        this.subjects.spawnSeed();
+      }
+    } else {
+      this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
+      this.subjects.spawnSeed();
+      this.persistLayout();
+    }
 
     const cam = this.cameras.main;
     cam.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     cam.setZoom(CAMERA_ZOOM);
     cam.setRoundPixels(true);
-    cam.centerOn(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    cam.centerOn(cx, cy);
 
-    // Camera-fixed night veil (below hint text)
     this.nightOverlay = this.add
       .rectangle(0, 0, this.scale.width, this.scale.height, NIGHT_TINT, 0)
       .setOrigin(0, 0)
@@ -94,6 +121,11 @@ export class KingdomScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.buildings.isPlacing()) {
+        const world = cam.getWorldPoint(pointer.x, pointer.y);
+        this.buildings.updateGhost(world.x, world.y);
+      }
+
       if (!pointer.isDown || !this.dragStart || !this.cameraStart) return;
       const dist = Phaser.Math.Distance.Between(
         pointer.x,
@@ -121,6 +153,22 @@ export class KingdomScene extends Phaser.Scene {
 
       if (wasPan) return;
 
+      if (this.buildings.isPlacing()) {
+        if (this.buildings.tryCommitPlace()) {
+          this.emitPlaceMode();
+          this.emitStats();
+          this.schedulePersist();
+          this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+            message: 'Building placed',
+          });
+        } else {
+          this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+            message: 'Cannot place on another object',
+          });
+        }
+        return;
+      }
+
       if (hitId) {
         this.publishSelection(this.subjects.select(hitId));
       } else {
@@ -128,15 +176,28 @@ export class KingdomScene extends Phaser.Scene {
       }
     });
 
-    this.game.events.on(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+    this.input.keyboard?.on('keydown-ESC', () => {
+      if (this.buildings.isPlacing()) {
+        this.buildings.cancelPlace();
+        this.emitPlaceMode();
+        this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: 'Placement cancelled',
+        });
+      }
+    });
 
-    // Initial day tick for HUD
+    this.game.events.on(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+    this.game.events.on(KingdomEvents.HIRE_SUBJECT, this.onHire);
+    this.game.events.on(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
+    this.game.events.on(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
       hour: this.subjects.clock.hour,
     });
+    this.emitStats();
+    this.emitPlaceMode();
 
-    // Refresh inspector activity while selected
     this.time.addEvent({
       delay: 1000,
       loop: true,
@@ -158,6 +219,62 @@ export class KingdomScene extends Phaser.Scene {
     this.raids?.clear();
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
+    this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
+    this.game.events.off(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
+    this.game.events.off(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+  }
+
+  private onHire = (payload: HireSubjectPayload) => {
+    const ok = this.subjects.hire(payload.role);
+    if (ok) {
+      this.emitStats();
+      this.schedulePersist();
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `Hired a ${payload.role}`,
+      });
+    }
+  };
+
+  private onBeginPlace = (payload: BeginPlacePayload) => {
+    this.buildings.beginPlace(payload.kind);
+    this.emitPlaceMode();
+  };
+
+  private onCancelPlace = () => {
+    this.buildings.cancelPlace();
+    this.emitPlaceMode();
+  };
+
+  private emitPlaceMode() {
+    this.game.events.emit(KingdomEvents.PLACE_MODE_CHANGED, {
+      active: this.buildings.isPlacing(),
+      kind: this.buildings.placingKind(),
+    });
+  }
+
+  private emitStats() {
+    const population = this.subjects.count();
+    const capacity = this.buildings.bedCapacity();
+    this.game.events.emit(KingdomEvents.KINGDOM_STATS, {
+      population,
+      capacity,
+      freeBeds: Math.max(0, capacity - population),
+      houseCount: this.buildings.houseCount(),
+      wallCount: this.buildings.wallCount(),
+      tavernCount: this.buildings.tavernCount(),
+    });
+  }
+
+  private schedulePersist() {
+    this.saveTimer?.remove(false);
+    this.saveTimer = this.time.delayedCall(400, () => this.persistLayout());
+  }
+
+  private persistLayout() {
+    void this.layoutRepo.save({
+      subjects: this.subjects.serialize(),
+      buildings: this.buildings.serialize(),
+    });
   }
 
   private onResize = (gameSize: Phaser.Structs.Size) => {
@@ -189,30 +306,6 @@ export class KingdomScene extends Phaser.Scene {
       if (id) return id;
     }
     return null;
-  }
-
-  private placeProps() {
-    const cx = WORLD_WIDTH / 2;
-    const cy = WORLD_HEIGHT / 2;
-
-    this.add.image(cx, cy, PROP_KEYS.keep).setDepth(10).setOrigin(0.5, 0.85);
-
-    this.add
-      .image(cx - 64, cy + 8, PROP_KEYS.house)
-      .setDepth(8)
-      .setOrigin(0.5, 0.85);
-    this.add
-      .image(cx + 72, cy + 16, PROP_KEYS.house)
-      .setDepth(8)
-      .setOrigin(0.5, 0.85);
-
-    for (let i = -2; i <= 2; i++) {
-      if (i === 0) continue;
-      this.add
-        .image(cx + i * 18, cy - 40, PROP_KEYS.wall)
-        .setDepth(9)
-        .setOrigin(0.5, 0.9);
-    }
   }
 }
 

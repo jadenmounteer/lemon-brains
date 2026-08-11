@@ -10,11 +10,11 @@ export interface Point {
   y: number;
 }
 
-/** Pick a point inside a schedule zone (simple rectangles around landmarks). */
+/** Pick a point inside a schedule zone. Home uses the subject’s house position. */
 export function randomPointInZone(
   zone: ZoneId,
-  homeIndex: number,
   world: WorldBounds,
+  homePoint: Point | null,
   rand: () => number = Math.random
 ): Point {
   const cx = world.width / 2;
@@ -33,9 +33,9 @@ export function randomPointInZone(
     case 'field':
       return { x: cx + jitter(160), y: cy + 90 + jitter(60) };
     case 'home': {
-      const homeX = homeIndex % 2 === 0 ? cx - 64 : cx + 72;
-      const homeY = homeIndex % 2 === 0 ? cy + 8 : cy + 16;
-      return { x: homeX + jitter(28), y: homeY + 12 + jitter(16) };
+      const hx = homePoint?.x ?? cx - 64;
+      const hy = homePoint?.y ?? cy + 8;
+      return { x: hx + jitter(28), y: hy + 12 + jitter(16) };
     }
   }
 }

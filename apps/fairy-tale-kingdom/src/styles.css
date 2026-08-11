@@ -399,3 +399,66 @@ a {
   margin: 0 0 0.5rem;
   font-family: Georgia, "Times New Roman", serif;
 }
+
+.market-capacity {
+  margin: 0.35rem 0;
+  font-size: 0.95rem;
+}
+
+.market-note {
+  margin: 0 0 0.5rem;
+  font-size: 0.82rem;
+}
+
+.market-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.market-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.market-row p {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+}
+
+.market-buy {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--gold);
+  background: rgba(212, 168, 75, 0.18);
+  color: #f6e2a8;
+  font-weight: 700;
+}
+
+.market-buy:disabled {
+  opacity: 0.45;
+}
+
+.place-banner {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0.5rem 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--gold);
+  background: rgba(212, 168, 75, 0.12);
+}
+
+.place-banner p {
+  margin: 0;
+  font-size: 0.85rem;
+}

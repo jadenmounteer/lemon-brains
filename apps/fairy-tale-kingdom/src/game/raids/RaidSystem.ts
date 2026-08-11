@@ -5,6 +5,7 @@ import {
   type Direction,
   type EnemyRole,
 } from '../art/assetManifest';
+import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { KingdomEvents } from '../subjects/events';
 
 export interface KeepPoint {
@@ -31,7 +32,6 @@ const LABELS: Record<RaidKind, string> = {
   enemy_army: 'a rival kingdom’s army',
 };
 
-/** First raid after grace period; then on a timer with escalating army chance. */
 const GRACE_MS = 40_000;
 const RAID_INTERVAL_MS = 55_000;
 const KEEP_REACH_PX = 28;
@@ -42,12 +42,17 @@ export class RaidSystem {
   private nextRaidAt = GRACE_MS;
   private gameOver = false;
   private raidCount = 0;
+  private buildings: BuildingSystem | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly world: { width: number; height: number },
     private readonly keep: KeepPoint
   ) {}
+
+  setBuildings(buildings: BuildingSystem): void {
+    this.buildings = buildings;
+  }
 
   get isGameOver(): boolean {
     return this.gameOver;
@@ -73,7 +78,6 @@ export class RaidSystem {
 
   private spawnRaid(): void {
     this.raidCount += 1;
-    // Every 3rd raid after the first, or 25% chance: enemy army (lose if they reach keep)
     const army =
       this.raidCount >= 3 &&
       (this.raidCount % 3 === 0 || Math.random() < 0.25);
@@ -132,7 +136,14 @@ export class RaidSystem {
     sprite.play(walkAnimKey(kind, dir), true);
 
     const dist = Math.hypot(dx, dy);
-    const speed = kind === 'giant' ? 28 : kind === 'enemy_army' ? 36 : 42;
+    let speed = kind === 'giant' ? 28 : kind === 'enemy_army' ? 36 : 42;
+    const midX = (sprite.x + this.keep.x) / 2;
+    const midY = (sprite.y + this.keep.y) / 2;
+    speed *= this.buildings?.raidSpeedMultiplier(midX, midY) ?? 1;
+    // Also check start/end near walls
+    speed *= this.buildings?.raidSpeedMultiplier(sprite.x, sprite.y) ?? 1;
+    speed = Math.max(12, speed);
+
     const duration = Math.max(4000, (dist / speed) * 1000);
 
     raider.tween = this.scene.tweens.add({
@@ -172,7 +183,10 @@ export class RaidSystem {
       return;
     }
 
-    const amount = STEAL_AMOUNTS[raider.kind];
+    let amount = STEAL_AMOUNTS[raider.kind];
+    if (this.buildings?.hasTavern()) {
+      amount = Math.max(1, Math.floor(amount * 0.75));
+    }
     this.scene.game.events.emit(KingdomEvents.GOLD_STOLEN, {
       amount,
       kind: raider.kind,

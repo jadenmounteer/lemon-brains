@@ -31,4 +31,13 @@ export class GoldRepository {
   async reset(): Promise<void> {
     await this.save(0);
   }
+
+  /** Spend gold if funds allow. Returns false when too poor. */
+  async spend(amount: number): Promise<boolean> {
+    const cost = Math.max(0, Math.floor(amount));
+    const current = await this.load();
+    if (current < cost) return false;
+    await this.save(current - cost);
+    return true;
+  }
 }

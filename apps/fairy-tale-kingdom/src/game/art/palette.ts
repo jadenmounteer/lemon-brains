@@ -20,6 +20,7 @@ export const palette = {
   clothEnemyArmy: 0x8b2e2e,
   metal: 0xc0c4c8,
   cream: 0xf4efe4,
+  gold: 0xd4a84b,
 } as const;
 
 export type PaletteColor = (typeof palette)[keyof typeof palette];

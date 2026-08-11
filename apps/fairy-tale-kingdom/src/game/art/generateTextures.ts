@@ -245,6 +245,24 @@ function drawWall(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawTavern(scene: Phaser.Scene) {
+  const w = 36;
+  const h = 32;
+  const tex = createCanvas(scene, PROP_KEYS.tavern, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 14, 28, 16, palette.wood);
+  fillRect(ctx, 4, 14, 28, 1, palette.ink);
+  for (let row = 0; row < 8; row++) {
+    fillRect(ctx, 4 + row, 6 + row, 28 - row * 2, 1, palette.roof);
+  }
+  fillRect(ctx, 14, 20, 8, 10, palette.woodDark);
+  fillRect(ctx, 8, 18, 4, 4, palette.cream);
+  fillRect(ctx, 24, 18, 4, 4, palette.cream);
+  // mug sign
+  fillRect(ctx, 26, 10, 5, 4, palette.gold);
+  tex.refresh();
+}
+
 /**
  * Generate all Phase 1 textures into the scene texture manager.
  * Keys match assetManifest / future PNG drop-ins.
@@ -257,6 +275,7 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.keep,
     PROP_KEYS.house,
     PROP_KEYS.wall,
+    PROP_KEYS.tavern,
   ]) {
     if (scene.textures.exists(key)) {
       scene.textures.remove(key);
@@ -273,6 +292,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawKeep(scene);
   drawHouse(scene);
   drawWall(scene);
+  drawTavern(scene);
 
   const terrain = scene.textures.get(TERRAIN_KEY);
   for (let i = 0; i < 4; i++) {
