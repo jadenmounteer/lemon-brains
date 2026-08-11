@@ -179,6 +179,12 @@ function clothFor(role: AnimRole): number {
       return palette.clothWitchHunter;
     case 'witch':
       return palette.clothWitch;
+    case 'necromancer':
+      return palette.clothNecromancer;
+    case 'zombie':
+      return palette.clothZombie;
+    case 'vampire_wife':
+      return palette.clothVampireWife;
     case 'bandit':
       return palette.clothBandit;
     case 'gypsy':
@@ -203,6 +209,8 @@ function clothFor(role: AnimRole): number {
       return palette.clothOgre;
     case 'dragon':
       return palette.clothDragon;
+    default:
+      return palette.clothPeasant;
   }
 }
 
@@ -244,6 +252,7 @@ function drawUnitFrame(
   const baseY = bob;
   const cloth = clothFor(role);
   const tall = role === 'giant' ? -2 : 0;
+  const skinTone = role === 'zombie' ? palette.skinZombie : palette.skin;
 
   fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
 
@@ -256,7 +265,7 @@ function drawUnitFrame(
   fillRect(ctx, originX + 4, 10 + baseY + tall, 1, 8 - tall, palette.ink);
   fillRect(ctx, originX + 11, 10 + baseY + tall, 1, 8 - tall, palette.ink);
 
-  fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 6, palette.skin);
+  fillRect(ctx, originX + 5, 4 + baseY + tall, 6, 6, skinTone);
   if (role === 'knight') {
     fillRect(ctx, originX + 5, 3 + baseY, 6, 3, palette.metal);
     fillRect(ctx, originX + 11, 12 + baseY, 2, 5, palette.metal);
@@ -302,6 +311,18 @@ function drawUnitFrame(
   } else if (role === 'witch') {
     fillRect(ctx, originX + 4, 2 + baseY, 8, 3, palette.ink);
     fillRect(ctx, originX + 12, 10 + baseY, 2, 6, palette.wood);
+  } else if (role === 'necromancer') {
+    // Deep hood shadowing the face, staff of bone.
+    fillRect(ctx, originX + 3, 1 + baseY, 10, 5, palette.clothNecromancer);
+    fillRect(ctx, originX + 12, 8 + baseY, 2, 10, palette.cream);
+  } else if (role === 'zombie') {
+    // Ragged, lopsided collar and a missing patch of hair.
+    fillRect(ctx, originX + 4, 3 + baseY, 4, 2, palette.clothZombie);
+    fillRect(ctx, originX + 9, 4 + baseY, 3, 1, palette.stoneDark);
+  } else if (role === 'vampire_wife') {
+    // Dark widow's-peak hair and a trailing cape.
+    fillRect(ctx, originX + 4, 2 + baseY, 8, 3, palette.ink);
+    fillRect(ctx, originX + 12, 9 + baseY, 2, 9, palette.clothVampireWife);
   } else if (role === 'dungeon_keeper') {
     fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.metal);
     fillRect(ctx, originX + 11, 12 + baseY, 3, 4, palette.gold);

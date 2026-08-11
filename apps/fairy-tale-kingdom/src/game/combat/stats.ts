@@ -98,6 +98,8 @@ export const CombatBalance = {
   thiefStealGold: 6,
   thiefCaptureRange: 32,
   necromancerArrestRange: 32,
+  zombieBiteRange: 22,
+  zombieMeleeDamage: 9,
   physicianHealRange: 40,
   physicianHealHunger: 35,
   physicianHealHp: 14,

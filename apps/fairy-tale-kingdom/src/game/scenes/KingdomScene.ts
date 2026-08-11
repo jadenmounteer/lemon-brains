@@ -293,12 +293,16 @@ export class KingdomScene extends Phaser.Scene {
       this.buildings,
       this.bubbles
     );
+    this.subjects.setSecurity(this.security);
     this.militaryPatrol = new MilitaryPatrolSystem(this.subjects, this.bubbles);
     this.undead = new UndeadSystem(
       this,
       this.subjects,
       this.buildings,
       this.security
+    );
+    this.subjects.setOnDeath((id, houseId, name) =>
+      this.undead.onSubjectDied(id, houseId, name)
     );
     this.naval = new NavalSystem(
       this,
