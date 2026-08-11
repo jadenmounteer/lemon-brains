@@ -11,6 +11,7 @@ import { KingdomEvents } from '../subjects/events';
 import { randomPointInZone, type WorldBounds } from '../subjects/zones';
 import { pickCampRaidLine, planSiege } from './GeneralStrategy';
 import { WarBalance, type CampKind } from './WarBalance';
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 export type { CampSnapshot };
 
@@ -178,7 +179,7 @@ export class EncampmentSystem {
   private camps: CampRecord[] = [];
   private nextId = 1;
   private nextUnitSeq = 1;
-  private campSpawnMs = 25_000;
+  private campSpawnMs = 90_000;
   private siegeWaveMs = 90_000;
   private buildings: BuildingSystem | null = null;
   private subjects: SubjectSystem | null = null;
@@ -218,11 +219,12 @@ export class EncampmentSystem {
     this.onChanged = cb;
   }
 
-  /** Seed 1–2 fringe camps for a new / migrated kingdom. */
-  seedStarterCamps(count = 2): void {
-    const n = Math.max(1, Math.min(3, count));
+  /** Seed fringe camps for a new / migrated kingdom (count from sandbox). */
+  seedStarterCamps(count = 1): void {
+    const n = Math.max(0, Math.min(4, count));
     for (let i = 0; i < n; i++) {
       const kinds = WarBalance.campKindsWeighted(this.daysPlayed);
+      if (!kinds.length) return;
       const kind = kinds[Math.floor(Math.random() * kinds.length)]!;
       const pos = this.pickFringePoint();
       if (!pos) continue;
@@ -242,7 +244,7 @@ export class EncampmentSystem {
       if (tooClose) continue;
       this.createCamp(kind, pos.x, pos.y, {
         garrison: 1 + Math.floor(Math.random() * 2),
-        raidCooldownMs: 25_000 + Math.random() * 80_000,
+        raidCooldownMs: 90_000 + Math.random() * 120_000,
       });
     }
     this.onChanged?.();
@@ -909,6 +911,7 @@ export class EncampmentSystem {
       camp.garrison >= thresh &&
       this.raids &&
       !this.raids.isArmySiege() &&
+      getSandboxRuntime().war.kinds[camp.kind] &&
       Math.random() < pressure
     ) {
       const size = WarBalance.raidPartySize(
@@ -917,9 +920,7 @@ export class EncampmentSystem {
         camp.garrison
       );
       this.launchParty(camp, size, false);
-      // Wide independent jitter so camps don't sync-attack
-      camp.raidCooldownMs =
-        50_000 + Math.random() * 90_000 + (1 - pressure) * 60_000;
+      camp.raidCooldownMs = WarBalance.raidCooldownMs(pressure);
     }
   }
 
@@ -1132,7 +1133,8 @@ export class EncampmentSystem {
   }
 
   private trySpawnSiegeWave(): void {
-    if (this.daysPlayed < 2) return;
+    if (this.daysPlayed < 3) return;
+    if (!getSandboxRuntime().war.kinds.siege) return;
     const siegeCount = this.camps.filter((c) => c.kind === 'siege').length;
     if (siegeCount >= WarBalance.maxSiegeCamps(this.daysPlayed)) return;
     if (this.raids?.isArmySiege()) return;

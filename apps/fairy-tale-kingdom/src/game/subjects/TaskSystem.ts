@@ -59,7 +59,8 @@ export class TaskSystem {
     if (!this.hunger) return;
     for (const managed of this.subjects.listManaged()) {
       if (managed.interrupt) continue;
-      if (managed.data.onWall || managed.data.sick) continue;
+      if (managed.data.onWall) continue;
+      // Sick subjects must still eat — blocking meals trapped the whole realm
       if (managed.data.hunger < Phase12Balance.hungerInterruptAt) continue;
       this.subjects.beginEat(managed.data.id);
     }
@@ -130,7 +131,9 @@ export class TaskSystem {
 
     for (const managed of this.subjects.listManaged()) {
       if (managed.data.role !== 'peasant') continue;
-      if (managed.interrupt || managed.data.sick || managed.data.onWall) continue;
+      if (managed.interrupt || managed.data.onWall) continue;
+      // When food is critical, even the sick must try to harvest
+      if (managed.data.sick && !this.foodLow()) continue;
       const field = this.buildings.nearestField(
         managed.sprite.x,
         managed.sprite.y
@@ -201,9 +204,10 @@ export class TaskSystem {
       // Passive schedule peasants near fields also produce when not interrupted
     }
 
-    // Passive harvest: peasants on field work near a field
+    // Passive harvest: peasants on field work near a field (sick harvest slowly so
+    // a hunger plague cannot freeze food production forever)
     for (const managed of this.subjects.listManaged()) {
-      if (managed.data.role !== 'peasant' || managed.data.sick) continue;
+      if (managed.data.role !== 'peasant') continue;
       if (managed.interrupt) continue;
       if (managed.data.zone !== 'field' && managed.data.activity !== 'work') {
         continue;
@@ -214,9 +218,10 @@ export class TaskSystem {
         EconomyBalance.harvestRange
       );
       if (!field) continue;
+      const sickMult = managed.data.sick ? 0.25 : 1;
       const amount = Math.max(
         1,
-        Math.round(EconomyBalance.foodPerHarvestTick * mult * 0.5)
+        Math.round(EconomyBalance.foodPerHarvestTick * mult * 0.5 * sickMult)
       );
       this.hunger?.addFood(amount);
     }

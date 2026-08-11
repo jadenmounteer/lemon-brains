@@ -733,3 +733,57 @@ a {
     max-height: 48px;
   }
 }
+
+/* Sandbox settings overlay */
+.sandbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(12, 18, 14, 0.72);
+}
+
+.sandbox-panel {
+  width: min(480px, 100%);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  padding: 1rem 1.1rem 1.25rem;
+}
+
+.sandbox-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.45rem 0;
+  font-size: 0.85rem;
+}
+
+.sandbox-field input[type='range'] {
+  width: 100%;
+}
+
+.sandbox-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin: 0.4rem 0 0.75rem;
+}
+
+.sandbox-check {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+}
+
+.sandbox-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(244, 239, 228, 0.15);
+}

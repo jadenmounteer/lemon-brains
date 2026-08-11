@@ -1,6 +1,9 @@
 /**
  * Day-scaled war difficulty. daysPlayed 0 = early game; grows over weeks.
+ * Multipliers from sandbox settings apply on top of these calmer defaults.
  */
+
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 export type CampKind =
   | 'bandit'
@@ -15,29 +18,48 @@ function dayScale(days: number): number {
   return Math.max(0, days);
 }
 
+function warMult(): number {
+  return getSandboxRuntime().war.intensity;
+}
+
 export const WarBalance = {
   /** ms between attempts to place a new fringe camp */
   campSpawnIntervalMs(days: number): number {
     const d = dayScale(days);
-    return Math.max(45_000, 120_000 - d * 2_500);
+    const sb = getSandboxRuntime().war;
+    const rate = Math.max(0.01, sb.campSpawnRate * sb.intensity);
+    // Calmer base: ~3 min early, floor 75s
+    const base = Math.max(75_000, 180_000 - d * 2_000);
+    return base / rate;
   },
 
   maxCamps(days: number): number {
     const d = dayScale(days);
-    return Math.min(28, 5 + Math.floor(d / 2));
+    const intensity = warMult();
+    const cap = Math.min(28, 4 + Math.floor(d / 2));
+    if (intensity <= 0) return 0;
+    return Math.max(0, Math.round(cap * Math.min(1.5, 0.5 + intensity * 0.5)));
   },
 
   /** How many concurrent siege camps are allowed */
   maxSiegeCamps(days: number): number {
     const d = dayScale(days);
+    const sb = getSandboxRuntime().war;
+    if (sb.siegeRate * sb.intensity <= 0 || !sb.kinds.siege) return 0;
     return Math.min(5, 1 + Math.floor(d / 8));
   },
 
   /** Early-game softener for raid/siege pressure (0–1) */
   earlyPressureFactor(days: number, population: number): number {
-    if (days >= 5 && population >= 8) return 1;
-    if (days < 5) return 0.35 + days * 0.1;
-    return 0.55 + Math.min(0.45, population * 0.05);
+    const sb = getSandboxRuntime().war;
+    const mult = sb.raidPressure * sb.intensity;
+    if (mult <= 0) return 0;
+    let base: number;
+    // Full pressure later: day 8+ and pop 12+
+    if (days >= 8 && population >= 12) base = 1;
+    else if (days < 8) base = 0.12 + days * 0.08;
+    else base = 0.4 + Math.min(0.5, population * 0.04);
+    return Math.min(1, base * mult);
   },
 
   /** Idle garrison size before a raid launches */
@@ -76,17 +98,19 @@ export const WarBalance = {
   /** ms between spawning one garrison unit at a camp */
   garrisonSpawnMs(kind: CampKind, days: number): number {
     const d = dayScale(days);
+    const sb = getSandboxRuntime().war;
+    const growth = Math.max(0.01, sb.garrisonGrowth * sb.intensity);
     const base =
       kind === 'goblin'
-        ? 18_000
+        ? 22_000
         : kind === 'giant'
-          ? 35_000
+          ? 40_000
           : kind === 'coven'
-            ? 40_000
+            ? 45_000
             : kind === 'gypsy'
-              ? 32_000
-              : 28_000;
-    return Math.max(10_000, base - d * 400);
+              ? 36_000
+              : 32_000;
+    return Math.max(12_000, (base - d * 350) / growth);
   },
 
   /** Units sent on a raid from a camp */
@@ -121,7 +145,10 @@ export const WarBalance = {
 
   siegeArmyCount(days: number): number {
     const d = dayScale(days);
-    return Math.min(10, 3 + Math.floor(d / 4));
+    const sb = getSandboxRuntime().war;
+    const rate = sb.siegeRate * sb.intensity;
+    if (rate <= 0) return 0;
+    return Math.min(10, Math.round((3 + Math.floor(d / 4)) * Math.min(1.5, rate)));
   },
 
   /** Starting supply pool for a siege encampment */
@@ -135,13 +162,17 @@ export const WarBalance = {
 
   siegeReinforceMs(days: number): number {
     const d = dayScale(days);
-    return Math.max(8_000, 22_000 - d * 300);
+    const sb = getSandboxRuntime().war;
+    const rate = Math.max(0.01, sb.siegeRate * sb.intensity);
+    return Math.max(8_000, (22_000 - d * 300) / rate);
   },
 
   /** How often army waves try to arrive (via encampment system) */
   siegeWaveIntervalMs(days: number): number {
     const d = dayScale(days);
-    return Math.max(90_000, 180_000 - d * 3_000);
+    const sb = getSandboxRuntime().war;
+    const rate = Math.max(0.01, sb.siegeRate * sb.intensity);
+    return Math.max(120_000, (240_000 - d * 3_000) / rate);
   },
 
   aggroRadius: 96,
@@ -161,14 +192,35 @@ export const WarBalance = {
     return Math.max(40_000, 90_000 - d * 1_500);
   },
 
+  /** Extra post-raid cooldown padding (ms) — longer = more peace between raids */
+  raidCooldownMs(pressure: number): number {
+    // Calmer: ~2–4+ minutes between attempts at low pressure
+    return 90_000 + Math.random() * 120_000 + (1 - pressure) * 90_000;
+  },
+
   campKindsWeighted(days: number): CampKind[] {
     const d = dayScale(days);
-    const kinds: CampKind[] = ['bandit', 'bandit', 'thief', 'goblin'];
-    if (d >= 2) kinds.push('giant');
-    if (d >= 3) kinds.push('gypsy');
-    if (d >= 4) kinds.push('goblin', 'bandit');
-    if (d >= 6) kinds.push('coven');
-    if (d >= 8) kinds.push('giant', 'thief', 'gypsy');
-    return kinds;
+    const enabled = getSandboxRuntime().war.kinds;
+    const kinds: CampKind[] = [];
+    const push = (k: CampKind, n = 1) => {
+      if (!enabled[k]) return;
+      for (let i = 0; i < n; i++) kinds.push(k);
+    };
+    push('bandit', 2);
+    push('thief');
+    push('goblin');
+    if (d >= 2) push('giant');
+    if (d >= 3) push('gypsy');
+    if (d >= 4) {
+      push('goblin');
+      push('bandit');
+    }
+    if (d >= 6) push('coven');
+    if (d >= 8) {
+      push('giant');
+      push('thief');
+      push('gypsy');
+    }
+    return kinds.length ? kinds : (enabled.bandit ? ['bandit'] : []);
   },
-} as const;
+};

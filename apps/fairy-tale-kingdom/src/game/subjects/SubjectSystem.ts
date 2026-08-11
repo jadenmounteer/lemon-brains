@@ -14,6 +14,7 @@ import type { SavedSubject } from '../../kingdom/LayoutRepository';
 import type { Aabb, BuildingSystem } from '../buildings/BuildingSystem';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
+import { getSandboxRuntime } from '../sandboxRuntime';
 import {
   BUILDING_ROLE_CAPACITY,
   civilianJobForBuilding,
@@ -881,20 +882,39 @@ export class SubjectSystem {
     this.raiseHungerAll(amount);
   }
 
+  private sickHungerThreshold(): number {
+    return getSandboxRuntime().sickness.sickAtHunger;
+  }
+
+  private dieHungerThreshold(): number {
+    return Phase12Balance.dieAtHunger;
+  }
+
   raiseHungerAll(amount: number): void {
+    const sickAt = this.sickHungerThreshold();
+    const dieAt = this.dieHungerThreshold();
+    const sickChance = Phase12Balance.hungerSickChance;
     for (const s of [...this.subjects]) {
       if (s.data.allegiance === 'camp') continue;
       s.data.hunger = Math.min(100, s.data.hunger + amount);
       const wasSick = s.data.sick;
-      s.data.sick = s.data.hunger >= 60;
+
+      if (s.data.hunger < sickAt) {
+        // Fed enough that hunger-sickness clears; meals also ease milder illness
+        if (s.data.sick) s.data.sick = false;
+      } else if (!s.data.sick && Math.random() < sickChance) {
+        // Rare: crossing the hunger line does not auto-plague the whole kingdom
+        s.data.sick = true;
+      }
+
       if (s.data.sick && !wasSick) {
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${s.data.name} fell sick from hunger`,
         });
+        // Keep meal interrupts — becoming sick must not cancel the cure
         if (
           s.interrupt?.kind === 'repair' ||
           s.interrupt?.kind === 'harvest' ||
-          s.interrupt?.kind === 'eat' ||
           s.interrupt?.kind === 'fish' ||
           s.interrupt?.kind === 'crew'
         ) {
@@ -902,7 +922,7 @@ export class SubjectSystem {
         }
       }
       this.applyHpTint(s);
-      if (s.data.hunger >= 100) {
+      if (s.data.hunger >= dieAt) {
         const name = s.data.name;
         const houseId = s.data.houseId;
         const id = s.data.id;
@@ -917,9 +937,10 @@ export class SubjectSystem {
   }
 
   recoverHunger(amount: number): void {
+    const sickAt = this.sickHungerThreshold();
     for (const s of this.subjects) {
       s.data.hunger = Math.max(0, s.data.hunger - amount);
-      s.data.sick = s.data.hunger >= 60;
+      if (s.data.hunger < sickAt) s.data.sick = false;
       this.applyHpTint(s);
     }
   }
@@ -928,7 +949,9 @@ export class SubjectSystem {
     const managed = this.getById(id);
     if (!managed) return;
     managed.data.hunger = Math.max(0, managed.data.hunger - amount);
-    managed.data.sick = managed.data.hunger >= 60;
+    if (managed.data.hunger < this.sickHungerThreshold()) {
+      managed.data.sick = false;
+    }
     this.applyHpTint(managed);
   }
 
@@ -945,7 +968,7 @@ export class SubjectSystem {
   tickHappiness(): void {
     for (const s of this.subjects) {
       if (s.data.allegiance === 'camp') continue;
-      if (s.data.hunger >= 60) {
+      if (s.data.hunger >= this.sickHungerThreshold()) {
         s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
       }
       if (s.data.sick) {
@@ -1911,7 +1934,7 @@ export class SubjectSystem {
       maxHp,
       onWall: Boolean(opts?.onWall),
       hunger,
-      sick: opts?.sick ?? hunger >= 60,
+      sick: opts?.sick ?? hunger >= getSandboxRuntime().sickness.sickAtHunger,
       temporaryPrincess: Boolean(opts?.temporaryPrincess),
       married: Boolean(opts?.married),
       happiness,

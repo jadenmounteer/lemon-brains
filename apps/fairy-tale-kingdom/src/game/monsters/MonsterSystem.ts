@@ -23,6 +23,7 @@ import {
   type Point,
   type WorldBounds,
 } from '../subjects/zones';
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 export type MonsterKind = MonsterRole;
 
@@ -277,7 +278,10 @@ export class MonsterSystem {
       this.syncActivity(m, hour);
       m.hunger = Math.min(
         100,
-        m.hunger + (deltaMs / 1000) * CombatBalance.monsterHungerPerSec
+        m.hunger +
+          (deltaMs / 1000) *
+            CombatBalance.monsterHungerPerSec *
+            getSandboxRuntime().monsters.hungerHunt
       );
       m.thinkAccumMs += deltaMs;
       if (m.kind === 'troll') {
@@ -299,7 +303,9 @@ export class MonsterSystem {
 
   onDayRolled(): void {
     this.dayCount += 1;
-    this.spawnAccumDays += 1;
+    const sb = getSandboxRuntime().monsters;
+    if (sb.spawnRate <= 0) return;
+    this.spawnAccumDays += sb.spawnRate;
     const maxMonsters = Math.min(14, 4 + Math.floor(this.daysPlayed / 3));
     if (this.monsters.length >= maxMonsters) return;
     // Spawn more often as days rise (every 2 days early → every day late)
@@ -307,12 +313,22 @@ export class MonsterSystem {
     if (this.spawnAccumDays < interval) return;
     this.spawnAccumDays = 0;
     const hasDragon = this.monsters.some((m) => m.kind === 'dragon');
-    let kind: MonsterKind = Math.random() < 0.45 ? 'ogre' : 'troll';
-    // Earlier / more frequent dragons
-    if (!hasDragon && (this.dayCount >= 2 || this.daysPlayed >= 2) && Math.random() < 0.65) {
-      kind = 'dragon';
+    const pool: MonsterKind[] = [];
+    if (sb.kinds.troll) pool.push('troll');
+    if (sb.kinds.ogre) pool.push('ogre');
+    if (
+      sb.kinds.dragon &&
+      !hasDragon &&
+      (this.dayCount >= 2 || this.daysPlayed >= 2) &&
+      Math.random() < 0.65
+    ) {
+      pool.push('dragon');
     }
-    // Extra spawn chance on long-lived kingdoms
+    if (!pool.length) return;
+    let kind: MonsterKind = pool[Math.floor(Math.random() * pool.length)]!;
+    if (kind !== 'dragon' && pool.includes('ogre') && pool.includes('troll')) {
+      kind = Math.random() < 0.45 ? 'ogre' : 'troll';
+    }
     const m = this.spawnMonster(kind);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message:
@@ -323,9 +339,17 @@ export class MonsterSystem {
     if (
       this.daysPlayed >= 8 &&
       this.monsters.length < maxMonsters &&
-      Math.random() < 0.45
+      Math.random() < 0.45 * sb.spawnRate
     ) {
-      const extra = this.spawnMonster(Math.random() < 0.5 ? 'ogre' : 'troll');
+      const extras: MonsterKind[] = [];
+      if (sb.kinds.ogre) extras.push('ogre');
+      if (sb.kinds.troll) extras.push('troll');
+      if (!extras.length) {
+        this.onChanged?.();
+        return;
+      }
+      const extraKind = extras[Math.floor(Math.random() * extras.length)]!;
+      const extra = this.spawnMonster(extraKind);
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `${extra.name} the ${extra.kind} joins the wilds!`,
       });

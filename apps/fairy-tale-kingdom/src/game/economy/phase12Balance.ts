@@ -2,8 +2,15 @@
 export const Phase12Balance = {
   mealCost: 1,
   mealHungerRecover: 40,
-  hungerRisePerHour: 10,
+  /** Slightly slower hunger so early food stress is less of a plague. */
+  hungerRisePerHour: 8,
   hungerInterruptAt: 45,
+  /** Hunger at/above this *may* mark a subject sick (see hungerSickChance). */
+  sickAtHunger: 90,
+  /** Chance to catch hunger-sickness when crossing the threshold (per hourly tick). */
+  hungerSickChance: 0.15,
+  /** Hunger at/above this is fatal without food. */
+  dieAtHunger: 100,
   eatDurationMs: 1600,
   keepInfluenceRadius: 280,
   paradeCooldownMs: 180_000,

@@ -1,5 +1,6 @@
 import { FoodRepository } from '../../learning/FoodRepository';
 import { Phase12Balance } from './phase12Balance';
+import { getSandboxRuntime } from '../sandboxRuntime';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { KingdomEvents } from '../subjects/events';
 import type Phaser from 'phaser';
@@ -48,7 +49,9 @@ export class HungerSystem {
       return;
     }
 
-    this.subjects.raiseHungerAll(Phase12Balance.hungerRisePerHour);
+    this.subjects.raiseHungerAll(
+      Phase12Balance.hungerRisePerHour * getSandboxRuntime().sickness.hungerRise
+    );
     this.subjects.tickHappiness();
     this.subjects.tryDefectMiserable();
     this.emitFood(this.foodRepo.loadSync());

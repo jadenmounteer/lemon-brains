@@ -21,10 +21,16 @@ import type {
   KingdomStats,
   SubjectSnapshot,
 } from './subjects/types';
+import {
+  SANDBOX_REGISTRY_KEY,
+  type SandboxSettings,
+} from '../kingdom/sandboxSettings';
+import { setSandboxRuntime } from './sandboxRuntime';
 
 interface PhaserGameProps {
   remountKey: number;
   daysPlayed: number;
+  sandboxSettings: SandboxSettings;
   hireRequest: { seq: number; role: UnitRole } | null;
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
@@ -66,6 +72,7 @@ interface PhaserGameProps {
 export function PhaserGame({
   remountKey,
   daysPlayed,
+  sandboxSettings,
   hireRequest,
   placeRequest,
   cancelPlaceToken,
@@ -140,6 +147,8 @@ export function PhaserGame({
 
     const game = createGame(host);
     gameRef.current = game;
+    setSandboxRuntime(sandboxSettings);
+    game.registry.set(SANDBOX_REGISTRY_KEY, sandboxSettings);
     game.registry.set('daysPlayed', daysPlayed);
 
     const handleSelect = (snap: SubjectSnapshot | null) => {
@@ -269,6 +278,11 @@ export function PhaserGame({
       daysPlayed,
     });
   }, [daysPlayed]);
+
+  useEffect(() => {
+    setSandboxRuntime(sandboxSettings);
+    gameRef.current?.registry.set(SANDBOX_REGISTRY_KEY, sandboxSettings);
+  }, [sandboxSettings]);
 
   useEffect(() => {
     if (!commandRequest) return;

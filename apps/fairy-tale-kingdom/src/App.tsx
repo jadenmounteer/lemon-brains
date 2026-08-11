@@ -29,6 +29,11 @@ import { LayoutRepository } from './kingdom/LayoutRepository';
 import { RansomPanel } from './kingdom/RansomPanel';
 import { TodoPanel } from './kingdom/TodoPanel';
 import { useKingdom } from './kingdom/useKingdom';
+import { useSandboxSettings } from './kingdom/useSandboxSettings';
+import {
+  loadShowCareerTodos,
+  saveShowCareerTodos,
+} from './kingdom/uiPrefs';
 import { QuestionPanel } from './learning/QuestionPanel';
 import { useFood } from './learning/useFood';
 import { useGold } from './learning/useGold';
@@ -102,6 +107,14 @@ export default function App() {
     infiniteGold,
     setCheatInfiniteGold,
   } = useGold();
+  const {
+    settings: sandboxSettings,
+    updateSettings: updateSandboxSettings,
+    reset: resetSandboxSettings,
+  } = useSandboxSettings();
+  const [showCareerTodos, setShowCareerTodos] = useState(() =>
+    loadShowCareerTodos()
+  );
   const { food, setFoodAmount, resetFood } = useFood();
   const { kingdom, ready: kingdomReady, needsSetup, startNewKingdom, incrementDay } =
     useKingdom();
@@ -179,6 +192,9 @@ export default function App() {
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
+  const todosVisible =
+    showCareerTodos && (stats.careerTodos?.length ?? 0) > 0;
+
   const showSide =
     showQuestions ||
     showMarket ||
@@ -186,7 +202,7 @@ export default function App() {
     selected !== null ||
     selectedBuilding !== null ||
     selectedCamp !== null ||
-    (stats.careerTodos?.length ?? 0) > 0;
+    todosVisible;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -494,6 +510,14 @@ export default function App() {
               onStartNewKingdom={handleNewKingdom}
               infiniteGold={infiniteGold}
               onToggleInfiniteGold={setCheatInfiniteGold}
+              showCareerTodos={showCareerTodos}
+              onToggleShowCareerTodos={(on) => {
+                setShowCareerTodos(on);
+                saveShowCareerTodos(on);
+              }}
+              sandboxSettings={sandboxSettings}
+              onSandboxSettingsChange={updateSandboxSettings}
+              onSandboxSettingsReset={resetSandboxSettings}
             />
           )}
         </div>
@@ -504,6 +528,7 @@ export default function App() {
           <PhaserGame
             remountKey={remountKey}
             daysPlayed={kingdom.daysPlayed}
+            sandboxSettings={sandboxSettings}
             hireRequest={hireRequest}
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
@@ -587,7 +612,7 @@ export default function App() {
 
         {showSidePanels && showSide && (
           <aside className="side-panels">
-            {(stats.careerTodos?.length ?? 0) > 0 && (
+            {todosVisible && (
               <TodoPanel
                 todos={stats.careerTodos ?? []}
                 gold={gold}

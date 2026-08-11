@@ -34,9 +34,12 @@ import type { Point } from '../subjects/zones';
 import { KingdomEvents } from '../subjects/events';
 import { Phase12Balance } from '../economy/phase12Balance';
 import { BUILDING_ROLE_CAPACITY } from '../jobs/capacities';
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 export const KEEP_ID = 'keep';
 export const FORT_TILE = TILE_SIZE;
+/** One marketplace wall buy places this many fort cells in a straight run. */
+export const WALL_PLACE_CELLS = 3;
 
 const KEEP_BLURB =
   'A seat of power. Rival armies must destroy every keep to conquer the kingdom.';
@@ -111,8 +114,12 @@ export class BuildingSystem {
   private placeKind: BuildKind | null = null;
   private placeRotation: 0 | 90 = 0;
   private ghost: Phaser.GameObjects.Image | null = null;
+  /** Extra ghosts for multi-cell wall runs (cells 2..N). */
+  private wallGhostExtras: Phaser.GameObjects.Image[] = [];
   private ghostValid = false;
   private ghostWallId: string | null = null;
+  /** Cached wall run under the cursor for commit. */
+  private wallRunPreview: Point[] = [];
   private raidActive = false;
   private pathGrid: PathGrid | null = null;
   private mapData: number[][] | null = null;
@@ -875,8 +882,15 @@ export class BuildingSystem {
     this.placeRotation = 0;
     this.ghost?.destroy();
     this.ghost = null;
+    this.clearWallGhostExtras();
+    this.wallRunPreview = [];
     this.ghostValid = false;
     this.ghostWallId = null;
+  }
+
+  private clearWallGhostExtras(): void {
+    for (const g of this.wallGhostExtras) g.destroy();
+    this.wallGhostExtras = [];
   }
 
   isPlacing(): boolean {
@@ -927,11 +941,30 @@ export class BuildingSystem {
     } else if (this.placeKind === 'wall') {
       const x = fortSnap(worldX);
       const y = fortSnap(worldY);
-      this.ghost.setPosition(x, y);
+      const run = this.wallRunCells(x, y);
+      this.wallRunPreview = run;
       this.ghostWallId = null;
-      this.ghostValid = this.canPlaceAt('wall', x, y);
-      const mask = this.previewWallMask(x, y);
-      this.ghost.setTexture(wallTextureKey(mask));
+      this.ghostValid = run.length > 0;
+      this.clearWallGhostExtras();
+      if (run.length > 0) {
+        const first = run[0]!;
+        this.ghost.setPosition(first.x, first.y);
+        this.ghost.setTexture(wallTextureKey(this.previewWallMask(first.x, first.y)));
+        this.ghost.setVisible(true);
+        for (let i = 1; i < run.length; i++) {
+          const cell = run[i]!;
+          const extra = this.scene.add
+            .image(cell.x, cell.y, wallTextureKey(this.previewWallMask(cell.x, cell.y)))
+            .setDepth(50)
+            .setOrigin(0.5, 0.75)
+            .setAlpha(0.55)
+            .setTint(this.ghostValid ? 0xffffff : 0xff5555);
+          this.wallGhostExtras.push(extra);
+        }
+      } else {
+        this.ghost.setPosition(x, y);
+        this.ghost.setTexture(wallTextureKey(this.previewWallMask(x, y)));
+      }
     } else if (this.placeKind === 'bridge') {
       const x = snapCoord(worldX);
       const y = snapCoord(worldY);
@@ -965,14 +998,50 @@ export class BuildingSystem {
     const y = this.ghost.y;
     const wallId = this.ghostWallId ?? undefined;
     const rotation = kind === 'bridge' ? this.placeRotation : undefined;
+    const wallRun =
+      kind === 'wall' && this.wallRunPreview.length > 0
+        ? [...this.wallRunPreview]
+        : null;
     this.cancelPlace();
-    this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId, rotation });
+    if (wallRun) {
+      for (const cell of wallRun) {
+        if (this.canPlaceAt('wall', cell.x, cell.y)) {
+          this.addBuilding('wall', cell.x, cell.y);
+        }
+      }
+    } else {
+      this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId, rotation });
+    }
     this.recomputeHouseLabels();
     this.refreshWallTextures();
     this.applyDrawbridgeState();
     this.rebuildPathGrid();
     this.onLayoutChanged?.();
     return true;
+  }
+
+  /**
+   * Up to WALL_PLACE_CELLS consecutive free fort cells from the snap point.
+   * Prefers continuing an existing orthogonal wall; otherwise east–west.
+   */
+  private wallRunCells(x: number, y: number): Point[] {
+    const hasN = Boolean(this.wallAt(x, y - FORT_TILE));
+    const hasS = Boolean(this.wallAt(x, y + FORT_TILE));
+    const hasE = Boolean(this.wallAt(x + FORT_TILE, y));
+    const hasW = Boolean(this.wallAt(x - FORT_TILE, y));
+    const verticalScore = (hasN ? 1 : 0) + (hasS ? 1 : 0);
+    const horizontalScore = (hasE ? 1 : 0) + (hasW ? 1 : 0);
+    const vertical = verticalScore > horizontalScore;
+    const dx = vertical ? 0 : FORT_TILE;
+    const dy = vertical ? FORT_TILE : 0;
+    const cells: Point[] = [];
+    for (let i = 0; i < WALL_PLACE_CELLS; i++) {
+      const cx = x + dx * i;
+      const cy = y + dy * i;
+      if (!this.canPlaceAt('wall', cx, cy)) break;
+      cells.push({ x: cx, y: cy });
+    }
+    return cells;
   }
 
   damageBuilding(id: string, amount: number, opts?: { fire?: boolean }): boolean {
@@ -1275,7 +1344,14 @@ export class BuildingSystem {
     if (match) {
       this.nextId = Math.max(this.nextId, Number(match[1]) + 1);
     }
-    const maxHp = opts?.maxHp ?? BUILDING_MAX_HP[kind];
+    const maxHp =
+      opts?.maxHp ??
+      Math.round(
+        BUILDING_MAX_HP[kind] *
+          (kind === 'wall' || kind === 'drawbridge'
+            ? getSandboxRuntime().buildings.wallHpMult
+            : 1)
+      );
     const hp = opts?.hp ?? maxHp;
     const closed = kind === 'drawbridge' ? this.raidActive : undefined;
     const px = isFortKind(kind) ? fortSnap(x) : x;

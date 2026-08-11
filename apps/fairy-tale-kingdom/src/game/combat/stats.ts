@@ -3,9 +3,9 @@ import type { BuildKind } from '../../marketplace/catalog';
 
 export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   house: 40,
-  wall: 40,
+  wall: 120,
   tavern: 45,
-  drawbridge: 50,
+  drawbridge: 90,
   stairs: 25,
   field: 25,
   granary: 40,

@@ -5,6 +5,7 @@ import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { CombatBalance } from '../combat/stats';
 import { KingdomEvents } from '../subjects/events';
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 interface Haunt {
   houseId: string;
@@ -64,7 +65,8 @@ export class UndeadSystem {
   ) {}
 
   update(deltaMs: number, isNight: boolean): void {
-    this.necroSpawnMs -= deltaMs;
+    const sb = getSandboxRuntime().undead;
+    this.necroSpawnMs -= deltaMs * Math.max(0.01, sb.necromancer);
     for (const c of [...this.castles]) {
       c.lifeMs -= deltaMs;
       if (c.lifeMs <= 0) this.despawnCastle(c);
@@ -81,8 +83,13 @@ export class UndeadSystem {
     const tickMs = this.accumMs;
     this.accumMs = 0;
 
-    if (isNight && this.necromancers.length === 0 && this.necroSpawnMs <= 0) {
-      this.necroSpawnMs = 140_000 + Math.random() * 100_000;
+    if (
+      sb.necromancer > 0 &&
+      isNight &&
+      this.necromancers.length === 0 &&
+      this.necroSpawnMs <= 0
+    ) {
+      this.necroSpawnMs = (140_000 + Math.random() * 100_000) / sb.necromancer;
       this.spawnNecromancer();
     }
     this.tickNecromancers(isNight, tickMs);
@@ -90,10 +97,20 @@ export class UndeadSystem {
     this.tickMilitaryVsZombies();
     this.tickExorcists();
 
-    if (isNight && this.castles.length < 2 && Math.random() < 0.05) {
+    if (
+      sb.vampire > 0 &&
+      isNight &&
+      this.castles.length < 2 &&
+      Math.random() < 0.05 * sb.vampire
+    ) {
       this.spawnVampireCastle();
     }
-    if (isNight && this.castles.length > 0 && Math.random() < 0.15) {
+    if (
+      sb.vampire > 0 &&
+      isNight &&
+      this.castles.length > 0 &&
+      Math.random() < 0.15 * sb.vampire
+    ) {
       this.tryVampireBite();
     }
     this.tickVampireHunters();
@@ -101,7 +118,8 @@ export class UndeadSystem {
   }
 
   onSubjectDied(_subjectId: string, houseId: string, name: string): void {
-    if (Math.random() > 0.18) return;
+    const ghostMult = getSandboxRuntime().undead.ghost;
+    if (ghostMult <= 0 || Math.random() > 0.18 * ghostMult) return;
     if (this.haunts.some((h) => h.houseId === houseId)) return;
     this.haunts.push({ houseId, ghostName: name });
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {

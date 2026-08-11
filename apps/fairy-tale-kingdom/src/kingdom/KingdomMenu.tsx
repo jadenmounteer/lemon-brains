@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PlayingManualPanel } from './PlayingManualPanel';
+import { SandboxSettingsPanel } from './SandboxSettingsPanel';
+import type { SandboxSettings } from './sandboxSettings';
 
 interface KingdomMenuProps {
   kingdomName: string;
@@ -9,6 +11,11 @@ interface KingdomMenuProps {
   forceTitle?: string;
   infiniteGold?: boolean;
   onToggleInfiniteGold?: (on: boolean) => void;
+  showCareerTodos?: boolean;
+  onToggleShowCareerTodos?: (on: boolean) => void;
+  sandboxSettings?: SandboxSettings;
+  onSandboxSettingsChange?: (next: SandboxSettings) => void;
+  onSandboxSettingsReset?: () => void;
 }
 
 export function KingdomMenu({
@@ -19,10 +26,16 @@ export function KingdomMenu({
   forceTitle,
   infiniteGold = false,
   onToggleInfiniteGold,
+  showCareerTodos = true,
+  onToggleShowCareerTodos,
+  sandboxSettings,
+  onSandboxSettingsChange,
+  onSandboxSettingsReset,
 }: KingdomMenuProps) {
   const [open, setOpen] = useState(forceOpen);
   const [showNewForm, setShowNewForm] = useState(forceOpen);
   const [showManual, setShowManual] = useState(false);
+  const [showSandbox, setShowSandbox] = useState(false);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -79,6 +92,20 @@ export function KingdomMenu({
               >
                 Playing manual
               </button>
+              {sandboxSettings &&
+                onSandboxSettingsChange &&
+                onSandboxSettingsReset && (
+                  <button
+                    type="button"
+                    className="menu-action"
+                    onClick={() => {
+                      setShowSandbox(true);
+                      setOpen(false);
+                    }}
+                  >
+                    Sandbox settings…
+                  </button>
+                )}
               <button
                 type="button"
                 className="menu-action"
@@ -89,6 +116,18 @@ export function KingdomMenu({
               >
                 Start new kingdom
               </button>
+              {onToggleShowCareerTodos && (
+                <button
+                  type="button"
+                  className="menu-action"
+                  aria-pressed={showCareerTodos}
+                  onClick={() => onToggleShowCareerTodos(!showCareerTodos)}
+                >
+                  {showCareerTodos
+                    ? 'Career wishes: shown'
+                    : 'Career wishes: hidden'}
+                </button>
+              )}
               {onToggleInfiniteGold && (
                 <button
                   type="button"
@@ -152,6 +191,17 @@ export function KingdomMenu({
       {showManual && (
         <PlayingManualPanel onClose={() => setShowManual(false)} />
       )}
+      {showSandbox &&
+        sandboxSettings &&
+        onSandboxSettingsChange &&
+        onSandboxSettingsReset && (
+          <SandboxSettingsPanel
+            settings={sandboxSettings}
+            onChange={onSandboxSettingsChange}
+            onReset={onSandboxSettingsReset}
+            onClose={() => setShowSandbox(false)}
+          />
+        )}
     </div>
   );
 }

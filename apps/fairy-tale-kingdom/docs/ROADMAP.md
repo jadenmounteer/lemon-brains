@@ -116,6 +116,11 @@ Checklist:
 - [x] Miserable peasants walk to a human camp (bandit/thief/gypsy only) and only turn (reskin + hostile) on arrival — soldiers ignore them until then
 - [x] Military auto-engages turned camp hostiles; raids hide/return living roster members
 
+### Wave 12G — Sandbox & calmer early game
+
+- [x] Hamburger **Sandbox settings** (local only): war/raid intensity, per-camp and monster toggles, sickness, undead, wall HP
+- [x] Hide career wishes from the menu; walls place in 3-cell runs with higher HP; early raids/sickness softened
+
 ## Non-goals (for now)
 
 - Manual combat orders (except generals commanding detachments)

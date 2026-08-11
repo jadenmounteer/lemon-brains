@@ -5,6 +5,7 @@ import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { EncampmentSystem } from '../war/EncampmentSystem';
 import { KingdomEvents } from '../subjects/events';
 import type { CurseKind } from '../subjects/types';
+import { getSandboxRuntime } from '../sandboxRuntime';
 
 const CURSES: NonNullable<CurseKind>[] = [
   'frog',
@@ -26,8 +27,10 @@ export class WitchSystem {
   ) {}
 
   update(deltaMs: number): void {
-    this.accumMs += deltaMs;
-    this.spawnAccumMs += deltaMs;
+    const curseMult = getSandboxRuntime().sickness.witchCurse;
+    this.accumMs += deltaMs * curseMult;
+    this.spawnAccumMs += deltaMs * curseMult;
+    if (curseMult <= 0) return;
     if (this.spawnAccumMs > 8000) {
       this.spawnAccumMs = 0;
       this.spawnFromCovens();
@@ -40,12 +43,14 @@ export class WitchSystem {
   }
 
   private spawnFromCovens(): void {
+    if (!getSandboxRuntime().war.kinds.coven) return;
     const covens = this.encampments
       .listCamps()
       .filter((c) => c.kind === 'coven');
     if (!covens.length) return;
     if (this.subjects.countRole('witch') >= 6) return;
-    if (Math.random() > 0.4) return;
+    const chance = 0.4 * getSandboxRuntime().sickness.witchCurse;
+    if (Math.random() > chance) return;
     const camp = covens[Math.floor(Math.random() * covens.length)]!;
     const spawned = this.subjects.spawnWitchNear(camp.x, camp.y);
     if (spawned) {

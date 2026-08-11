@@ -22,6 +22,7 @@ import { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
 import { SiegeVfx } from '../siege/SiegeVfx';
 import { ThiefSystem } from '../thieves/ThiefSystem';
 import { EncampmentSystem } from '../war/EncampmentSystem';
+import { getSandboxRuntime } from '../sandboxRuntime';
 import {
   KingdomEvents,
   type ArrestCampPayload,
@@ -370,7 +371,9 @@ export class KingdomScene extends Phaser.Scene {
         this.encampments.restore(saved.encampments);
         this.encampments.reconcileLivingCamps();
       } else {
-        this.encampments.seedStarterCamps(2);
+        this.encampments.seedStarterCamps(
+          getSandboxRuntime().war.starterCampCount
+        );
       }
       if (typeof saved.mapSeed !== 'number') {
         this.persistLayout();
@@ -379,7 +382,9 @@ export class KingdomScene extends Phaser.Scene {
       // New kingdom or map-size migrate: keep only, no units, seed camps
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
       this.monsters.seedIfEmpty();
-      this.encampments.seedStarterCamps(2);
+      this.encampments.seedStarterCamps(
+        getSandboxRuntime().war.starterCampCount
+      );
       this.persistLayout();
     }
 

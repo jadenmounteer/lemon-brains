@@ -132,7 +132,7 @@ export function buildManualSections(): ManualSection[] {
           body: [
             'Inspect subjects (job, workplace, thoughts, happiness). Follow interesting lives with the camera.',
             'Answer questions for gold → hire workers and place buildings from the marketplace.',
-            'Promote careers from the To-Do list when capacity frees up.',
+            'Promote careers from the career-wishes list when capacity frees up (hide it from the hamburger menu if it gets in the way).',
             'Watch festivals, weddings, and camp life. When raids loom, trust sphere patrols — or send a general’s detachment.',
           ],
         },
@@ -140,6 +140,12 @@ export function buildManualSections(): ManualSection[] {
           title: 'Winning by surviving',
           body: [
             'You lose when every keep is destroyed. Extra keeps seat dukes and buy time. Soft early raids give you space to found — but never zero danger.',
+          ],
+        },
+        {
+          title: 'Sandbox settings',
+          body: [
+            'Open the hamburger menu → Sandbox settings. Tune raid intensity, which camps and monsters can appear, sickness, undead pressure, and wall HP. These knobs are saved in this browser only — they are not part of a kingdom save.',
           ],
         },
       ],
@@ -339,7 +345,7 @@ export function buildManualSections(): ManualSection[] {
           'Soldiers, archers, knights, general capacity and military sphere. Needs royalty.',
         ]),
         buildEntry('wall', 'prop:wall', [
-          'Connects on the fort grid. Climb with stairs; hold with archers.',
+          'One buy places a straight run of three fort cells (continues an existing wall when possible). Tough stone — expect raiders to spend real time breaching. Connect segments for gates and stairs.',
         ]),
         buildEntry('stairs', 'prop:stairs', [
           'Snap to walls so defenders reach the battlements.',
