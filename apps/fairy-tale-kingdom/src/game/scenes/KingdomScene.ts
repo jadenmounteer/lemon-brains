@@ -66,6 +66,10 @@ const CAMERA_ZOOM = 2;
 const FOLLOW_ZOOM = 3;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 3.5;
+/** Lower = gentler scroll zoom. Tuned for trackpads (many small deltas) and mice (large notches). */
+const ZOOM_SENSITIVITY = 0.0022;
+/** Cap zoom change per wheel event so one fling can't jump the whole range. */
+const ZOOM_MAX_STEP = 0.1;
 const PAN_THRESHOLD_PX = 6;
 const NIGHT_TINT = 0x0a1520;
 const PATH_TILE = 16;
@@ -1034,11 +1038,20 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private zoomAtPointer(dy: number): void {
+    if (dy === 0) return;
     const cam = this.cameras.main;
+    // Keep follow target but don't fight user zoom by resetting level.
+    if (this.followSubjectId) {
+      this.followSubjectId = null;
+      cam.stopFollow();
+    }
     const pointer = this.input.activePointer;
     const before = cam.getWorldPoint(pointer.x, pointer.y);
-    const factor = dy > 0 ? 0.9 : 1.1;
+    // Exponential in deltaY: small trackpad ticks nudge gently; mouse notches still move ~5–6%.
+    let factor = Math.exp(-dy * ZOOM_SENSITIVITY);
+    factor = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
     const next = Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX);
+    if (Math.abs(next - cam.zoom) < 0.0005) return;
     cam.setZoom(next);
     const after = cam.getWorldPoint(pointer.x, pointer.y);
     cam.scrollX += before.x - after.x;
