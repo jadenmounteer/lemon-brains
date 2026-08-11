@@ -7,6 +7,8 @@ interface KingdomMenuProps {
   onStartNewKingdom: (name: string) => void | Promise<void>;
   forceOpen?: boolean;
   forceTitle?: string;
+  infiniteGold?: boolean;
+  onToggleInfiniteGold?: (on: boolean) => void;
 }
 
 export function KingdomMenu({
@@ -15,6 +17,8 @@ export function KingdomMenu({
   onStartNewKingdom,
   forceOpen = false,
   forceTitle,
+  infiniteGold = false,
+  onToggleInfiniteGold,
 }: KingdomMenuProps) {
   const [open, setOpen] = useState(forceOpen);
   const [showNewForm, setShowNewForm] = useState(forceOpen);
@@ -85,6 +89,18 @@ export function KingdomMenu({
               >
                 Start new kingdom
               </button>
+              {onToggleInfiniteGold && (
+                <button
+                  type="button"
+                  className="menu-action"
+                  aria-pressed={infiniteGold}
+                  onClick={() => onToggleInfiniteGold(!infiniteGold)}
+                >
+                  {infiniteGold
+                    ? 'Cheat: infinite gold ON'
+                    : 'Cheat: infinite gold'}
+                </button>
+              )}
             </>
           ) : (
             <form

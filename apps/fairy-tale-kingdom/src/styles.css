@@ -78,6 +78,13 @@ a {
   color: #f6e2a8;
 }
 
+.cheat-badge {
+  font-size: 0.7em;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .pop {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;

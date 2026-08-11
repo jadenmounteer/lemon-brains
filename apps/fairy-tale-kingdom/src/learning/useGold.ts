@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GOLD_PER_CORRECT, GoldRepository } from './GoldRepository';
+import {
+  loadInfiniteGoldCheat,
+  saveInfiniteGoldCheat,
+} from '../kingdom/cheatFlags';
 
 const repository = new GoldRepository();
 
 export function useGold() {
   const [gold, setGold] = useState(0);
   const [ready, setReady] = useState(false);
+  const [infiniteGold, setInfiniteGold] = useState(() =>
+    loadInfiniteGoldCheat()
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -18,6 +25,11 @@ export function useGold() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const setCheatInfiniteGold = useCallback((on: boolean) => {
+    setInfiniteGold(on);
+    saveInfiniteGoldCheat(on);
   }, []);
 
   const addGold = useCallback(async (delta: number) => {
@@ -35,21 +47,31 @@ export function useGold() {
     setGold(0);
   }, []);
 
-  const stealGold = useCallback(async (amount: number) => {
-    return addGold(-Math.abs(amount));
-  }, [addGold]);
+  const stealGold = useCallback(
+    async (amount: number) => {
+      if (infiniteGold) return gold;
+      return addGold(-Math.abs(amount));
+    },
+    [addGold, gold, infiniteGold]
+  );
 
-  const spend = useCallback(async (amount: number) => {
-    const ok = await repository.spend(amount);
-    if (ok) {
-      setGold(await repository.load());
-    }
-    return ok;
-  }, []);
+  const spend = useCallback(
+    async (amount: number) => {
+      if (infiniteGold) return true;
+      const ok = await repository.spend(amount);
+      if (ok) {
+        setGold(await repository.load());
+      }
+      return ok;
+    },
+    [infiniteGold]
+  );
 
   return {
     gold,
     ready,
+    infiniteGold,
+    setCheatInfiniteGold,
     addGold,
     earnCorrectAnswer,
     resetGold,

@@ -36,6 +36,10 @@ export interface SavedMonster {
   caveId?: string;
   x?: number;
   y?: number;
+  homeX?: number;
+  homeY?: number;
+  influenceRadius?: number;
+  hunger?: number;
 }
 
 export interface ManagedMonster {
@@ -53,6 +57,14 @@ export interface ManagedMonster {
   thinkAccumMs: number;
   regenAccumMs: number;
   moving: boolean;
+  /** Territory sphere center — the spawn point (or cave, for dragons). */
+  homeX: number;
+  homeY: number;
+  influenceRadius: number;
+  /** 0–100; wandering targets clamp to the sphere, but a hungry monster hunts. */
+  hunger: number;
+  /** True while actively chasing prey after crossing the hunger threshold. */
+  hunting: boolean;
 }
 
 const TROLL_SLOTS: {
@@ -191,6 +203,13 @@ export class MonsterSystem {
     return m ? this.toSnapshot(m) : null;
   }
 
+  /** Territory sphere for the selected (or given) monster — drawn like the keep overlay. */
+  getInfluence(id: string): { x: number; y: number; radius: number } | null {
+    const m = this.getById(id);
+    if (!m) return null;
+    return { x: m.homeX, y: m.homeY, radius: m.influenceRadius };
+  }
+
   serialize(): SavedMonster[] {
     return this.monsters.map((m) => ({
       id: m.id,
@@ -202,6 +221,10 @@ export class MonsterSystem {
       caveId: m.caveId ?? undefined,
       x: m.sprite.x,
       y: m.sprite.y,
+      homeX: m.homeX,
+      homeY: m.homeY,
+      influenceRadius: m.influenceRadius,
+      hunger: m.hunger,
     }));
   }
 
@@ -218,6 +241,10 @@ export class MonsterSystem {
         caveId: s.caveId ?? null,
         x: s.x,
         y: s.y,
+        homeX: s.homeX,
+        homeY: s.homeY,
+        influenceRadius: s.influenceRadius,
+        hunger: s.hunger,
       });
     }
   }
@@ -248,6 +275,10 @@ export class MonsterSystem {
     for (const m of [...this.monsters]) {
       if (!m.sprite.active) continue;
       this.syncActivity(m, hour);
+      m.hunger = Math.min(
+        100,
+        m.hunger + (deltaMs / 1000) * CombatBalance.monsterHungerPerSec
+      );
       m.thinkAccumMs += deltaMs;
       if (m.kind === 'troll') {
         m.regenAccumMs += deltaMs;
@@ -325,6 +356,10 @@ export class MonsterSystem {
       caveId?: string | null;
       x?: number;
       y?: number;
+      homeX?: number;
+      homeY?: number;
+      influenceRadius?: number;
+      hunger?: number;
     }
   ): ManagedMonster {
     const id = opts?.id ?? `${kind}-${this.nextId++}`;
@@ -357,6 +392,16 @@ export class MonsterSystem {
     if (twoHeaded) sprite.setTint(0xffccaa);
     sprite.play(idleAnimKey(kind));
 
+    // Home defaults to the spawn point — dragons anchor to their cave, not
+    // the (slightly-offset) sprite start position, so restores stay stable.
+    const cave = kind === 'dragon' && caveId ? getCavePoints().find((c) => c.id === caveId) : null;
+    const home =
+      typeof opts?.homeX === 'number' && typeof opts?.homeY === 'number'
+        ? { x: opts.homeX, y: opts.homeY }
+        : cave
+          ? { x: cave.x, y: cave.y + 8 }
+          : start;
+
     const m: ManagedMonster = {
       id,
       kind,
@@ -365,6 +410,11 @@ export class MonsterSystem {
       hp,
       maxHp,
       twoHeaded,
+      homeX: home.x,
+      homeY: home.y,
+      influenceRadius: opts?.influenceRadius ?? CombatBalance.monsterInfluenceRadius,
+      hunger: opts?.hunger ?? 0,
+      hunting: false,
       caveId,
       activity: 'patrol',
       activityLabel: 'Roaming',
@@ -479,6 +529,14 @@ export class MonsterSystem {
       }
     }
 
+    // Hunger-driven hunt — takes priority over idle wandering (but not the
+    // scripted steal/smash actions above) once the monster grows ravenous.
+    if (m.hunger > CombatBalance.monsterHungerHuntThreshold) {
+      if (this.tickHunt(m)) return;
+    } else if (m.hunting) {
+      m.hunting = false;
+    }
+
     // Scare peasants / melee nearby subjects
     const victim = this.subjects?.nearestSubject(
       m.sprite.x,
@@ -515,11 +573,72 @@ export class MonsterSystem {
     if (!m.moving) this.nudgeTowardZone(m);
   }
 
+  /**
+   * Chases and bites the nearest kingdom subject within the monster's home
+   * sphere. Returns false (letting normal roaming resume) when no prey is
+   * within range. Toasts once per hunt, not on every tick.
+   */
+  private tickHunt(m: ManagedMonster): boolean {
+    const victim = this.subjects?.nearestSubject(
+      m.homeX,
+      m.homeY,
+      m.influenceRadius
+    );
+    if (!victim) return false;
+
+    if (!m.hunting) {
+      m.hunting = true;
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${m.name} the ${m.kind} grows ravenous and hunts nearby!`,
+      });
+    }
+    m.activity = 'hunt';
+    m.activityLabel = 'Hunting for prey';
+
+    const d = Phaser.Math.Distance.Between(
+      m.sprite.x,
+      m.sprite.y,
+      victim.sprite.x,
+      victim.sprite.y
+    );
+    if (d > CombatBalance.guardRange + 10) {
+      this.nudgeToward(m, victim.sprite.x, victim.sprite.y, m.kind === 'dragon' ? 60 : 45);
+      return true;
+    }
+
+    this.vfx?.meleeLunge(m.sprite, victim.sprite.x, victim.sprite.y);
+    const dmg =
+      m.kind === 'dragon'
+        ? CombatBalance.dragonBreath
+        : m.kind === 'ogre'
+          ? CombatBalance.ogreSmash * 0.5
+          : CombatBalance.monsterMelee;
+    this.subjects?.damageSubject(victim.data.id, dmg);
+    m.hunger = Math.max(0, m.hunger - CombatBalance.monsterHungerFeedRelief);
+    if (m.hunger <= CombatBalance.monsterHungerHuntThreshold) m.hunting = false;
+    return true;
+  }
+
+  /** Clamps a wander target to the monster's home sphere. */
+  private clampToSphere(m: ManagedMonster, x: number, y: number): Point {
+    const dx = x - m.homeX;
+    const dy = y - m.homeY;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= m.influenceRadius || dist === 0) return { x, y };
+    const scale = m.influenceRadius / dist;
+    return { x: m.homeX + dx * scale, y: m.homeY + dy * scale };
+  }
+
   private nudgeTowardZone(m: ManagedMonster): void {
     let target = randomPointInZone(m.zone, this.world, null);
     if (m.kind === 'dragon' && m.zone === 'cave' && m.caveId) {
       const cave = getCavePoints().find((c) => c.id === m.caveId);
       if (cave) target = { x: cave.x, y: cave.y + 8 };
+    }
+    // Dragons leave the sphere briefly to steal gold from the keep — every
+    // other wander target (and the fleeing-home leg right after) stays put.
+    if (m.zone !== 'keep') {
+      target = this.clampToSphere(m, target.x, target.y);
     }
     this.nudgeToward(m, target.x, target.y, m.kind === 'dragon' ? 50 : 32);
   }
@@ -608,7 +727,7 @@ export class MonsterSystem {
       hp: m.hp,
       maxHp: m.maxHp,
       onWall: false,
-      hunger: 0,
+      hunger: Math.round(m.hunger),
       sick: false,
       genderLabel: '—',
     };

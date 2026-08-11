@@ -106,6 +106,7 @@ export function exportManualArt(scene: Phaser.Scene): void {
   put('prop:fishingBoat', PROP_KEYS.fishingBoat);
   put('prop:warship', PROP_KEYS.warship);
   put('prop:vampireCastle', PROP_KEYS.vampireCastle);
+  put('prop:vampireCastleInterior', PROP_KEYS.vampireCastleInterior);
   put('prop:cave', PROP_KEYS.cave);
   put('prop:carriage', PROP_KEYS.carriage);
   put('prop:banditCamp', PROP_KEYS.banditCamp);

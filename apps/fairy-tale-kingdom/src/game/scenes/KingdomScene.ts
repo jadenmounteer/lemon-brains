@@ -66,10 +66,11 @@ const CAMERA_ZOOM = 2;
 const FOLLOW_ZOOM = 3;
 const ZOOM_MIN = 1;
 const ZOOM_MAX = 3.5;
-/** Lower = gentler scroll zoom. Tuned for trackpads (many small deltas) and mice (large notches). */
-const ZOOM_SENSITIVITY = 0.0022;
-/** Cap zoom change per wheel event so one fling can't jump the whole range. */
+/** Sensitivity after deltaMode normalization (pixel-ish units). */
+const ZOOM_SENSITIVITY = 0.0018;
+/** Cap zoom change per wheel/pinch step. */
 const ZOOM_MAX_STEP = 0.1;
+const ZOOM_KEY_FACTOR = 1.12;
 const PAN_THRESHOLD_PX = 6;
 const NIGHT_TINT = 0x0a1520;
 const PATH_TILE = 16;
@@ -113,6 +114,8 @@ export class KingdomScene extends Phaser.Scene {
   private keepPoint = { x: 0, y: 0 };
   private followSubjectId: string | null = null;
   private influenceGfx: Phaser.GameObjects.Graphics | null = null;
+  private pinching = false;
+  private pinchLastDist = 0;
 
   constructor() {
     super('KingdomScene');
@@ -387,7 +390,7 @@ export class KingdomScene extends Phaser.Scene {
     this.applyNightOverlay();
 
     this.add
-      .text(12, 12, 'Drag to look · scroll to zoom · click a subject, monster, camp, or building', {
+      .text(12, 12, 'Drag to look · scroll / pinch to zoom · click a subject, monster, camp, or building', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -400,16 +403,37 @@ export class KingdomScene extends Phaser.Scene {
     this.input.on(
       'wheel',
       (
-        _pointer: Phaser.Input.Pointer,
+        pointer: Phaser.Input.Pointer,
         _gos: unknown,
         _dx: number,
-        dy: number
+        dy: number,
+        _dz: number,
+        event?: WheelEvent
       ) => {
-        this.zoomAtPointer(dy);
+        const raw = event?.deltaY ?? dy;
+        const mode = event?.deltaMode ?? 0;
+        // Normalize to pixel-ish units: LINE≈16, PAGE≈400
+        const normalized =
+          mode === 1 ? raw * 16 : mode === 2 ? raw * 400 : raw;
+        this.zoomAtPointer(pointer.x, pointer.y, normalized);
       }
     );
 
+    this.input.keyboard?.on('keydown-PLUS', () => {
+      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, ZOOM_KEY_FACTOR);
+    });
+    this.input.keyboard?.on('keydown-EQUALS', () => {
+      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, ZOOM_KEY_FACTOR);
+    });
+    this.input.keyboard?.on('keydown-MINUS', () => {
+      this.applyZoomAt(this.scale.width / 2, this.scale.height / 2, 1 / ZOOM_KEY_FACTOR);
+    });
+
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerCount() >= 2) {
+        this.beginPinch();
+        return;
+      }
       if (!pointer.leftButtonDown()) return;
       this.pointerMoved = false;
       this.dragStart = new Phaser.Math.Vector2(pointer.x, pointer.y);
@@ -417,6 +441,12 @@ export class KingdomScene extends Phaser.Scene {
     });
 
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (this.activePointerCount() >= 2) {
+        this.updatePinch();
+        return;
+      }
+      if (this.pinching) return;
+
       if (this.buildings.isPlacing()) {
         const world = cam.getWorldPoint(pointer.x, pointer.y);
         this.buildings.updateGhost(world.x, world.y);
@@ -442,6 +472,17 @@ export class KingdomScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (this.pinching) {
+        if (this.activePointerCount() < 2) {
+          this.pinching = false;
+          this.pinchLastDist = 0;
+        }
+        this.dragStart = null;
+        this.cameraStart = null;
+        this.pointerMoved = false;
+        return;
+      }
+
       const wasPan = this.pointerMoved;
       this.dragStart = null;
       this.cameraStart = null;
@@ -481,11 +522,11 @@ export class KingdomScene extends Phaser.Scene {
         this.beginFollowSubject(hit.id);
       } else if (hit?.type === 'monster') {
         this.clearFollowCam();
-        this.clearInfluenceCircle();
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishCampSelection(this.encampments.select(null));
         this.publishSelection(this.monsters.select(hit.id));
+        this.updateMonsterInfluenceCircle(hit.id);
       } else if (hit?.type === 'camp') {
         this.clearFollowCam();
         this.clearInfluenceCircle();
@@ -975,6 +1016,20 @@ export class KingdomScene extends Phaser.Scene {
     this.influenceGfx.fillCircle(pt.x, pt.y, snap.influenceRadius);
   }
 
+  /** Draws a monster's territory sphere (home ± influence radius) when selected. */
+  private updateMonsterInfluenceCircle(id: string | null): void {
+    this.clearInfluenceCircle();
+    if (!id) return;
+    const inf = this.monsters.getInfluence(id);
+    if (!inf) return;
+    const color = 0x7a4fb0;
+    this.influenceGfx = this.add.graphics().setDepth(6);
+    this.influenceGfx.lineStyle(1, color, 0.55);
+    this.influenceGfx.strokeCircle(inf.x, inf.y, inf.radius);
+    this.influenceGfx.fillStyle(color, 0.06);
+    this.influenceGfx.fillCircle(inf.x, inf.y, inf.radius);
+  }
+
   private clearInfluenceCircle(): void {
     this.influenceGfx?.destroy();
     this.influenceGfx = null;
@@ -1038,23 +1093,79 @@ export class KingdomScene extends Phaser.Scene {
     cam.zoomTo(FOLLOW_ZOOM, 450);
   };
 
-  private zoomAtPointer(dy: number): void {
-    if (dy === 0) return;
+  private activePointerCount(): number {
+    let n = 0;
+    for (const p of this.input.manager.pointers) {
+      if (p.active && p.isDown) n += 1;
+    }
+    return n;
+  }
+
+  private pinchPointers(): [Phaser.Input.Pointer, Phaser.Input.Pointer] | null {
+    const down: Phaser.Input.Pointer[] = [];
+    for (const p of this.input.manager.pointers) {
+      if (p.active && p.isDown) down.push(p);
+      if (down.length === 2) return [down[0]!, down[1]!];
+    }
+    return null;
+  }
+
+  private beginPinch(): void {
+    const pair = this.pinchPointers();
+    if (!pair) return;
+    this.pinching = true;
+    this.pinchLastDist = Phaser.Math.Distance.Between(
+      pair[0].x,
+      pair[0].y,
+      pair[1].x,
+      pair[1].y
+    );
+    this.dragStart = null;
+    this.cameraStart = null;
+    this.pointerMoved = false;
+  }
+
+  private updatePinch(): void {
+    const pair = this.pinchPointers();
+    if (!pair) {
+      this.pinching = false;
+      return;
+    }
+    if (!this.pinching) this.beginPinch();
+    const dist = Phaser.Math.Distance.Between(
+      pair[0].x,
+      pair[0].y,
+      pair[1].x,
+      pair[1].y
+    );
+    if (this.pinchLastDist > 4 && dist > 4) {
+      const factor = dist / this.pinchLastDist;
+      const midX = (pair[0].x + pair[1].x) / 2;
+      const midY = (pair[0].y + pair[1].y) / 2;
+      this.applyZoomAt(midX, midY, factor);
+    }
+    this.pinchLastDist = dist;
+  }
+
+  private zoomAtPointer(screenX: number, screenY: number, normalizedDy: number): void {
+    if (normalizedDy === 0) return;
+    let factor = Math.exp(-normalizedDy * ZOOM_SENSITIVITY);
+    factor = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
+    this.applyZoomAt(screenX, screenY, factor);
+  }
+
+  private applyZoomAt(screenX: number, screenY: number, factor: number): void {
     const cam = this.cameras.main;
-    // Keep follow target but don't fight user zoom by resetting level.
     if (this.followSubjectId) {
       this.followSubjectId = null;
       cam.stopFollow();
     }
-    const pointer = this.input.activePointer;
-    const before = cam.getWorldPoint(pointer.x, pointer.y);
-    // Exponential in deltaY: small trackpad ticks nudge gently; mouse notches still move ~5–6%.
-    let factor = Math.exp(-dy * ZOOM_SENSITIVITY);
-    factor = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
-    const next = Phaser.Math.Clamp(cam.zoom * factor, ZOOM_MIN, ZOOM_MAX);
+    const before = cam.getWorldPoint(screenX, screenY);
+    const clamped = Phaser.Math.Clamp(factor, 1 - ZOOM_MAX_STEP, 1 + ZOOM_MAX_STEP);
+    const next = Phaser.Math.Clamp(cam.zoom * clamped, ZOOM_MIN, ZOOM_MAX);
     if (Math.abs(next - cam.zoom) < 0.0005) return;
     cam.setZoom(next);
-    const after = cam.getWorldPoint(pointer.x, pointer.y);
+    const after = cam.getWorldPoint(screenX, screenY);
     cam.scrollX += before.x - after.x;
     cam.scrollY += before.y - after.y;
   }

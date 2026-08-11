@@ -1616,6 +1616,24 @@ function drawVampireCastle(scene: Phaser.Scene) {
   fillRect(ctx, 12, 20, 6, 6, 0x4a1020);
   fillRect(ctx, 38, 20, 6, 6, 0x4a1020);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.vampireCastleInterior, w, h);
+  const ic = int.getContext();
+  // Gloomy stone hall floor
+  fillRect(ic, 8, 16, 40, 28, 0x241018);
+  fillRect(ic, 10, 18, 36, 24, 0x321622);
+  // Coffin resting against the back wall
+  fillRect(ic, 32, 30, 12, 10, palette.woodDark);
+  fillRect(ic, 34, 28, 8, 4, palette.woodDark);
+  // Red carpet runner to the door
+  fillRect(ic, 24, 30, 8, 12, 0x6b1020);
+  // Cobweb-hung candelabra glow
+  fillRect(ic, 14, 22, 6, 8, 0x1a0812);
+  fillRect(ic, 16, 20, 2, 4, 0xffcc66);
+  // Tall arched window with moonlight
+  fillRect(ic, 40, 20, 6, 10, 0x1a2a3a);
+  fillRect(ic, 41, 21, 4, 8, 0x33445a);
+  int.refresh();
 }
 
 function drawFishingBoat(scene: Phaser.Scene) {
@@ -1891,6 +1909,7 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.fishingBoat,
     PROP_KEYS.warship,
     PROP_KEYS.vampireCastle,
+    PROP_KEYS.vampireCastleInterior,
     PROP_KEYS.carriage,
     PROP_KEYS.banditCamp,
     PROP_KEYS.goblinCamp,

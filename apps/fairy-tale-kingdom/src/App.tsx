@@ -92,8 +92,16 @@ const DEFAULT_STATS: KingdomStats = {
 
 export default function App() {
   const { settings, ready } = useSettings();
-  const { gold, earnCorrectAnswer, resetGold, stealGold, spend, addGold } =
-    useGold();
+  const {
+    gold,
+    earnCorrectAnswer,
+    resetGold,
+    stealGold,
+    spend,
+    addGold,
+    infiniteGold,
+    setCheatInfiniteGold,
+  } = useGold();
   const { food, setFoodAmount, resetFood } = useFood();
   const { kingdom, ready: kingdomReady, needsSetup, startNewKingdom, incrementDay } =
     useKingdom();
@@ -427,7 +435,16 @@ export default function App() {
         </div>
         <div className="hud-actions">
           <div className="gold" aria-live="polite">
-            Gold: <strong>{gold}</strong>
+            Gold:{' '}
+            <strong>
+              {infiniteGold ? '∞' : gold}
+              {infiniteGold ? (
+                <span className="cheat-badge" title="Cheat mode">
+                  {' '}
+                  cheat
+                </span>
+              ) : null}
+            </strong>
           </div>
           {showSidePanels && (
             <>
@@ -473,6 +490,8 @@ export default function App() {
                     : undefined
               }
               onStartNewKingdom={handleNewKingdom}
+              infiniteGold={infiniteGold}
+              onToggleInfiniteGold={setCheatInfiniteGold}
             />
           )}
         </div>

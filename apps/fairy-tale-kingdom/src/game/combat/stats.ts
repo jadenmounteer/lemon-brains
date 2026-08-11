@@ -105,6 +105,14 @@ export const CombatBalance = {
   physicianHealHp: 14,
   marriageRange: 48,
   weddingDurationMs: 4000,
+  /** Default radius (px) of a monster's home territory sphere. */
+  monsterInfluenceRadius: 160,
+  /** Hunger points gained per second while active in the world. */
+  monsterHungerPerSec: 0.6,
+  /** Hunger threshold above which a monster abandons wandering to hunt prey. */
+  monsterHungerHuntThreshold: 60,
+  /** Hunger relieved per successful bite/attack while hunting. */
+  monsterHungerFeedRelief: 45,
 } as const;
 
 export const RAIDER_MAX_HP: Record<EnemyRole, number> = {
