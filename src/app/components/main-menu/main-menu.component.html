@@ -299,6 +299,26 @@
     </div>
 
     <div class="settings-group">
+      <h3>Read Aloud</h3>
+      <div class="checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            [(ngModel)]="settings.readQuestionsAloud"
+            (change)="updateSettings()"
+          />
+          <span class="difficulty-label">
+            Read questions aloud
+            <small class="difficulty-hint">
+              Speaks each question automatically and shows a replay button so
+              she can play on her own
+            </small>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <div class="settings-group">
       <h3>Game Difficulty</h3>
       <p class="difficulty-description">
         Choose how challenging the zombies will be:

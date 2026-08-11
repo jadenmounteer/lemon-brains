@@ -13,4 +13,46 @@ body {
   padding: 0;
   height: 100%;
   font-family: Arial, sans-serif;
+  /* Kid-proof touch: no long-press select / callout / gray flash on the page */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+/* Decorative media should not capture presses or start drag/save sheets */
+img,
+canvas,
+svg,
+video {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+
+/* Only real controls receive taps; restore pointer events on them */
+button,
+a,
+input,
+label,
+select,
+textarea,
+[role="button"] {
+  pointer-events: auto;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+}
+
+/* Nested SVG/icons inside buttons must not steal the hit target */
+button svg,
+button img,
+label svg,
+label img,
+[role="button"] svg,
+[role="button"] img {
+  pointer-events: none;
 }

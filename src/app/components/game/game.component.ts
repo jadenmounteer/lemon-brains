@@ -18,6 +18,7 @@ import { AppSettings, GameDifficulty } from '../../learning/models/app-settings'
 import { LearningQuestion } from '../../learning/models/learning-question';
 import { CurriculumRegistry } from '../../learning/curriculum-registry.service';
 import { SpeechSynthesisService } from '../../learning/speech-synthesis.service';
+import { resolveQuestionSpeech } from '../../learning/utils/spoken-question';
 import { QuestionOptionsComponent } from '../question-options/question-options.component';
 
 @Component({
@@ -191,7 +192,11 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
 
   get canReplayPromptSpeech(): boolean {
     return (
-      !!this.currentQuestion?.promptSpeech && this.speechSynthesis.isSupported()
+      this.speechSynthesis.isSupported() &&
+      !!resolveQuestionSpeech(
+        this.currentQuestion,
+        this.settings.readQuestionsAloud
+      )
     );
   }
 
@@ -200,7 +205,10 @@ export class GameComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private speakCurrentPrompt(): void {
-    const speech = this.currentQuestion?.promptSpeech;
+    const speech = resolveQuestionSpeech(
+      this.currentQuestion,
+      this.settings.readQuestionsAloud
+    );
     if (speech && this.speechSynthesis.isSupported()) {
       this.speechSynthesis.speak(speech);
     }

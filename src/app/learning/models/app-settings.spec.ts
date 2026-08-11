@@ -40,12 +40,14 @@ describe('migrateSettings', () => {
     expect(migrated.portuguese.categories.vocabulary).toBe(true);
     expect(migrated.portuguese.categories.phrases).toBe(false);
     expect(migrated.reading.letterRecognition).toBe(true);
+    expect(migrated.readQuestionsAloud).toBe(false);
   });
 
   it('preserves already-migrated nested settings', () => {
     const migrated = migrateSettings({
       curriculumId: 'reading',
       gameDifficulty: 'easy',
+      readQuestionsAloud: true,
       reading: {
         letterRecognition: true,
         cvcWords: false,
@@ -56,5 +58,6 @@ describe('migrateSettings', () => {
     expect(migrated.curriculumId).toBe('reading');
     expect(migrated.reading.cvcWords).toBe(false);
     expect(migrated.reading.sightWords).toBe(true);
+    expect(migrated.readQuestionsAloud).toBe(true);
   });
 });

@@ -39,6 +39,8 @@ export interface ReadingSettings {
 export interface AppSettings {
   curriculumId: CurriculumId;
   gameDifficulty: GameDifficulty;
+  /** When true, every question is spoken aloud and shows a replay control. */
+  readQuestionsAloud: boolean;
   math: MathSettings;
   portuguese: PortugueseSettings;
   reading: ReadingSettings;
@@ -47,6 +49,7 @@ export interface AppSettings {
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   curriculumId: 'math',
   gameDifficulty: 'normal',
+  readQuestionsAloud: false,
   math: {
     operations: {
       addition: true,
@@ -83,6 +86,7 @@ export interface LegacyGameSettings {
   portugueseTypes?: Partial<PortugueseSettings['categories']>;
   numberRanges?: Partial<MathSettings['numberRanges']>;
   gameDifficulty?: GameDifficulty;
+  readQuestionsAloud?: boolean;
   math?: Partial<MathSettings> & {
     operations?: Partial<MathSettings['operations']>;
     numberRanges?: Partial<MathSettings['numberRanges']>;
@@ -122,6 +126,10 @@ export function migrateSettings(raw: unknown): AppSettings {
   return {
     curriculumId,
     gameDifficulty: parsed.gameDifficulty ?? DEFAULT_APP_SETTINGS.gameDifficulty,
+    readQuestionsAloud:
+      typeof parsed.readQuestionsAloud === 'boolean'
+        ? parsed.readQuestionsAloud
+        : DEFAULT_APP_SETTINGS.readQuestionsAloud,
     math: {
       operations: {
         ...DEFAULT_APP_SETTINGS.math.operations,
