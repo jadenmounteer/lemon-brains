@@ -78,6 +78,18 @@ a {
   color: #f6e2a8;
 }
 
+.pop {
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(232, 245, 233, 0.1);
+  border: 1px solid #6a9276;
+  color: var(--cream);
+}
+
+.pop-cap {
+  opacity: 0.75;
+}
+
 
 .hud-actions button,
 .back {

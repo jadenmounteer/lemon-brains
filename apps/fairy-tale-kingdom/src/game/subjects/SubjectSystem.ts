@@ -191,6 +191,27 @@ export class SubjectSystem {
     return this.subjects.find((s) => s.data.id === id);
   }
 
+  /** Tight world-space body pick (feet at sprite origin). */
+  pickAt(worldX: number, worldY: number): string | null {
+    let best: ManagedSubject | null = null;
+    let bestY = -Infinity;
+    for (const s of this.subjects) {
+      if (!s.sprite.active) continue;
+      const left = s.sprite.x - UNIT_WIDTH / 2;
+      const right = s.sprite.x + UNIT_WIDTH / 2;
+      const top = s.sprite.y - UNIT_HEIGHT;
+      const bottom = s.sprite.y;
+      if (worldX < left || worldX > right || worldY < top || worldY > bottom) {
+        continue;
+      }
+      if (s.sprite.y >= bestY) {
+        best = s;
+        bestY = s.sprite.y;
+      }
+    }
+    return best?.data.id ?? null;
+  }
+
   getSelectedId(): string | null {
     return this.selectedId;
   }

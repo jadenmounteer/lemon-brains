@@ -378,15 +378,14 @@ export class KingdomScene extends Phaser.Scene {
   private resolveHit(
     pointer: Phaser.Input.Pointer
   ): { type: 'subject' | 'building'; id: string } | null {
-    const hits = this.input.hitTestPointer(pointer);
-    let buildingId: string | null = null;
-    for (const obj of hits) {
-      const subjectId = obj.getData('subjectId') as string | undefined;
-      if (subjectId) return { type: 'subject', id: subjectId };
-      const bid = obj.getData('buildingId') as string | undefined;
-      if (bid && !buildingId) buildingId = bid;
-    }
-    return buildingId ? { type: 'building', id: buildingId } : null;
+    const world = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+    // Direct body hit on a person wins; otherwise buildings use footprints
+    // so houses stay clickable even when residents linger nearby.
+    const subjectId = this.subjects.pickAt(world.x, world.y);
+    if (subjectId) return { type: 'subject', id: subjectId };
+    const buildingId = this.buildings.pickAt(world.x, world.y);
+    if (buildingId) return { type: 'building', id: buildingId };
+    return null;
   }
 }
 

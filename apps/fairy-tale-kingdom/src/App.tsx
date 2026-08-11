@@ -173,6 +173,14 @@ export default function App() {
           </div>
           {showSidePanels && (
             <>
+              <div
+                className="pop"
+                aria-live="polite"
+                title={`${stats.freeBeds} free bed${stats.freeBeds === 1 ? '' : 's'}`}
+              >
+                Pop: <strong>{stats.population}</strong>
+                <span className="pop-cap"> / {stats.capacity}</span>
+              </div>
               <button type="button" onClick={() => setShowQuestions((v) => !v)}>
                 {showQuestions ? 'Hide questions' : 'Questions'}
               </button>

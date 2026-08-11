@@ -91,7 +91,7 @@ export class BuildingSystem {
 
   setKeepSprite(sprite: Phaser.GameObjects.Image): void {
     this.keepSprite = sprite;
-    this.makeInteractive(sprite, KEEP_ID, 'keep');
+    this.makeInteractive(sprite, KEEP_ID);
   }
 
   getSelectedId(): string | null {
@@ -229,6 +229,28 @@ export class BuildingSystem {
 
   getById(id: string): BuildingRecord | undefined {
     return this.buildings.find((b) => b.id === id);
+  }
+
+  /** World-space pick using footprints (reliable with display origins). */
+  pickAt(worldX: number, worldY: number): string | null {
+    let bestId: string | null = null;
+    let bestBottom = -Infinity;
+
+    const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
+    if (pointInAabb(keepBox, worldX, worldY)) {
+      bestId = KEEP_ID;
+      bestBottom = keepBox.bottom;
+    }
+
+    for (const b of this.buildings) {
+      const box = footprintAabb(b.kind, b.x, b.y);
+      if (!pointInAabb(box, worldX, worldY)) continue;
+      if (box.bottom >= bestBottom) {
+        bestId = b.id;
+        bestBottom = box.bottom;
+      }
+    }
+    return bestId;
   }
 
   wallPoints(): Point[] {
@@ -490,12 +512,11 @@ export class BuildingSystem {
 
   private makeInteractive(
     sprite: Phaser.GameObjects.Image,
-    id: string,
-    kind: BuildKind | 'keep'
+    id: string
   ): void {
-    const { w, h } = FOOTPRINT[kind];
+    // Hit tests use texture top-left as (0,0), not the display origin.
     sprite.setInteractive(
-      new Phaser.Geom.Rectangle(-w / 2, -h, w, h),
+      new Phaser.Geom.Rectangle(0, 0, sprite.width, sprite.height),
       Phaser.Geom.Rectangle.Contains
     );
     sprite.input!.cursor = 'pointer';
@@ -550,7 +571,7 @@ export class BuildingSystem {
       .image(x, y, textureFor(kind, Boolean(closed)))
       .setDepth(kind === 'wall' || kind === 'stairs' ? 9 : 8)
       .setOrigin(0.5, 0.85);
-    this.makeInteractive(sprite, id, kind);
+    this.makeInteractive(sprite, id);
     const record: BuildingRecord = {
       id,
       kind,
@@ -675,4 +696,8 @@ function intersects(a: Aabb, b: Aabb): boolean {
     a.bottom <= b.top ||
     a.top >= b.bottom
   );
+}
+
+function pointInAabb(box: Aabb, x: number, y: number): boolean {
+  return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
 }
