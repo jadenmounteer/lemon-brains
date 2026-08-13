@@ -59,7 +59,8 @@ export function generateKingdomMap(
   }
 
   // Keep clearing (no starter roads — player places them)
-  paintKeepClearing(data, cols, rows, midCol, midRow, 6, 7);
+  // Larger keep (~160×120) needs a wider grass bailey
+  paintKeepClearing(data, cols, rows, midCol, midRow, 8, 9);
 
   // Irregular coastal ocean (not a perfect rectangular frame)
   paintIrregularCoast(data, cols, rows, midCol, midRow, rand, scale);

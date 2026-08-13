@@ -252,7 +252,8 @@ export class EncampmentSystem {
   }
 
   private keepClearance(): number {
-    return Math.max(180, Math.min(this.world.width, this.world.height) * 0.12);
+    // Larger keep footprint needs more breathing room from fringe camps
+    return Math.max(220, Math.min(this.world.width, this.world.height) * 0.13);
   }
 
   private campClearance(): number {

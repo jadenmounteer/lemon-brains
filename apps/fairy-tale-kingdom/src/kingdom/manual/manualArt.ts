@@ -82,6 +82,8 @@ export function exportManualArt(scene: Phaser.Scene): void {
   for (const role of MONSTER_ROLES) put(`monster:${role}`, role, '0');
 
   put('prop:keep', PROP_KEYS.keep);
+  put('prop:keepInterior', PROP_KEYS.keepInterior);
+  put('prop:horse', PROP_KEYS.horse);
   put('prop:house', PROP_KEYS.house);
   put('prop:manor', PROP_KEYS.manor);
   put('prop:wall', wallTextureKey(0));

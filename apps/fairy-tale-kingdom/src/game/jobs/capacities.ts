@@ -34,6 +34,8 @@ export const BUILDING_ROLE_CAPACITY: Partial<
   keep: {
     duke: 1,
     duchess: 1,
+    /** Castle staff share peasant slots on the keep. */
+    peasant: 8,
   },
   gallows: {
     executioner: 1,
@@ -43,7 +45,40 @@ export const BUILDING_ROLE_CAPACITY: Partial<
   },
 };
 
-export type CivilianJob = 'farmer' | 'baker' | 'merchant' | 'fisherman';
+export type CivilianJob =
+  | 'farmer'
+  | 'baker'
+  | 'merchant'
+  | 'fisherman'
+  | 'cook'
+  | 'servant'
+  | 'steward'
+  | 'scribe'
+  | 'cupbearer';
+
+export const CASTLE_JOBS: CivilianJob[] = [
+  'cook',
+  'servant',
+  'steward',
+  'scribe',
+  'cupbearer',
+];
+
+/** Per-keep capacity for each castle staff job. */
+export const CASTLE_JOB_CAPACITY: Record<
+  'cook' | 'servant' | 'steward' | 'scribe' | 'cupbearer',
+  number
+> = {
+  cook: 2,
+  servant: 3,
+  steward: 1,
+  scribe: 1,
+  cupbearer: 1,
+};
+
+export function isCastleJob(job: CivilianJob | undefined): boolean {
+  return !!job && (CASTLE_JOBS as string[]).includes(job);
+}
 
 export function civilianJobForBuilding(
   kind: BuildKind
@@ -53,6 +88,31 @@ export function civilianJobForBuilding(
   if (kind === 'market') return 'merchant';
   if (kind === 'dock') return 'fisherman';
   return null;
+}
+
+export function jobLabel(job: CivilianJob | undefined): string {
+  switch (job) {
+    case 'farmer':
+      return 'Farmer';
+    case 'baker':
+      return 'Baker';
+    case 'merchant':
+      return 'Merchant';
+    case 'fisherman':
+      return 'Fisherman';
+    case 'cook':
+      return 'Cook';
+    case 'servant':
+      return 'Servant';
+    case 'steward':
+      return 'Steward';
+    case 'scribe':
+      return 'Scribe';
+    case 'cupbearer':
+      return 'Cupbearer';
+    default:
+      return '';
+  }
 }
 
 export const CAREER_ROLES: UnitRole[] = [

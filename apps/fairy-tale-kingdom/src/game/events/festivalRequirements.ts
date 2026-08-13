@@ -65,7 +65,8 @@ export const FESTIVAL_REQUIREMENTS: FestivalRequirement[] = [
   {
     kind: 'joust',
     title: 'Royal joust',
-    blurb: 'Knights clash while the crown and crowd watch.',
+    blurb:
+      'Mounted knights charge the lists — horses, lances, clash, and cheers.',
     buildings: '≥1 barracks',
     units: 'King and queen, ≥2 knights, ≥5 peasants',
   },

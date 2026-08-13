@@ -1,3 +1,5 @@
+import type { CivilianJob } from '../jobs/capacities';
+import { isCastleJob } from '../jobs/capacities';
 import type { ScheduleSlot, SubjectRole } from './types';
 
 function withMeals(
@@ -70,22 +72,100 @@ const archerBase: ScheduleSlot[] = [
   { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
 ];
 
-const royalBase: ScheduleSlot[] = [
-  { startHour: 0, endHour: 7, activity: 'sleep', zone: 'home', label: 'Resting in chambers' },
-  { startHour: 7, endHour: 12, activity: 'idle_keep', zone: 'keep', label: 'Holding court at the keep' },
-  { startHour: 12, endHour: 14, activity: 'parade', zone: 'path', label: 'Royal procession (when scheduled)' },
-  { startHour: 14, endHour: 16, activity: 'gather', zone: 'path', label: 'Walking the kingdom paths' },
-  { startHour: 16, endHour: 20, activity: 'idle_keep', zone: 'keep', label: 'Appearing before the people' },
-  { startHour: 20, endHour: 24, activity: 'sleep', zone: 'home', label: 'Retiring for the night' },
+const kingSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 7, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Resting in chambers' },
+  { startHour: 7, endHour: 12, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Holding court in the great hall' },
+  { startHour: 12, endHour: 14, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Midday feast' },
+  { startHour: 14, endHour: 16, activity: 'parade', zone: 'path', label: 'Royal procession (when scheduled)' },
+  { startHour: 16, endHour: 18, activity: 'gather', zone: 'path', label: 'Walking the kingdom paths' },
+  { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening banquet' },
+  { startHour: 21, endHour: 24, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Retiring to chambers' },
+];
+
+const queenSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 7, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Resting in chambers' },
+  { startHour: 7, endHour: 11, activity: 'study', zone: 'keep', room: 'solar', label: 'In the solar' },
+  { startHour: 11, endHour: 13, activity: 'court', zone: 'keep', room: 'chapel_nook', label: 'Private chapel prayers' },
+  { startHour: 13, endHour: 15, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Hosting the midday table' },
+  { startHour: 15, endHour: 18, activity: 'gather', zone: 'path', label: 'Garden walk among the people' },
+  { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening banquet host' },
+  { startHour: 21, endHour: 24, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Retiring to chambers' },
+];
+
+const princeSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 7, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Resting in chambers' },
+  { startHour: 7, endHour: 11, activity: 'train', zone: 'keep', room: 'courtyard', label: 'Training in the courtyard' },
+  { startHour: 11, endHour: 14, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Attending court' },
+  { startHour: 14, endHour: 17, activity: 'patrol', zone: 'path', label: 'Riding the roads' },
+  { startHour: 17, endHour: 18, activity: 'train', zone: 'keep', room: 'armory_nook', label: 'At the armory' },
+  { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening feast' },
+  { startHour: 21, endHour: 24, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Retiring to chambers' },
+];
+
+const princessSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 7, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Resting in chambers' },
+  { startHour: 7, endHour: 12, activity: 'study', zone: 'keep', room: 'solar', label: 'Music and embroidery in the solar' },
+  { startHour: 12, endHour: 14, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Midday feast' },
+  { startHour: 14, endHour: 17, activity: 'gather', zone: 'keep', room: 'courtyard', label: 'Strolling the courtyard' },
+  { startHour: 17, endHour: 18, activity: 'study', zone: 'keep', room: 'chapel_nook', label: 'Quiet prayers' },
+  { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening banquet' },
+  { startHour: 21, endHour: 24, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Retiring to chambers' },
+];
+
+const cookSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 5, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 5, endHour: 11, activity: 'knead', zone: 'keep', room: 'kitchen', label: 'Prepping in the kitchen' },
+  { startHour: 11, endHour: 14, activity: 'serve', zone: 'keep', room: 'banquet', label: 'Serving the midday feast' },
+  { startHour: 14, endHour: 17, activity: 'cook', zone: 'keep', room: 'kitchen', label: 'Cooking supper' },
+  { startHour: 17, endHour: 20, activity: 'serve', zone: 'keep', room: 'banquet', label: 'Banquet service' },
+  { startHour: 20, endHour: 22, activity: 'clean', zone: 'keep', room: 'kitchen', label: 'Scouring the kitchen' },
+  { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home' },
+];
+
+const servantSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 5, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 5, endHour: 9, activity: 'clean', zone: 'keep', room: 'servants', label: 'Tidying servants’ quarters' },
+  { startHour: 9, endHour: 13, activity: 'clean', zone: 'keep', room: 'chambers', label: 'Cleaning royal chambers' },
+  { startHour: 13, endHour: 16, activity: 'clean', zone: 'keep', room: 'great_hall', label: 'Sweeping the great hall' },
+  { startHour: 16, endHour: 19, activity: 'gather', zone: 'path', label: 'Running castle errands' },
+  { startHour: 19, endHour: 21, activity: 'serve', zone: 'keep', room: 'banquet', label: 'Helping at supper' },
+  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home' },
+];
+
+const stewardSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 6, endHour: 12, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Preparing the great hall' },
+  { startHour: 12, endHour: 14, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Overseeing the feast' },
+  { startHour: 14, endHour: 18, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Castle inventory' },
+  { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening feast steward' },
+  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home' },
+];
+
+const scribeSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 6, endHour: 12, activity: 'study', zone: 'keep', room: 'solar', label: 'Copying ledgers in the solar' },
+  { startHour: 12, endHour: 14, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Recording court petitions' },
+  { startHour: 14, endHour: 18, activity: 'study', zone: 'keep', room: 'solar', label: 'Writing dispatches' },
+  { startHour: 18, endHour: 20, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Quiet supper' },
+  { startHour: 20, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home' },
+];
+
+const cupbearerSchedule: ScheduleSlot[] = [
+  { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
+  { startHour: 6, endHour: 11, activity: 'serve', zone: 'keep', room: 'banquet', label: 'Setting the banquet hall' },
+  { startHour: 11, endHour: 14, activity: 'serve', zone: 'keep', room: 'great_hall', label: 'Serving at court' },
+  { startHour: 14, endHour: 17, activity: 'clean', zone: 'keep', room: 'banquet', label: 'Polishing goblets' },
+  { startHour: 17, endHour: 21, activity: 'serve', zone: 'keep', room: 'banquet', label: 'Cupbearing at supper' },
+  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home' },
 ];
 
 const fairySchedule: ScheduleSlot[] = withMeals(
   [
-    { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Resting' },
-    { startHour: 6, endHour: 12, activity: 'idle_keep', zone: 'keep', label: 'Watching over the keep' },
+    { startHour: 0, endHour: 6, activity: 'sleep', zone: 'keep', room: 'chambers', label: 'Resting' },
+    { startHour: 6, endHour: 12, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Watching over the court' },
     { startHour: 12, endHour: 18, activity: 'gather', zone: 'path', label: 'Visiting the people' },
-    { startHour: 18, endHour: 22, activity: 'idle_keep', zone: 'keep', label: 'Sparkling near the keep' },
-    { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Turning in' },
+    { startHour: 18, endHour: 22, activity: 'juggle', zone: 'keep', room: 'courtyard', label: 'Sparkling in the courtyard' },
+    { startHour: 22, endHour: 24, activity: 'sleep', zone: 'keep', room: 'chambers', label: 'Turning in' },
   ],
   'keep',
   'keep'
@@ -128,7 +208,7 @@ const childSchedule: ScheduleSlot[] = withMeals(
   [
     { startHour: 0, endHour: 7, activity: 'sleep', zone: 'home', label: 'Sleeping' },
     { startHour: 7, endHour: 12, activity: 'play', zone: 'path', label: 'Playing in the streets' },
-    { startHour: 12, endHour: 14, activity: 'idle_keep', zone: 'home', label: 'Resting at home' },
+    { startHour: 12, endHour: 14, activity: 'play', zone: 'keep', room: 'gate', label: 'Playing by the keep gate' },
     { startHour: 14, endHour: 18, activity: 'play', zone: 'path', label: 'Playing with friends' },
     { startHour: 18, endHour: 21, activity: 'idle_keep', zone: 'home', label: 'Helping at home' },
     { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Bedtime' },
@@ -140,9 +220,9 @@ const childSchedule: ScheduleSlot[] = withMeals(
 const jesterSchedule: ScheduleSlot[] = withMeals(
   [
     { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping' },
-    { startHour: 6, endHour: 12, activity: 'juggle', zone: 'keep', label: 'Juggling by the keep' },
+    { startHour: 6, endHour: 12, activity: 'juggle', zone: 'keep', room: 'courtyard', label: 'Juggling in the courtyard' },
     { startHour: 12, endHour: 16, activity: 'juggle', zone: 'path', label: 'Entertaining the plaza' },
-    { startHour: 16, endHour: 20, activity: 'juggle', zone: 'keep', label: 'Court entertainment' },
+    { startHour: 16, endHour: 20, activity: 'juggle', zone: 'keep', room: 'great_hall', label: 'Court entertainment' },
     { startHour: 20, endHour: 24, activity: 'sleep', zone: 'home', label: 'Resting' },
   ],
   'tavern',
@@ -197,7 +277,18 @@ const witchSchedule: ScheduleSlot[] = withMeals(
   'forest'
 );
 
-const dukeSchedule = withMeals(royalBase, 'keep', 'keep');
+const dukeSchedule = withMeals(
+  [
+    { startHour: 0, endHour: 7, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Resting in keep chambers' },
+    { startHour: 7, endHour: 12, activity: 'court', zone: 'keep', room: 'great_hall', label: 'Local court at the keep' },
+    { startHour: 12, endHour: 14, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Midday table' },
+    { startHour: 14, endHour: 18, activity: 'gather', zone: 'path', label: 'Touring the influence' },
+    { startHour: 18, endHour: 21, activity: 'feast', zone: 'keep', room: 'banquet', label: 'Evening table' },
+    { startHour: 21, endHour: 24, activity: 'chamber', zone: 'keep', room: 'chambers', label: 'Retiring' },
+  ],
+  'keep',
+  'keep'
+);
 
 /** Living-camp garrison: sleep by the fire, otherwise roam within the camp sphere. */
 function campSchedule(label: string): ScheduleSlot[] {
@@ -247,7 +338,31 @@ const vampireWifeSchedule: ScheduleSlot[] = [
   { startHour: 20, endHour: 24, activity: 'hunt', zone: 'forest', label: 'Prowling with the vampire' },
 ];
 
-export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
+function castleScheduleFor(job: CivilianJob): ScheduleSlot[] | null {
+  switch (job) {
+    case 'cook':
+      return withMeals(cookSchedule, 'keep', 'keep');
+    case 'servant':
+      return withMeals(servantSchedule, 'home', 'keep');
+    case 'steward':
+      return withMeals(stewardSchedule, 'keep', 'keep');
+    case 'scribe':
+      return withMeals(scribeSchedule, 'home', 'keep');
+    case 'cupbearer':
+      return withMeals(cupbearerSchedule, 'keep', 'keep');
+    default:
+      return null;
+  }
+}
+
+export function scheduleFor(
+  role: SubjectRole,
+  job?: CivilianJob
+): ScheduleSlot[] {
+  if (role === 'peasant' && job && isCastleJob(job)) {
+    const castle = castleScheduleFor(job);
+    if (castle) return castle;
+  }
   switch (role) {
     case 'peasant':
       return withMeals(peasantBase, 'home', 'home');
@@ -269,10 +384,13 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
     case 'bishop':
       return withMeals(bishopBase, 'cathedral', 'home');
     case 'king':
+      return withMeals(kingSchedule, 'keep', 'keep');
     case 'queen':
+      return withMeals(queenSchedule, 'keep', 'keep');
     case 'prince':
+      return withMeals(princeSchedule, 'keep', 'keep');
     case 'princess':
-      return withMeals(royalBase, 'keep', 'keep');
+      return withMeals(princessSchedule, 'keep', 'keep');
     case 'duke':
     case 'duchess':
       return dukeSchedule;
@@ -303,8 +421,12 @@ export function scheduleFor(role: SubjectRole): ScheduleSlot[] {
   }
 }
 
-export function slotAtHour(role: SubjectRole, hour: number): ScheduleSlot {
-  const slots = scheduleFor(role);
+export function slotAtHour(
+  role: SubjectRole,
+  hour: number,
+  job?: CivilianJob
+): ScheduleSlot {
+  const slots = scheduleFor(role, job);
   const h = ((hour % 24) + 24) % 24;
   return (
     slots.find((s) => h >= s.startHour && h < s.endHour) ??
@@ -312,8 +434,11 @@ export function slotAtHour(role: SubjectRole, hour: number): ScheduleSlot {
   );
 }
 
-export function scheduleSummary(role: SubjectRole): string[] {
-  return scheduleFor(role).map((s) => {
+export function scheduleSummary(
+  role: SubjectRole,
+  job?: CivilianJob
+): string[] {
+  return scheduleFor(role, job).map((s) => {
     const a = formatHour(s.startHour);
     const b = formatHour(s.endHour === 24 ? 0 : s.endHour);
     return `${a}–${b}: ${s.label}`;

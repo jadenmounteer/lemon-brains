@@ -28,6 +28,15 @@ export class RoyaltySystem {
     | null = null;
   private onBallStart: ((pt: { x: number; y: number }) => void) | null = null;
   private onBallEnd: (() => void) | null = null;
+  private onWeddingStart:
+    | ((opts: {
+        a: string;
+        b: string;
+        bishop: string;
+        x: number;
+        y: number;
+      }) => boolean)
+    | null = null;
   private lastMorningHour = -1;
   private weddingCooldownMs = 0;
   private readonly parade: ParadeSystem;
@@ -46,6 +55,18 @@ export class RoyaltySystem {
 
   setOnBallEnd(cb: () => void): void {
     this.onBallEnd = cb;
+  }
+
+  setOnWeddingStart(
+    cb: (opts: {
+      a: string;
+      b: string;
+      bishop: string;
+      x: number;
+      y: number;
+    }) => boolean
+  ): void {
+    this.onWeddingStart = cb;
   }
 
   isInspired(): boolean {
@@ -354,14 +375,24 @@ export class RoyaltySystem {
 
     if (!near) return;
 
-    this.weddingCooldownMs = 12_000;
-    this.subjects.beginWedding(
-      prince.data.id,
-      princess.data.id,
-      bishop.data.id,
-      cat,
-      CombatBalance.weddingDurationMs
-    );
+    this.weddingCooldownMs = 45_000;
+    const started = this.onWeddingStart?.({
+      a: prince.data.id,
+      b: princess.data.id,
+      bishop: bishop.data.id,
+      x: cat.x,
+      y: cat.y,
+    });
+    if (!started) {
+      // Fallback short ceremony if spectacle system unavailable
+      this.subjects.beginWedding(
+        prince.data.id,
+        princess.data.id,
+        bishop.data.id,
+        cat,
+        CombatBalance.weddingDurationMs
+      );
+    }
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${prince.data.name} and ${princess.data.name} wed at the cathedral!`,
     });

@@ -2,6 +2,7 @@ import type { UnitRole } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import type { LifeLogEntry } from '../thoughts/lifeLog';
 import type { CivilianJob } from '../jobs/capacities';
+import type { KeepRoomId } from '../keep/KeepLayout';
 import type { CampKind } from '../war/WarBalance';
 
 export type SubjectRole = UnitRole;
@@ -131,7 +132,15 @@ export type ActivityId =
   | 'joust'
   | 'fish'
   | 'crew'
-  | 'exorcise';
+  | 'exorcise'
+  | 'cook'
+  | 'serve'
+  | 'clean'
+  | 'court'
+  | 'feast'
+  | 'study'
+  | 'chamber'
+  | 'knead';
 
 export type DayPhase = 'Night' | 'Morning' | 'Afternoon' | 'Evening';
 
@@ -174,6 +183,8 @@ export interface ScheduleSlot {
   activity: ActivityId;
   zone: ZoneId;
   label: string;
+  /** Keep interior room when zone is 'keep'. */
+  room?: KeepRoomId;
 }
 
 export interface Subject {
@@ -244,6 +255,8 @@ export interface SubjectSnapshot {
   body?: BodyCondition;
   jobLabel?: string;
   workplaceLabel?: string;
+  /** e.g. Banquet hall when inside the keep */
+  roomLabel?: string;
   thought?: string;
   goalLabel?: string;
   backstory?: string;

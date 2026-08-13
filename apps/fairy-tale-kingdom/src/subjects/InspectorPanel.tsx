@@ -123,6 +123,11 @@ export function InspectorPanel({
         <span className="muted">Works at</span>{' '}
         {subject.workplaceLabel ?? 'No assigned workplace'}
       </p>
+      {subject.roomLabel ? (
+        <p>
+          <span className="muted">At</span> {subject.roomLabel}
+        </p>
+      ) : null}
       <p>
         <span className="muted">Lives at</span> {subject.homeLabel}
       </p>

@@ -12,7 +12,9 @@ export const Phase12Balance = {
   /** Hunger at/above this is fatal without food. */
   dieAtHunger: 100,
   eatDurationMs: 1600,
-  keepInfluenceRadius: 280,
+  keepInfluenceRadius: 320,
+  /** Happiness bump near supper when cooks are on duty. */
+  cookMealHappiness: 2,
   paradeCooldownMs: 180_000,
   paradeDurationMs: 28_000,
   paradeHappiness: 8,

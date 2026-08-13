@@ -98,7 +98,7 @@ const festivalExtra: Record<
     benefits:
       'Knights clash for glory under royal banners; crowd happiness soars and the barracks district becomes the place to be.',
     scene:
-      'Lists open by the barracks. King and queen watch, peasants pack the rails, knights tilt. Expect awe bubbles and festival gathering around the lists.',
+      'Lists open by the barracks when two or more knights serve. Knights mount horses, charge the lists, clash lances, and the crowd cheers the winner. Expect mount → charge → clash → cheer loops while the joust lasts.',
   },
 };
 
@@ -122,18 +122,25 @@ export function buildManualSections(): ManualSection[] {
       id: 'howto',
       label: 'How to rule',
       intro: [
-        'Fairy Tale Kingdom is a watchable realm. You hire, place, and inspect — subjects live their schedules, fight when pressed, and celebrate when the gates are met.',
-        'Gold comes from Knowledge Quest answers and recovered plunder. Spend it on beds, workplaces, walls, and careers. Food and happiness keep people loyal; empty stomachs and misery birth witches, thieves, and bandits.',
+        'Fairy Tale Kingdom is a watchable realm. You hire, place, and inspect — subjects live their schedules inside a living castle and across the map, fight when pressed, and celebrate when the gates are met.',
+        'Gold comes from Knowledge Quest answers (Questions in the menu on mobile; Market stays on the HUD) and recovered plunder. Spend it on beds, workplaces, walls, and careers. Food and happiness keep people loyal; empty stomachs and misery birth witches, thieves, and bandits.',
         'Start with a lone keep and hire your first peasants. Place houses for beds, a granary then fields for food, roads for patrols, and a dungeon or barracks when you need order and steel. Grow outward — the map is vast, and fringe camps watch you from the wilds.',
       ],
       entries: [
         {
           title: 'Day-to-day loop',
           body: [
-            'Inspect subjects (job, workplace, thoughts, happiness). Follow interesting lives with the camera.',
-            'Answer questions for gold → hire workers and place buildings from the marketplace.',
-            'Promote careers from the career-wishes list when capacity frees up (hide it from the hamburger menu if it gets in the way).',
-            'Watch festivals, weddings, and camp life. When raids loom, trust sphere patrols — or send a general’s detachment.',
+            'Watch castle life unfold: follow a cook through supper prep, or the king at morning court. Tap anyone to follow; open Details for job, room (“At: Banquet hall”), thoughts, and happiness.',
+            'Answer Knowledge Quest questions for gold → hire workers and place buildings from Market.',
+            'Promote careers from career wishes (menu on mobile) when building capacity frees up.',
+            'Watch festivals, staged weddings, mounted jousts, and camp life. When raids loom, trust sphere patrols — or send a general’s detachment.',
+          ],
+        },
+        {
+          title: 'Camera & mobile',
+          body: [
+            'Tap a person to follow the camera; pan the map to stop following. Pinch or use the −/+ buttons to zoom (hidden while a full sheet is open).',
+            'On phones, following starts with a compact bottom bar so the map stays visible — Details expands the inspector; Hide collapses it again without unfollow.',
           ],
         },
         {
@@ -158,13 +165,13 @@ export function buildManualSections(): ManualSection[] {
       ],
       entries: [
         hireEntry('peasant', 'unit:peasant', [
-          'The backbone of the realm. Assign jobs (farmer, baker, merchant, fisherman, …) at workplaces. They flee indoors when cordons or raids scream danger, dance at festivals, marry, and raise children when beds allow.',
+          'The backbone of the realm. Jobs include farmer, baker, merchant, fisherman, and castle staff (cook, servant, steward, scribe, cupbearer) at the keep. They flee indoors when cordons or raids scream danger, dance at festivals, marry, and raise children when beds allow.',
         ]),
         {
           artKey: 'unit:child',
           title: 'Child',
           body: [
-            'Born to married couples who share a house. Children play together, grow up on the clock, and become peasants ready for careers. No marketplace hire — only family.',
+            'Born to married couples who share a house. Children play in the streets and by the keep gate, grow up on the clock, and become peasants ready for careers. No marketplace hire — only family.',
           ],
         },
         hireEntry('guard', 'unit:guard', [
@@ -269,7 +276,9 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'prop:venueWedding',
           title: 'Weddings',
           body: [
-            'A bishop at a cathedral can marry eligible pairs (including prince + princess). A wedding arch blooms; guests nearby gain happiness. Married pairs share a house when beds allow.',
+            'A bishop at a cathedral can marry eligible pairs (including prince + princess).',
+            'Ceremony stages: guests gather → aisle procession → bishop rite (“I do!”) → cheers → feast handoff in the keep banquet hall. Nearby guests (capped) gain happiness.',
+            'Married pairs share a house when beds allow; a temporary ball-princess who weds a prince stays a princess forever.',
           ],
         },
         {
@@ -290,7 +299,7 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'prop:carriage',
           title: 'Parades & balls',
           body: [
-            'Royal parades roll the carriage through influence. Royal balls gather the court at the keep — Fairy Godmother blessings only work then. Balls are separate from street festivals.',
+            'Royal parades roll the carriage through influence. Royal balls revel in the keep courtyard (dance, toast, chatter) — Fairy Godmother blessings only work then. Indoor feasts fill the banquet hall on the royal schedule. Jesters juggle in the great hall and courtyard. Balls are separate from street festivals.',
           ],
         },
       ],
@@ -299,11 +308,11 @@ export function buildManualSections(): ManualSection[] {
       id: 'buildings',
       label: 'Buildings',
       intro: [
-        'Place from the marketplace. Selecting a workplace lists Who works here. Burnable buildings can fall in raids and sieges — repair interrupts send peasants with hammers.',
+        'Place from the marketplace. Selecting a workplace lists Who works here. Burnable buildings can fall in raids and sieges — repair interrupts send peasants with hammers. Step inside a dwelling or the keep and the roof hides so you can see the floor plan.',
       ],
       entries: [
         buildEntry('keep', 'prop:keep', [
-          'Heart of the realm. Influence circle; royal housing; lose only when all keeps fall.',
+          'Heart of the realm — now a large multi-room castle. Influence circle; royal housing; castle staff workplaces; lose only when all keeps fall. See Castle life for the room guide.',
         ]),
         buildEntry('house', 'prop:house', [
           'Three beds. Starter homes for hires and families.',
@@ -371,6 +380,66 @@ export function buildManualSections(): ManualSection[] {
       ],
     },
     {
+      id: 'castle',
+      label: 'Castle life',
+      intro: [
+        'The keep is a Stronghold-style machine with named rooms. When someone stands inside, the roof hides and you see kitchens, halls, and chambers. Follow staff and royals to watch the day unfold.',
+      ],
+      entries: [
+        {
+          artKey: 'prop:keep',
+          title: 'The enlarged keep',
+          body: [
+            'A wide bailey with gate, courtyard, and an inner hall block. Click people inside to follow them room to room. Interior underlay shows distinct floors for each room.',
+          ],
+        },
+        {
+          title: 'Room guide',
+          body: [
+            'Gate & courtyard — arrivals, children at play, jester juggling, prince training.',
+            'Great hall — morning court, steward inventory, bows to the throne.',
+            'Banquet hall — midday and evening feasts, cupbearer service, wedding feast handoff.',
+            'Kitchen — cooks knead and cook; hearth glows.',
+            'Servants’ quarters — staff tidy and rest between chores.',
+            'Royal chambers — sleep and private retirement for the crown and dukes.',
+            'Solar — queen/princess study, scribe ledgers.',
+            'Chapel nook — quiet prayers.',
+            'Armory nook — prince gear and steel.',
+          ],
+        },
+        {
+          artKey: 'unit:peasant',
+          title: 'Castle staff jobs',
+          body: [
+            'Peasants bind to open keep posts when capacity allows (alongside fields and shops):',
+            'Cook (2) — kitchen prep → banquet service → scour. On-duty cooks slightly raise meal happiness.',
+            'Servant (3) — quarters → chambers → hall → errands.',
+            'Steward (1) — great hall prep and feast oversight.',
+            'Scribe (1) — solar ledgers and court records.',
+            'Cupbearer (1) — banquet and court service.',
+            'Inspector shows Job + Works at: The Keep + At: <room>.',
+          ],
+        },
+        {
+          artKey: 'unit:king',
+          title: 'A day at court',
+          body: [
+            'King: chambers → great hall court → midday feast → parade/paths → evening banquet → chambers.',
+            'Queen: solar → chapel → feast host → garden walk → banquet → chambers.',
+            'Prince: courtyard training → court → roads → armory → feast.',
+            'Princess: solar arts → feast → courtyard stroll → chapel → banquet.',
+            'Dukes/duchesses mirror a quieter local court at their keep.',
+          ],
+        },
+        {
+          title: 'Keep life beats',
+          body: [
+            'While folk occupy keep rooms you will see chatter, bows, serving lines, scrubbing, kneading, and juggling — speech bubbles and thoughts update so following feels alive.',
+          ],
+        },
+      ],
+    },
+    {
       id: 'economy',
       label: 'Economy',
       intro: [
@@ -413,19 +482,22 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Civilian jobs',
           body: [
-            'Farmer → fields. Baker → bakery. Merchant → market. Fisherman → dock (boats sail short loops and return food). Jobs bind a workplaceId — inspectors show Works at.',
+            'Farmer → fields. Baker → bakery. Merchant → market. Fisherman → dock (boats sail short loops and return food).',
+            'Castle staff → keep: cook, servant, steward, scribe, cupbearer (see Castle life).',
+            'Jobs bind a workplace — inspectors show Works at (and At: room inside the keep).',
           ],
         },
         {
           title: 'Career promotions',
           body: [
             'Guards need dungeon slots; soldiers/archers/knights/elites/general need barracks; physicians need infirmary; bishop & witch hunter need cathedral; jester needs tavern; executioner needs gallows. Capacity is per building — build more posts to promote more souls.',
+            'On mobile, open the hamburger menu for career wishes; Market stays on the compact HUD.',
           ],
         },
         {
           title: 'Workplace inspectors',
           body: [
-            'Subject inspector: Job + Works at. Building inspector: Who works here (name + job). Empty workplaces wait for your next hire or promotion.',
+            'Subject inspector: Job + Works at + At (keep room). Building inspector: Who works here (name + job). Empty workplaces wait for your next hire or promotion.',
           ],
         },
       ],
@@ -434,7 +506,7 @@ export function buildManualSections(): ManualSection[] {
       id: 'royalty',
       label: 'Royalty',
       intro: [
-        'Court life is theater with stakes: balls, blessings, marriages, and the carriage on parade.',
+        'Court life is theater with stakes: room-by-room schedules in the keep, balls in the courtyard, banquet feasts, blessings, marriages, and the carriage on parade.',
       ],
       entries: [
         {

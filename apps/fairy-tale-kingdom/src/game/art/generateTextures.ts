@@ -863,47 +863,90 @@ function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
 }
 
 function drawKeep(scene: Phaser.Scene) {
-  const w = 80;
-  const h = 68;
+  // ~2× former keep — multi-room exterior + readable floor plan interior
+  const w = 160;
+  const h = 124;
   const tex = createCanvas(scene, PROP_KEYS.keep, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 8, 22, 64, 42, palette.stone);
-  fillRect(ctx, 8, 22, 64, 2, palette.ink);
-  fillRect(ctx, 8, 22, 2, 42, palette.ink);
-  fillRect(ctx, 70, 22, 2, 42, palette.ink);
-  for (let i = 0; i < 7; i++) {
-    fillRect(ctx, 10 + i * 9, 8, 7, 16, palette.stone);
-    fillRect(ctx, 10 + i * 9, 8, 7, 1, palette.ink);
+  // Outer bailey wall
+  fillRect(ctx, 6, 28, 148, 88, palette.stone);
+  fillRect(ctx, 6, 28, 148, 2, palette.ink);
+  fillRect(ctx, 6, 28, 2, 88, palette.ink);
+  fillRect(ctx, 152, 28, 2, 88, palette.ink);
+  // Battlements
+  for (let i = 0; i < 14; i++) {
+    fillRect(ctx, 8 + i * 10, 12, 8, 18, palette.stone);
+    fillRect(ctx, 8 + i * 10, 12, 8, 1, palette.ink);
   }
-  fillRect(ctx, 32, 46, 16, 18, palette.woodDark);
-  fillRect(ctx, 16, 32, 7, 6, palette.cream);
-  fillRect(ctx, 57, 32, 7, 6, palette.cream);
-  fillRect(ctx, 34, 30, 12, 8, palette.gold);
-  fillRect(ctx, 36, 12, 8, 6, palette.roof);
+  // Corner towers
+  fillRect(ctx, 4, 20, 18, 28, palette.stoneDark);
+  fillRect(ctx, 138, 20, 18, 28, palette.stoneDark);
+  fillRect(ctx, 8, 16, 10, 8, palette.roof);
+  fillRect(ctx, 142, 16, 10, 8, palette.roof);
+  // Keep keep (inner hall block)
+  fillRect(ctx, 40, 36, 80, 52, palette.stoneDark);
+  fillRect(ctx, 44, 40, 72, 44, palette.stone);
+  // Gate / doors
+  fillRect(ctx, 68, 88, 24, 28, palette.woodDark);
+  fillRect(ctx, 76, 96, 8, 12, palette.ink);
+  // Windows
+  fillRect(ctx, 52, 50, 10, 8, palette.cream);
+  fillRect(ctx, 98, 50, 10, 8, palette.cream);
+  fillRect(ctx, 70, 48, 20, 10, palette.gold);
+  // Banner
+  fillRect(ctx, 74, 34, 12, 16, palette.clothKing);
+  pixel(ctx, 78, 40, palette.gold);
+  // Kitchen chimney
+  fillRect(ctx, 128, 42, 10, 22, palette.stoneDark);
+  fillRect(ctx, 130, 38, 6, 6, palette.ink);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.keepInterior, w, h);
   const ic = int.getContext();
-  // stone floor + tapestries
-  fillRect(ic, 8, 22, 64, 42, palette.stoneDark);
-  fillRect(ic, 10, 24, 60, 38, palette.wood);
-  fillRect(ic, 12, 26, 18, 14, palette.roof);
-  fillRect(ic, 14, 28, 14, 10, 0x6b2040);
-  // throne dais
-  fillRect(ic, 48, 28, 20, 24, palette.stone);
-  fillRect(ic, 52, 32, 12, 14, palette.gold);
-  fillRect(ic, 54, 30, 8, 4, palette.cream);
-  // long table
-  fillRect(ic, 18, 44, 28, 6, palette.woodDark);
-  fillRect(ic, 20, 42, 4, 4, palette.wood);
-  fillRect(ic, 40, 42, 4, 4, palette.wood);
-  // hearth niche (fire sprite overlays)
-  fillRect(ic, 28, 50, 14, 10, palette.stoneDark);
-  fillRect(ic, 30, 52, 10, 6, palette.ink);
-  fillRect(ic, 34, 54, 2, 2, 0xff6622);
-  // banner
-  fillRect(ic, 36, 24, 6, 12, palette.clothKing);
-  pixel(ic, 38, 28, palette.gold);
+  // Base stone floor
+  fillRect(ic, 6, 28, 148, 88, palette.stoneDark);
+  // Courtyard (south-center, lighter)
+  fillRect(ic, 50, 78, 60, 32, 0x8a9a70);
+  fillRect(ic, 72, 100, 16, 12, palette.dirt);
+  // Great hall (center-west)
+  fillRect(ic, 20, 40, 56, 40, palette.wood);
+  fillRect(ic, 24, 44, 18, 14, 0x6b2040);
+  // Throne dais
+  fillRect(ic, 48, 44, 22, 20, palette.stone);
+  fillRect(ic, 52, 48, 14, 12, palette.gold);
+  fillRect(ic, 55, 46, 8, 4, palette.cream);
+  // Banner
+  fillRect(ic, 40, 36, 6, 12, palette.clothKing);
+  // Banquet hall (east)
+  fillRect(ic, 90, 48, 48, 36, palette.wood);
+  fillRect(ic, 96, 58, 36, 8, palette.woodDark);
+  fillRect(ic, 98, 54, 4, 4, palette.wood);
+  fillRect(ic, 124, 54, 4, 4, palette.wood);
+  fillRect(ic, 110, 54, 4, 4, palette.wood);
+  // Kitchen (NE) + hearth
+  fillRect(ic, 118, 30, 34, 28, palette.stone);
+  fillRect(ic, 124, 40, 16, 12, palette.stoneDark);
+  fillRect(ic, 128, 44, 8, 6, palette.ink);
+  fillRect(ic, 130, 46, 4, 3, 0xff6622);
+  // Servants quarters (SW)
+  fillRect(ic, 10, 78, 36, 30, palette.wood);
+  fillRect(ic, 14, 84, 12, 6, palette.cream);
+  fillRect(ic, 28, 84, 12, 6, palette.cream);
+  // Royal chambers (NW)
+  fillRect(ic, 10, 32, 40, 28, 0x4a3058);
+  fillRect(ic, 16, 42, 14, 8, palette.clothKing);
+  fillRect(ic, 32, 42, 12, 8, palette.cream);
+  // Solar (N)
+  fillRect(ic, 70, 30, 36, 22, 0x3a4a68);
+  fillRect(ic, 78, 38, 20, 8, palette.woodDark);
+  fillRect(ic, 84, 34, 8, 4, palette.cream);
+  // Chapel nook (W)
+  fillRect(ic, 8, 52, 20, 22, 0x2a3048);
+  fillRect(ic, 14, 58, 8, 10, palette.gold);
+  // Armory nook (SE)
+  fillRect(ic, 118, 86, 30, 24, palette.stone);
+  fillRect(ic, 124, 92, 6, 12, palette.metal);
+  fillRect(ic, 134, 94, 8, 8, palette.woodDark);
   int.refresh();
 }
 
@@ -1790,12 +1833,39 @@ function drawBallTable(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawHorse(scene: Phaser.Scene) {
+  const w = 28;
+  const h = 22;
+  const tex = createCanvas(scene, PROP_KEYS.horse, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 6, 8, 16, 8, palette.wood);
+  fillRect(ctx, 18, 4, 8, 8, palette.woodDark);
+  fillRect(ctx, 22, 6, 4, 3, palette.cream);
+  fillRect(ctx, 8, 14, 3, 6, palette.woodDark);
+  fillRect(ctx, 16, 14, 3, 6, palette.woodDark);
+  fillRect(ctx, 4, 10, 4, 3, palette.ink);
+  pixel(ctx, 24, 7, palette.ink);
+  tex.refresh();
+}
+
+function drawJuggleBall(scene: Phaser.Scene) {
+  const w = 6;
+  const h = 6;
+  const tex = createCanvas(scene, PROP_KEYS.juggleBall, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 1, 1, 4, 4, palette.clothJester);
+  pixel(ctx, 2, 2, palette.gold);
+  tex.refresh();
+}
+
 function drawVenueProps(scene: Phaser.Scene) {
   drawVenueBanner(scene, PROP_KEYS.venueFestival, palette.clothPeasant, true);
   drawVenueBanner(scene, PROP_KEYS.venueWedding, palette.clothPrincess, true);
   drawVenueBanner(scene, PROP_KEYS.venueJoust, palette.clothKnight, false);
   drawVenueBanner(scene, PROP_KEYS.venueFuneral, palette.stoneDark, false);
   drawVenueBanner(scene, PROP_KEYS.venueBall, palette.clothKing, true);
+  drawHorse(scene);
+  drawJuggleBall(scene);
   drawBallTable(scene);
 }
 
@@ -1940,6 +2010,8 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.venueFuneral,
     PROP_KEYS.venueBall,
     PROP_KEYS.ballTable,
+    PROP_KEYS.horse,
+    PROP_KEYS.juggleBall,
     PROP_KEYS.houseInterior,
     PROP_KEYS.keepInterior,
     PROP_KEYS.tavernInterior,

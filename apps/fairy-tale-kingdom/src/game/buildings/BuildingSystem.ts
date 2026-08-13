@@ -91,7 +91,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   road: { w: 16, h: 16 },
   bridge: { w: 56, h: 20 },
   dock: { w: 40, h: 28 },
-  keep: { w: 80, h: 64 },
+  keep: { w: 160, h: 120 },
 };
 
 const STAIR_SNAP_DIST = 96;
@@ -653,6 +653,20 @@ export class BuildingSystem {
   }
 
   getById(id: string): BuildingRecord | undefined {
+    if (id === KEEP_ID && this.keepHp > 0 && this.keepSprite) {
+      return {
+        id: KEEP_ID,
+        kind: 'keep',
+        x: this.keep.x,
+        y: this.keep.y,
+        hp: this.keepHp,
+        maxHp: this.keepMaxHp,
+        sprite: this.keepSprite,
+        interiorSprite: this.keepInteriorSprite ?? undefined,
+        hearthSprite: this.keepHearth ?? undefined,
+        labelIndex: 0,
+      };
+    }
     return this.buildings.find((b) => b.id === id);
   }
 

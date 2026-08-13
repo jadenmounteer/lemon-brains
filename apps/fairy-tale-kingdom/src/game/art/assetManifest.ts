@@ -133,6 +133,8 @@ export const PROP_KEYS = {
   venueFuneral: 'prop-venue-funeral',
   venueBall: 'prop-venue-ball',
   ballTable: 'prop-ball-table',
+  horse: 'prop-horse',
+  juggleBall: 'prop-juggle-ball',
   road: 'prop-road',
   bridge: 'prop-bridge',
   bridgeV: 'prop-bridge-v',

@@ -324,7 +324,8 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'keep',
     name: 'Keep',
-    blurb: 'Spreads royal influence. Seat dukes here. All keeps must fall to lose.',
+    blurb:
+      'A multi-room castle: court, banquet, kitchen, and chambers. Seat dukes and castle staff. All keeps must fall to lose.',
     cost: 120,
     requiresRoyalty: true,
   },

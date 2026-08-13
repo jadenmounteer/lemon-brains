@@ -23,10 +23,21 @@ import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
 import {
   BUILDING_ROLE_CAPACITY,
+  CASTLE_JOB_CAPACITY,
+  CASTLE_JOBS,
   civilianJobForBuilding,
+  isCastleJob,
+  jobLabel,
   roleFromCareerGoal,
   type CivilianJob,
 } from '../jobs/capacities';
+import {
+  defaultRoomForActivity,
+  roomForCastleJob,
+  roomLabel,
+  roomPoint,
+  type KeepRoomId,
+} from '../keep/KeepLayout';
 import type { BuildKind } from '../../marketplace/catalog';
 import type { PathGrid } from '../path/PathGrid';
 import type { RaidSystem } from '../raids/RaidSystem';
@@ -862,7 +873,7 @@ export class SubjectSystem {
     const set = new Set(kinds);
     for (const s of this.subjects) {
       if (!set.has(s.data.activity as 'ball' | 'festival' | 'flee')) continue;
-      const slot = slotAtHour(s.data.role, this.clock.hour);
+      const slot = slotAtHour(s.data.role, this.clock.hour, s.data.job);
       s.data.activity = slot.activity;
       s.data.activityLabel = slot.label;
       s.data.zone = slot.zone;
@@ -938,9 +949,32 @@ export class SubjectSystem {
       ? 'Eating on the wall'
       : 'Having a meal';
 
+    // Cooks on duty slightly improve supper mood for nearby diners
+    const cooksOnDuty = this.subjects.filter(
+      (s) =>
+        s.data.job === 'cook' &&
+        (s.data.activity === 'cook' ||
+          s.data.activity === 'knead' ||
+          s.data.activity === 'serve')
+    ).length;
+    if (cooksOnDuty > 0) {
+      managed.data.happiness = Math.min(
+        100,
+        managed.data.happiness + Phase12Balance.cookMealHappiness
+      );
+    }
+
     // Wall units eat in place; others may stroll toward a tavern/home for flavor
     // but the meal completes on a timer even if they never arrive.
     if (managed.data.onWall) return;
+    if (livesAtKeep(managed.data.role) || isCastleJob(managed.data.job)) {
+      const keep = this.buildings?.getById(KEEP_ID);
+      if (keep) {
+        const pt = roomPoint(keep, 'banquet', managed.data.id);
+        this.nudgeToward(subjectId, pt.x, pt.y, 50);
+        return;
+      }
+    }
     const tavern = this.buildings
       ?.list()
       .find((b) => b.kind === 'tavern' && b.hp > 0);
@@ -1223,7 +1257,7 @@ export class SubjectSystem {
     for (const s of this.subjects) {
       s.data.sick = false;
       if (s.data.activity === 'flee') {
-        const slot = slotAtHour(s.data.role, this.clock.hour);
+        const slot = slotAtHour(s.data.role, this.clock.hour, s.data.job);
         s.data.activity = slot.activity;
         s.data.activityLabel = slot.label;
         s.data.zone = slot.zone;
@@ -1564,7 +1598,7 @@ export class SubjectSystem {
         ) {
           continue;
         }
-        const slot = slotAtHour(managed.data.role, this.clock.hour);
+        const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
         const site = this.resolveScheduleSite(managed, slot);
         const dist = Phaser.Math.Distance.Between(
           managed.sprite.x,
@@ -2230,7 +2264,7 @@ export class SubjectSystem {
       allegiance?: Subject['allegiance'];
     }
   ): void {
-    const slot = slotAtHour(role, this.clock.hour);
+    const slot = slotAtHour(role, this.clock.hour, opts?.job);
     const home = this.homePointFor(houseId);
     const rawStart = randomPointInZone(slot.zone, this.world, home);
     const start = this.snapToWalkable(rawStart.x, rawStart.y);
@@ -2325,7 +2359,10 @@ export class SubjectSystem {
     if (!this.buildings) return false;
     let totalCap = 0;
     let found = false;
-    for (const b of this.buildings.list()) {
+    const buildings = [...this.buildings.list()];
+    const keep = this.buildings.getById(KEEP_ID);
+    if (keep) buildings.push(keep);
+    for (const b of buildings) {
       if (b.hp <= 0) continue;
       const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
       const cap = caps?.[role];
@@ -2337,9 +2374,34 @@ export class SubjectSystem {
     return this.countRole(role) >= totalCap;
   }
 
+  private openCastleJob(exceptId?: string): CivilianJob | null {
+    for (const job of CASTLE_JOBS) {
+      const cap =
+        CASTLE_JOB_CAPACITY[
+          job as keyof typeof CASTLE_JOB_CAPACITY
+        ];
+      const used = this.subjects.filter(
+        (s) => s.data.job === job && s.data.id !== exceptId
+      ).length;
+      if (used < cap) return job;
+    }
+    return null;
+  }
+
   private bindWorkplace(managed: ManagedSubject, role: UnitRole): void {
     if (!this.buildings) return;
-    for (const b of this.buildings.list()) {
+    const candidates = [...this.buildings.list()];
+    const keep = this.buildings.getById(KEEP_ID);
+    if (keep && role === 'peasant') {
+      // Seed early castle life, then fill farms/shops before more staff
+      const castleStaff = this.subjects.filter((s) =>
+        isCastleJob(s.data.job)
+      ).length;
+      if (castleStaff < 3) candidates.unshift(keep);
+      else candidates.push(keep);
+    }
+
+    for (const b of candidates) {
       if (b.hp <= 0) continue;
       const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
       const cap = caps?.[role];
@@ -2350,6 +2412,15 @@ export class SubjectSystem {
           (s.data.role === role || s.data.id === managed.data.id)
       ).length;
       if (used >= cap && managed.data.workplaceId !== b.id) continue;
+
+      if (b.kind === 'keep') {
+        const castleJob = this.openCastleJob(managed.data.id);
+        if (!castleJob) continue;
+        managed.data.workplaceId = KEEP_ID;
+        managed.data.job = castleJob;
+        return;
+      }
+
       managed.data.workplaceId = b.id;
       const job = civilianJobForBuilding(b.kind);
       if (job) managed.data.job = job;
@@ -2417,7 +2488,7 @@ export class SubjectSystem {
         continue;
       }
       const prev = managed.data.activity;
-      const slot = slotAtHour(managed.data.role, this.clock.hour);
+      const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
       managed.data.activity = slot.activity;
       managed.data.activityLabel = slot.label;
       managed.data.zone = slot.zone;
@@ -2441,7 +2512,15 @@ export class SubjectSystem {
       activity === 'train' ||
       activity === 'juggle' ||
       activity === 'execute' ||
-      activity === 'gather'
+      activity === 'gather' ||
+      activity === 'cook' ||
+      activity === 'knead' ||
+      activity === 'serve' ||
+      activity === 'clean' ||
+      activity === 'court' ||
+      activity === 'feast' ||
+      activity === 'study' ||
+      activity === 'chamber'
     );
   }
 
@@ -2485,10 +2564,48 @@ export class SubjectSystem {
       return { ...patrol, sticky: false, mode: 'zone' };
     }
 
+    // Keep room from schedule (royals / castle staff)
+    if (slot.zone === 'keep' && this.buildings) {
+      const keep = this.buildings.getById(KEEP_ID);
+      if (keep) {
+        const room: KeepRoomId =
+          slot.room ??
+          (isCastleJob(managed.data.job)
+            ? roomForCastleJob(managed.data.job)
+            : defaultRoomForActivity(slot.activity, managed.data.role));
+        const pt = roomPoint(keep, room, managed.data.id);
+        const sticky =
+          this.isStickyActivity(slot.activity) ||
+          slot.activity === 'idle_keep' ||
+          slot.activity === 'eat';
+        return {
+          x: pt.x,
+          y: pt.y,
+          sticky,
+          mode: sticky ? 'work' : 'zone',
+          buildingId: KEEP_ID,
+        };
+      }
+    }
+
     // Bound workplace (farmer→field, baker→bakery, guard→dungeon, …)
     if (managed.data.workplaceId && this.buildings) {
       const b = this.buildings.getById(managed.data.workplaceId);
       if (b && this.isStickyActivity(slot.activity)) {
+        if (b.kind === 'keep') {
+          const room: KeepRoomId =
+            slot.room ??
+            (isCastleJob(managed.data.job)
+              ? roomForCastleJob(managed.data.job)
+              : defaultRoomForActivity(slot.activity, managed.data.role));
+          const pt = roomPoint(b, room, managed.data.id);
+          return {
+            ...pt,
+            sticky: true,
+            mode: 'work',
+            buildingId: b.id,
+          };
+        }
         const outdoor =
           b.kind === 'field' ||
           b.kind === 'dock' ||
@@ -2642,7 +2759,7 @@ export class SubjectSystem {
         continue;
       }
 
-      const slot = slotAtHour(managed.data.role, this.clock.hour);
+      const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
       const site = this.resolveScheduleSite(managed, slot);
       const dist = Phaser.Math.Distance.Between(
         managed.sprite.x,
@@ -2713,7 +2830,7 @@ export class SubjectSystem {
     if (!managed.sprite.active || managed.moving || managed.data.onWall) return;
     if (managed.interrupt) return;
 
-    const slot = slotAtHour(managed.data.role, this.clock.hour);
+    const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
     managed.data.activity = slot.activity;
     managed.data.activityLabel = slot.label;
     managed.data.zone = slot.zone;
@@ -2856,7 +2973,7 @@ export class SubjectSystem {
       homeLabel: managed.data.houseId
         ? (this.buildings?.houseLabel(managed.data.houseId) ?? 'a house')
         : 'no house (orphaned)',
-      scheduleSummary: scheduleSummary(managed.data.role),
+      scheduleSummary: scheduleSummary(managed.data.role, managed.data.job),
       dayPhase: this.clock.phase,
       hour: this.clock.hour,
       hp: managed.data.hp,
@@ -2887,24 +3004,30 @@ export class SubjectSystem {
         ? (this.buildings?.displayNameForId(managed.data.workplaceId) ??
           'a workplace')
         : 'No assigned workplace',
+      roomLabel: this.roomLabelFor(managed),
     };
+  }
+
+  private roomLabelFor(managed: ManagedSubject): string | undefined {
+    if (managed.data.zone !== 'keep') return undefined;
+    const slot = slotAtHour(
+      managed.data.role,
+      this.clock.hour,
+      managed.data.job
+    );
+    const room =
+      slot.room ??
+      (isCastleJob(managed.data.job)
+        ? roomForCastleJob(managed.data.job)
+        : defaultRoomForActivity(managed.data.activity, managed.data.role));
+    return roomLabel(room);
   }
 }
 
 function jobDisplayLabel(managed: ManagedSubject): string {
   if (managed.data.job) {
-    switch (managed.data.job) {
-      case 'farmer':
-        return 'Farmer';
-      case 'baker':
-        return 'Baker';
-      case 'merchant':
-        return 'Merchant';
-      case 'fisherman':
-        return 'Fisherman';
-      default:
-        return managed.data.job;
-    }
+    const label = jobLabel(managed.data.job);
+    if (label) return label;
   }
   return roleLabel(managed.data.role);
 }

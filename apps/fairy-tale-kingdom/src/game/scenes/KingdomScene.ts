@@ -49,6 +49,9 @@ import { WitchSystem } from '../witches/WitchSystem';
 import { EventVenueSystem } from '../events/EventVenueSystem';
 import { FestivalFunSystem } from '../events/FestivalFunSystem';
 import { BallFunSystem } from '../events/BallFunSystem';
+import { WeddingCeremonySystem } from '../events/WeddingCeremonySystem';
+import { JoustSpectacleSystem } from '../events/JoustSpectacleSystem';
+import { KeepLifeSystem } from '../keep/KeepLifeSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
 import { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { SecuritySystem } from '../security/SecuritySystem';
@@ -104,6 +107,9 @@ export class KingdomScene extends Phaser.Scene {
   private bubbles!: SpeechBubbleSystem;
   private festivalFun!: FestivalFunSystem;
   private ballFun!: BallFunSystem;
+  private weddingCeremony!: WeddingCeremonySystem;
+  private joustSpectacle!: JoustSpectacleSystem;
+  private keepLife!: KeepLifeSystem;
   private security!: SecuritySystem;
   private militaryPatrol!: MilitaryPatrolSystem;
   private undead!: UndeadSystem;
@@ -121,6 +127,8 @@ export class KingdomScene extends Phaser.Scene {
   private influenceGfx: Phaser.GameObjects.Graphics | null = null;
   private pinching = false;
   private pinchLastDist = 0;
+  private juggleProps = new Map<string, Phaser.GameObjects.Image[]>();
+  private jugglePhase = 0;
 
   constructor() {
     super('KingdomScene');
@@ -303,6 +311,22 @@ export class KingdomScene extends Phaser.Scene {
     this.subjects.setBubbles(this.bubbles);
     this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
     this.ballFun = new BallFunSystem(this, this.subjects, this.bubbles);
+    this.weddingCeremony = new WeddingCeremonySystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.bubbles
+    );
+    this.joustSpectacle = new JoustSpectacleSystem(
+      this,
+      this.subjects,
+      this.bubbles
+    );
+    this.keepLife = new KeepLifeSystem(
+      this.subjects,
+      this.buildings,
+      this.bubbles
+    );
     this.security = new SecuritySystem(
       this,
       this.subjects,
@@ -337,8 +361,10 @@ export class KingdomScene extends Phaser.Scene {
       this.venues.setFestivalAnchor?.(pick);
       if (pick.kind === 'joust') {
         this.venues.startJoustAt?.(pick.x, pick.y);
+        this.joustSpectacle.start(pick.x, pick.y);
       } else {
         this.venues.startFestivalAt?.(pick.x, pick.y);
+        this.joustSpectacle.stop();
       }
     });
     this.royalty.setOnBallStart((pt) => {
@@ -347,6 +373,12 @@ export class KingdomScene extends Phaser.Scene {
     this.royalty.setOnBallEnd(() => {
       this.ballFun.stop();
     });
+    this.royalty.setOnWeddingStart((opts) =>
+      this.weddingCeremony.start(opts.a, opts.b, opts.bishop, {
+        x: opts.x,
+        y: opts.y,
+      })
+    );
 
     this.monsters.setBuildings(this.buildings);
     this.monsters.setSubjects(this.subjects);
@@ -703,18 +735,24 @@ export class KingdomScene extends Phaser.Scene {
     this.witches?.update(delta);
     this.venues?.update(delta, {
       festivalActive: false, // Royalty + FestivalFun own festival venues
-      weddingActive: false,
+      weddingActive: false, // WeddingCeremonySystem owns the arch + stages
       peacetime: !(this.raids?.hasActiveRaiders() ?? false),
     });
     this.bubbles?.update(delta);
     this.festivalFun?.update(delta);
     if (!this.royalty?.isFestivalActive()) {
       this.festivalFun?.stop();
+      this.joustSpectacle?.stop();
     }
     this.ballFun?.update(delta);
     if (!this.royalty?.isBallActive()) {
       this.ballFun?.stop();
     }
+    this.weddingCeremony?.update(delta);
+    this.joustSpectacle?.update(delta);
+    this.joustSpectacle?.updateMountedPatrol();
+    this.keepLife?.update(delta);
+    this.updateJuggleProps();
     this.security?.update(delta);
     this.militaryPatrol?.update(
       delta,
@@ -1062,6 +1100,44 @@ export class KingdomScene extends Phaser.Scene {
       this.schedulePersist();
     }
   };
+
+  /** Orbiting balls above jesters while they juggle. */
+  private updateJuggleProps(): void {
+    this.jugglePhase += 0.12;
+    const active = new Set<string>();
+    for (const s of this.subjects.listManaged()) {
+      if (s.data.activity !== 'juggle' || !s.sprite.active) continue;
+      active.add(s.data.id);
+      let balls = this.juggleProps.get(s.data.id);
+      if (!balls) {
+        balls = [];
+        if (this.textures.exists(PROP_KEYS.juggleBall)) {
+          for (let i = 0; i < 3; i++) {
+            balls.push(
+              this.add
+                .image(s.sprite.x, s.sprite.y, PROP_KEYS.juggleBall)
+                .setDepth(s.sprite.depth + 2)
+                .setOrigin(0.5, 0.5)
+            );
+          }
+        }
+        this.juggleProps.set(s.data.id, balls);
+      }
+      balls.forEach((ball, i) => {
+        const ang = this.jugglePhase + (i * Math.PI * 2) / 3;
+        ball.setPosition(
+          s.sprite.x + Math.cos(ang) * 10,
+          s.sprite.y - 14 + Math.sin(ang * 2) * 4
+        );
+        ball.setDepth(s.sprite.depth + 2);
+      });
+    }
+    for (const [id, balls] of this.juggleProps) {
+      if (active.has(id)) continue;
+      for (const b of balls) b.destroy();
+      this.juggleProps.delete(id);
+    }
+  }
 
   private beginFollowSubject(id: string): void {
     this.followSubjectId = id;
