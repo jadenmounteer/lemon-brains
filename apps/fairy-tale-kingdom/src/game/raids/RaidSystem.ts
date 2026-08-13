@@ -665,6 +665,11 @@ export class RaidSystem {
         : home?.aggroOnly
           ? 'fighting'
           : 'pathing';
+    const rawHomeX = home?.homeX ?? x;
+    const rawHomeY = home?.homeY ?? y;
+    const homePt = this.pathGrid
+      ? this.pathGrid.snapWorldToOpen(rawHomeX, rawHomeY)
+      : { x: rawHomeX, y: rawHomeY };
     const raider: ActiveRaider = {
       kind,
       sprite,
@@ -680,8 +685,8 @@ export class RaidSystem {
       investX: invest.x,
       investY: invest.y,
       homeCampId: home?.homeCampId ?? null,
-      homeX: home?.homeX ?? x,
-      homeY: home?.homeY ?? y,
+      homeX: homePt.x,
+      homeY: homePt.y,
       rosterSubjectId: home?.rosterSubjectId ?? null,
       stealKind: home?.stealKind ?? null,
       carriedGold: 0,
@@ -1129,8 +1134,8 @@ export class RaidSystem {
       this.killRaider(raider, false);
       return;
     }
-    // Faster flee
-    this.stepToward(raider, edge.x, edge.y, deltaMs * 1.45);
+    // Path around mountains/water — never bee-line into blocked terrain
+    this.followPathTo(raider, edge.x, edge.y, deltaMs * 1.45);
     raider.sprite.setTint(0xaaaaaa);
   }
 
@@ -1160,7 +1165,7 @@ export class RaidSystem {
       this.returnRaiderHome(raider);
       return;
     }
-    this.stepToward(raider, raider.homeX, raider.homeY, deltaMs);
+    this.followPathTo(raider, raider.homeX, raider.homeY, deltaMs);
   }
 
   private tickGiantHunt(
@@ -1183,7 +1188,7 @@ export class RaidSystem {
           this.grabVillager(raider, prey.data.id);
           return;
         }
-        this.stepToward(raider, prey.sprite.x, prey.sprite.y, deltaMs);
+        this.followPathTo(raider, prey.sprite.x, prey.sprite.y, deltaMs);
         return;
       }
       // No prey nearby — smash a building or idle-path toward settlement, never steal gold
@@ -1258,7 +1263,7 @@ export class RaidSystem {
       raider.sprite.play(idleAnimKey(raider.kind), true);
       return;
     }
-    this.stepToward(raider, raider.homeX, raider.homeY, deltaMs);
+    this.followPathTo(raider, raider.homeX, raider.homeY, deltaMs);
   }
 
   private tickGiantFeast(raider: ActiveRaider, deltaMs: number): void {
@@ -1277,6 +1282,8 @@ export class RaidSystem {
     raider.targetSubjectId = subjectId;
     raider.state = 'carrying';
     raider.path = [];
+    raider.pathIndex = 0;
+    this.repathTo(raider, raider.homeX, raider.homeY);
     this.subjects?.beginAbducted(subjectId);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: 'A giant grabs a villager!',
@@ -1403,6 +1410,12 @@ export class RaidSystem {
     raider.targetSubjectId = null;
     raider.targetBuildingId = null;
     raider.path = [];
+    raider.pathIndex = 0;
+    this.repathTo(
+      raider,
+      raider.homeX || this.campPoint?.x || 24,
+      raider.homeY || this.campPoint?.y || 24
+    );
   }
 
   private triggerRout(): void {
@@ -1459,12 +1472,18 @@ export class RaidSystem {
   }
 
   private repath(raider: ActiveRaider): void {
+    this.repathTo(raider, this.keep.x, this.keep.y + 20);
+  }
+
+  /** Pathfind to an arbitrary goal, escaping mountain/water bowls if needed. */
+  private repathTo(raider: ActiveRaider, goalX: number, goalY: number): void {
     if (!this.pathGrid) {
-      raider.path = [{ x: this.keep.x, y: this.keep.y + 20 }];
+      raider.path = [{ x: goalX, y: goalY }];
       raider.pathIndex = 0;
       return;
     }
-    const goal = { x: this.keep.x, y: this.keep.y + 20 };
+    this.unstickRaider(raider);
+    const goal = this.pathGrid.snapWorldToOpen(goalX, goalY);
     let from = { x: raider.sprite.x, y: raider.sprite.y };
     let path = this.pathGrid.findPath(from, goal);
     // Camps in mountain bowls have no land corridor — slip out onto the rim,
@@ -1485,12 +1504,109 @@ export class RaidSystem {
     raider.pathIndex = 0;
   }
 
+  /** Pull a raider off mountains/water onto the nearest walkable cell. */
+  private unstickRaider(raider: ActiveRaider): void {
+    if (!this.pathGrid) return;
+    if (!this.pathGrid.isWorldBlocked(raider.sprite.x, raider.sprite.y)) return;
+    const safe = this.pathGrid.snapWorldToOpen(
+      raider.sprite.x,
+      raider.sprite.y
+    );
+    raider.sprite.setPosition(safe.x, safe.y);
+    raider.sprite.setDepth(25 + safe.y * 0.01);
+  }
+
+  /**
+   * Follow a land path around mountains/water toward a goal.
+   * Repaths when the path is empty, exhausted, or the next hop is blocked.
+   */
+  private followPathTo(
+    raider: ActiveRaider,
+    goalX: number,
+    goalY: number,
+    deltaMs: number
+  ): void {
+    this.unstickRaider(raider);
+    const goalDist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      goalX,
+      goalY
+    );
+    if (goalDist < 16) {
+      this.stepToward(raider, goalX, goalY, deltaMs);
+      return;
+    }
+
+    const needRepath =
+      !raider.path.length ||
+      raider.pathIndex >= raider.path.length ||
+      // Path goal drifted far from intended home (or was for the keep)
+      Phaser.Math.Distance.Between(
+        raider.path[raider.path.length - 1]!.x,
+        raider.path[raider.path.length - 1]!.y,
+        goalX,
+        goalY
+      ) > 48;
+
+    if (needRepath) {
+      this.repathTo(raider, goalX, goalY);
+    }
+
+    if (!raider.path.length) {
+      // Last resort: try pocket escape then a single open-cell slide
+      if (this.pathGrid) {
+        const exit = this.pathGrid.escapeLandPocket({
+          x: raider.sprite.x,
+          y: raider.sprite.y,
+        });
+        if (exit) {
+          this.stepToward(raider, exit.x, exit.y, deltaMs);
+          return;
+        }
+      }
+      this.stepToward(raider, goalX, goalY, deltaMs);
+      return;
+    }
+
+    while (raider.pathIndex < raider.path.length) {
+      const wp = raider.path[raider.pathIndex]!;
+      const wd = Phaser.Math.Distance.Between(
+        raider.sprite.x,
+        raider.sprite.y,
+        wp.x,
+        wp.y
+      );
+      if (wd < 12) {
+        raider.pathIndex += 1;
+        continue;
+      }
+      this.stepToward(raider, wp.x, wp.y, deltaMs);
+      // If still blocked after step, force a fresh path next tick
+      if (
+        this.pathGrid?.isWorldBlocked(
+          raider.sprite.x + (wp.x - raider.sprite.x) * 0.15,
+          raider.sprite.y + (wp.y - raider.sprite.y) * 0.15
+        )
+      ) {
+        raider.path = [];
+        raider.pathIndex = 0;
+      }
+      return;
+    }
+
+    // Exhausted path — repath next frame
+    raider.path = [];
+    raider.pathIndex = 0;
+  }
+
   private stepToward(
     raider: ActiveRaider,
     tx: number,
     ty: number,
     deltaMs: number
   ): void {
+    this.unstickRaider(raider);
     const dx = tx - raider.sprite.x;
     const dy = ty - raider.sprite.y;
     const dist = Math.hypot(dx, dy) || 1;
@@ -1507,19 +1623,53 @@ export class RaidSystem {
         { x: tx, y: ty }
       );
       if (path && path.length > 1) {
-        const wp = path[1]!;
+        const wp = path[Math.min(2, path.length - 1)]!;
         const d2 =
           Math.hypot(wp.x - raider.sprite.x, wp.y - raider.sprite.y) || 1;
         nx = raider.sprite.x + ((wp.x - raider.sprite.x) / d2) * Math.min(step, d2);
         ny = raider.sprite.y + ((wp.y - raider.sprite.y) / d2) * Math.min(step, d2);
       } else {
-        return;
+        // Slide along the obstacle toward whichever perpendicular axis is open
+        const candidates: Array<[number, number]> = [
+          [raider.sprite.x + Math.sign(dx || 1) * step, raider.sprite.y],
+          [raider.sprite.x, raider.sprite.y + Math.sign(dy || 1) * step],
+          [raider.sprite.x - Math.sign(dx || 1) * step, raider.sprite.y],
+          [raider.sprite.x, raider.sprite.y - Math.sign(dy || 1) * step],
+          [
+            raider.sprite.x + (-dy / dist) * step,
+            raider.sprite.y + (dx / dist) * step,
+          ],
+          [
+            raider.sprite.x - (-dy / dist) * step,
+            raider.sprite.y - (dx / dist) * step,
+          ],
+        ];
+        let slid = false;
+        for (const [cx, cy] of candidates) {
+          if (!this.pathGrid.isWorldBlocked(cx, cy)) {
+            nx = cx;
+            ny = cy;
+            slid = true;
+            break;
+          }
+        }
+        if (!slid) {
+          const exit = this.pathGrid.escapeLandPocket({
+            x: raider.sprite.x,
+            y: raider.sprite.y,
+          });
+          if (exit) {
+            raider.sprite.setPosition(exit.x, exit.y);
+            raider.sprite.setDepth(25 + exit.y * 0.01);
+          }
+          return;
+        }
       }
       if (this.pathGrid.isWorldBlocked(nx, ny)) return;
     }
 
     this.faceToward(raider, tx, ty);
-    const dir = facingFromDelta(dx, dy);
+    const dir = facingFromDelta(nx - raider.sprite.x, ny - raider.sprite.y);
     raider.sprite.play(walkAnimKey(raider.kind, dir), true);
     raider.sprite.setPosition(nx, ny);
     raider.sprite.setDepth(25 + ny * 0.01);
@@ -1651,6 +1801,8 @@ export class RaidSystem {
     raider.targetSubjectId = null;
     raider.targetBuildingId = null;
     raider.path = [];
+    raider.pathIndex = 0;
+    this.repathTo(raider, raider.homeX, raider.homeY);
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${label} flee home with the gold!`,
     });
