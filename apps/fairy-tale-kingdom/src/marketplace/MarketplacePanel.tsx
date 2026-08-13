@@ -20,6 +20,7 @@ interface MarketplacePanelProps {
   onBuyBuilding: (kind: BuildKind) => void;
   onBuyNaval: (kind: NavalKind) => void;
   onCancelPlace: () => void;
+  onClose?: () => void;
 }
 
 export function MarketplacePanel({
@@ -32,6 +33,7 @@ export function MarketplacePanel({
   onBuyBuilding,
   onBuyNaval,
   onCancelPlace,
+  onClose,
 }: MarketplacePanelProps) {
   const canAfford = (cost: number) => infiniteGold || gold >= cost;
   const hireItems = HIRE_CATALOG.filter(
@@ -39,7 +41,18 @@ export function MarketplacePanel({
   );
   return (
     <section className="panel market-panel">
-      <h2>Marketplace</h2>
+      <div className="sheet-header">
+        <h2>Marketplace</h2>
+        {onClose && (
+          <button
+            type="button"
+            className="inspector-close touch-btn"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        )}
+      </div>
       <p className="market-capacity" aria-live="polite">
         Population: <strong>{stats.population}</strong> / {stats.capacity} beds
         <span className="muted">

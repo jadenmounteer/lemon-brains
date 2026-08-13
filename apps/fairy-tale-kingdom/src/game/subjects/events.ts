@@ -41,6 +41,7 @@ export const KingdomEvents = {
   FOCUS_CAMP: 'kingdom:focus-camp',
   BUY_NAVAL: 'kingdom:buy-naval',
   SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
+  CAMERA_ZOOM: 'kingdom:camera-zoom',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -146,3 +147,8 @@ export interface BuyNavalPayload {
 }
 
 export type SandboxSpawnPayload = SandboxSpawnAction;
+
+export interface CameraZoomPayload {
+  /** +1 zoom in, -1 zoom out */
+  direction: 1 | -1;
+}

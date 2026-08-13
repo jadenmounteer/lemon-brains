@@ -194,6 +194,12 @@ export default function App() {
     seq: number;
     action: SandboxSpawnAction;
   } | null>(null);
+  const [cameraZoomRequest, setCameraZoomRequest] = useState<{
+    seq: number;
+    direction: 1 | -1;
+  } | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
@@ -447,12 +453,55 @@ export default function App() {
 
   const showSidePanels = kingdomReady && !needsSetup && !namingAfterLoss;
 
+  const closePlaySheets = useCallback(() => {
+    setShowMarket(false);
+    setShowQuestions(false);
+    setShowRansom(false);
+    setSelected(null);
+    setSelectedBuilding(null);
+    setSelectedCamp(null);
+    setDeselectToken((n) => n + 1);
+    setCareerTodosVisible(false);
+  }, [setCareerTodosVisible]);
+
+  const openMarket = useCallback(() => {
+    setMenuOpen(false);
+    setShowQuestions(false);
+    setShowRansom(false);
+    setSelected(null);
+    setSelectedBuilding(null);
+    setSelectedCamp(null);
+    setDeselectToken((n) => n + 1);
+    setShowMarket((v) => !v);
+  }, []);
+
+  const openQuestions = useCallback(() => {
+    setMenuOpen(false);
+    setShowMarket(false);
+    setShowRansom(false);
+    setShowQuestions((v) => !v);
+  }, []);
+
+  const chromeBlockingZoom =
+    menuOpen ||
+    menuOverlayOpen ||
+    showMarket ||
+    showQuestions ||
+    showRansom ||
+    !!selected ||
+    !!selectedBuilding ||
+    !!selectedCamp ||
+    todosVisible ||
+    !!gameOver;
+
   return (
     <div className="app">
       <header className="hud">
         <div className="brand">
           <h1 aria-live="polite">
-            {day.dayPhase} · {formatClock(day.hour)}
+            <span className="brand-clock">
+              {day.dayPhase} · {formatClock(day.hour)}
+            </span>
           </h1>
           <p className="tagline">
             {kingdom.name
@@ -461,41 +510,84 @@ export default function App() {
             {stats.inspired ? ' · Inspired!' : ''}
           </p>
         </div>
-        <div className="hud-actions">
-          <div className="gold" aria-live="polite">
-            Gold:{' '}
-            <strong>
-              {infiniteGold ? '∞' : gold}
-              {infiniteGold ? (
-                <span className="cheat-badge" title="Cheat mode">
-                  {' '}
-                  cheat
-                </span>
-              ) : null}
-            </strong>
+        <div className="hud-resources" aria-label="Resources">
+          <div
+            className="gold resource-pill"
+            aria-live="polite"
+            title={infiniteGold ? 'Gold (cheat ∞)' : `Gold: ${gold}`}
+          >
+            <span className="pill-full">
+              Gold:{' '}
+              <strong>
+                {infiniteGold ? '∞' : gold}
+                {infiniteGold ? (
+                  <span className="cheat-badge"> cheat</span>
+                ) : null}
+              </strong>
+            </span>
+            <span className="pill-short">
+              G <strong>{infiniteGold ? '∞' : gold}</strong>
+            </span>
           </div>
           {showSidePanels && (
             <>
-              <div className="food" aria-live="polite">
-                Food: <strong>{food}</strong>
+              <div className="food resource-pill" aria-live="polite" title={`Food: ${food}`}>
+                <span className="pill-full">
+                  Food: <strong>{food}</strong>
+                </span>
+                <span className="pill-short">
+                  F <strong>{food}</strong>
+                </span>
               </div>
               <div
-                className="pop"
+                className="pop resource-pill"
                 aria-live="polite"
-                title={`${stats.freeBeds} free bed${stats.freeBeds === 1 ? '' : 's'}`}
+                title={`Population ${stats.population} / ${stats.capacity} (${stats.freeBeds} free beds)`}
               >
-                Pop: <strong>{stats.population}</strong>
-                <span className="pop-cap"> / {stats.capacity}</span>
+                <span className="pill-full">
+                  Pop: <strong>{stats.population}</strong>
+                  <span className="pop-cap"> / {stats.capacity}</span>
+                </span>
+                <span className="pill-short">
+                  P{' '}
+                  <strong>
+                    {stats.population}/{stats.capacity}
+                  </strong>
+                </span>
               </div>
-              <button type="button" onClick={() => setShowQuestions((v) => !v)}>
+            </>
+          )}
+        </div>
+        <div className="hud-actions">
+          {showSidePanels && (
+            <>
+              <button
+                type="button"
+                className="hud-icon-btn touch-btn hud-desktop-only"
+                onClick={openQuestions}
+                aria-pressed={showQuestions}
+              >
                 {showQuestions ? 'Hide questions' : 'Questions'}
               </button>
-              <button type="button" onClick={() => setShowMarket((v) => !v)}>
-                {showMarket ? 'Hide market' : 'Marketplace'}
+              <button
+                type="button"
+                className="hud-icon-btn touch-btn"
+                onClick={openMarket}
+                aria-pressed={showMarket}
+                aria-label={showMarket ? 'Hide marketplace' : 'Marketplace'}
+                title="Marketplace"
+              >
+                <span className="hud-btn-full">
+                  {showMarket ? 'Hide market' : 'Marketplace'}
+                </span>
+                <span className="hud-btn-short" aria-hidden="true">
+                  Mkt
+                </span>
               </button>
               {careerTodoCount > 0 && (
                 <button
                   type="button"
+                  className="hud-icon-btn touch-btn hud-desktop-only"
                   aria-pressed={showCareerTodos}
                   onClick={() => setCareerTodosVisible(!showCareerTodos)}
                 >
@@ -505,7 +597,11 @@ export default function App() {
                 </button>
               )}
               {(captives.length > 0 || showRansom) && (
-                <button type="button" onClick={() => setShowRansom((v) => !v)}>
+                <button
+                  type="button"
+                  className="hud-icon-btn touch-btn hud-desktop-only"
+                  onClick={() => setShowRansom((v) => !v)}
+                >
                   {showRansom
                     ? 'Hide ransom'
                     : `Ransom (${captives.length})`}
@@ -513,7 +609,7 @@ export default function App() {
               )}
             </>
           )}
-          <a className="back" href={config.hostUrl}>
+          <a className="back hud-desktop-only" href={config.hostUrl}>
             Knowledge Quest
           </a>
           {kingdomReady && (
@@ -539,6 +635,25 @@ export default function App() {
               onSandboxSpawn={(action) =>
                 setSandboxSpawnRequest({ seq: Date.now(), action })
               }
+              open={menuOpen || needsSetup || namingAfterLoss}
+              onOpenChange={(next) => {
+                if (next) {
+                  setShowMarket(false);
+                  setShowQuestions(false);
+                  setShowRansom(false);
+                }
+                setMenuOpen(next);
+              }}
+              knowledgeQuestUrl={config.hostUrl}
+              captiveCount={captives.length}
+              showRansomOpen={showRansom}
+              onOpenQuestions={openQuestions}
+              onOpenRansom={() => {
+                setShowMarket(false);
+                setShowQuestions(false);
+                setShowRansom((v) => !v);
+              }}
+              onOverlayChange={setMenuOverlayOpen}
             />
           )}
         </div>
@@ -551,6 +666,7 @@ export default function App() {
             daysPlayed={kingdom.daysPlayed}
             sandboxSettings={sandboxSettings}
             sandboxSpawnRequest={sandboxSpawnRequest}
+            cameraZoomRequest={cameraZoomRequest}
             hireRequest={hireRequest}
             placeRequest={placeRequest}
             cancelPlaceToken={cancelPlaceToken}
@@ -563,9 +679,31 @@ export default function App() {
             arrestCampRequest={arrestCampRequest}
             focusCampRequest={focusCampRequest}
             navalRequest={navalRequest}
-            onSubjectSelected={setSelected}
-            onBuildingSelected={setSelectedBuilding}
-            onCampSelected={setSelectedCamp}
+            onSubjectSelected={(s) => {
+              if (s) {
+                setShowMarket(false);
+                setShowQuestions(false);
+                setShowRansom(false);
+                setMenuOpen(false);
+              }
+              setSelected(s);
+            }}
+            onBuildingSelected={(b) => {
+              if (b) {
+                setShowMarket(false);
+                setShowQuestions(false);
+                setMenuOpen(false);
+              }
+              setSelectedBuilding(b);
+            }}
+            onCampSelected={(c) => {
+              if (c) {
+                setShowMarket(false);
+                setShowQuestions(false);
+                setMenuOpen(false);
+              }
+              setSelectedCamp(c);
+            }}
             onDayTick={setDay}
             onDayRolled={() => {
               void incrementDay();
@@ -620,7 +758,36 @@ export default function App() {
           />
         )}
 
-        {toast && <div className="toast">{toast}</div>}
+        {toast && (
+          <div className={`toast${chromeBlockingZoom ? ' toast-elevated' : ''}`}>
+            {toast}
+          </div>
+        )}
+
+        {showSidePanels && !chromeBlockingZoom && (
+          <div className="camera-zoom" role="group" aria-label="Camera zoom">
+            <button
+              type="button"
+              className="camera-zoom-btn touch-btn"
+              aria-label="Zoom out"
+              onClick={() =>
+                setCameraZoomRequest({ seq: Date.now(), direction: -1 })
+              }
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="camera-zoom-btn touch-btn"
+              aria-label="Zoom in"
+              onClick={() =>
+                setCameraZoomRequest({ seq: Date.now(), direction: 1 })
+              }
+            >
+              +
+            </button>
+          </div>
+        )}
 
         {gameOver && (
           <GameOverModal
@@ -633,126 +800,138 @@ export default function App() {
         )}
 
         {showSidePanels && showSide && (
-          <aside className="side-panels">
-            {todosVisible && (
-              <TodoPanel
-                todos={stats.careerTodos ?? []}
-                gold={gold}
-                infiniteGold={infiniteGold}
-                onHire={(todo) => {
-                  void handleCareerHire(todo);
-                }}
-                onHide={() => setCareerTodosVisible(false)}
-              />
-            )}
-            {selected && (
-              <InspectorPanel
-                subject={selected}
-                militaryAvailable={stats.militaryAvailable}
-                onClose={() => {
-                  setSelected(null);
-                  setDeselectToken((n) => n + 1);
-                }}
-                onTransformPeasant={() => {
-                  setTransformRequest({
-                    seq: Date.now(),
-                    fgmId: selected.id,
-                  });
-                }}
-                onCommandTroops={(troopCount) => {
-                  setCommandRequest({
-                    seq: Date.now(),
-                    generalId: selected.id,
-                    troopCount,
-                  });
-                }}
-              />
-            )}
-            {selectedBuilding && (
-              <BuildingInspectorPanel
-                building={selectedBuilding}
-                onClose={() => {
-                  setSelectedBuilding(null);
-                  setDeselectToken((n) => n + 1);
-                }}
-              />
-            )}
-            {selectedCamp && (
-              <CampInspectorPanel
-                camp={selectedCamp}
-                onArrest={() => {
-                  setArrestCampRequest({
-                    seq: Date.now(),
-                    campId: selectedCamp.id,
-                  });
-                }}
-                onDestroy={() => {
-                  setDestroyCampRequest({
-                    seq: Date.now(),
-                    campId: selectedCamp.id,
-                  });
-                }}
-                onClose={() => {
-                  setSelectedCamp(null);
-                  setDeselectToken((n) => n + 1);
-                }}
-                onSelectUnit={(unit: CampRosterEntry) => {
-                  setFocusCampRequest({
-                    seq: Date.now(),
-                    campId: selectedCamp.id,
-                    unitId: unit.id,
-                  });
-                  if (unit.status === 'away') {
-                    flash(`${unit.name} is out raiding — not home right now`);
-                  }
-                }}
-              />
-            )}
-            {showRansom && (
-              <RansomPanel
-                captives={captives}
-                gold={gold}
-                infiniteGold={infiniteGold}
-                canExecute={stats.canExecuteCaptive}
-                onRansom={(id, cost) => {
-                  void handleRansom(id, cost);
-                }}
-                onExecute={(id) => {
-                  setExecuteRequest({ seq: Date.now(), id });
-                }}
-                onClose={() => setShowRansom(false)}
-              />
-            )}
-            {showQuestions && (
-              <QuestionPanel
-                settings={settings}
-                ready={ready}
-                onGoldEarned={earnCorrectAnswer}
-              />
-            )}
-            {showMarket && (
-              <MarketplacePanel
-                gold={gold}
-                infiniteGold={infiniteGold}
-                stats={stats}
-                placeMode={placeMode}
-                enabledRoles={sandboxSettings.units.kinds}
-                onHire={(role) => {
-                  void handleHire(role);
-                }}
-                onBuyBuilding={(kind) => {
-                  void handleBuyBuilding(kind);
-                }}
-                onBuyNaval={(kind) => {
-                  void handleBuyNaval(kind);
-                }}
-                onCancelPlace={() => {
-                  refundPendingPlace(true);
-                  setCancelPlaceToken((n) => n + 1);
-                }}
-              />
-            )}
-          </aside>
+          <>
+            <button
+              type="button"
+              className="sheet-scrim side-scrim"
+              aria-label="Close panel"
+              onClick={() => {
+                closePlaySheets();
+              }}
+            />
+            <aside className="side-panels sheet-stack">
+              {todosVisible && (
+                <TodoPanel
+                  todos={stats.careerTodos ?? []}
+                  gold={gold}
+                  infiniteGold={infiniteGold}
+                  onHire={(todo) => {
+                    void handleCareerHire(todo);
+                  }}
+                  onHide={() => setCareerTodosVisible(false)}
+                />
+              )}
+              {selected && (
+                <InspectorPanel
+                  subject={selected}
+                  militaryAvailable={stats.militaryAvailable}
+                  onClose={() => {
+                    setSelected(null);
+                    setDeselectToken((n) => n + 1);
+                  }}
+                  onTransformPeasant={() => {
+                    setTransformRequest({
+                      seq: Date.now(),
+                      fgmId: selected.id,
+                    });
+                  }}
+                  onCommandTroops={(troopCount) => {
+                    setCommandRequest({
+                      seq: Date.now(),
+                      generalId: selected.id,
+                      troopCount,
+                    });
+                  }}
+                />
+              )}
+              {selectedBuilding && (
+                <BuildingInspectorPanel
+                  building={selectedBuilding}
+                  onClose={() => {
+                    setSelectedBuilding(null);
+                    setDeselectToken((n) => n + 1);
+                  }}
+                />
+              )}
+              {selectedCamp && (
+                <CampInspectorPanel
+                  camp={selectedCamp}
+                  onArrest={() => {
+                    setArrestCampRequest({
+                      seq: Date.now(),
+                      campId: selectedCamp.id,
+                    });
+                  }}
+                  onDestroy={() => {
+                    setDestroyCampRequest({
+                      seq: Date.now(),
+                      campId: selectedCamp.id,
+                    });
+                  }}
+                  onClose={() => {
+                    setSelectedCamp(null);
+                    setDeselectToken((n) => n + 1);
+                  }}
+                  onSelectUnit={(unit: CampRosterEntry) => {
+                    setFocusCampRequest({
+                      seq: Date.now(),
+                      campId: selectedCamp.id,
+                      unitId: unit.id,
+                    });
+                    if (unit.status === 'away') {
+                      flash(`${unit.name} is out raiding — not home right now`);
+                    }
+                  }}
+                />
+              )}
+              {showRansom && (
+                <RansomPanel
+                  captives={captives}
+                  gold={gold}
+                  infiniteGold={infiniteGold}
+                  canExecute={stats.canExecuteCaptive}
+                  onRansom={(id, cost) => {
+                    void handleRansom(id, cost);
+                  }}
+                  onExecute={(id) => {
+                    setExecuteRequest({ seq: Date.now(), id });
+                  }}
+                  onClose={() => setShowRansom(false)}
+                />
+              )}
+              {showQuestions && (
+                <QuestionPanel
+                  settings={settings}
+                  ready={ready}
+                  onGoldEarned={earnCorrectAnswer}
+                  onClose={() => setShowQuestions(false)}
+                />
+              )}
+              {showMarket && (
+                <MarketplacePanel
+                  gold={gold}
+                  infiniteGold={infiniteGold}
+                  stats={stats}
+                  placeMode={placeMode}
+                  enabledRoles={sandboxSettings.units.kinds}
+                  onHire={(role) => {
+                    void handleHire(role);
+                  }}
+                  onBuyBuilding={(kind) => {
+                    void handleBuyBuilding(kind);
+                  }}
+                  onBuyNaval={(kind) => {
+                    void handleBuyNaval(kind);
+                  }}
+                  onCancelPlace={() => {
+                    refundPendingPlace(true);
+                    setCancelPlaceToken((n) => n + 1);
+                  }}
+                  onClose={() => setShowMarket(false)}
+                />
+              )}
+            </aside>
+          </>
         )}
       </main>
     </div>

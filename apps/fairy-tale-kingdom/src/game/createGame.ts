@@ -11,6 +11,10 @@ export function createGame(parent: HTMLElement): Phaser.Game {
     pixelArt: true,
     antialias: false,
     roundPixels: true,
+    // Multitouch so pinch-zoom can see a second finger on mobile.
+    input: {
+      activePointers: 3,
+    },
     scale: {
       mode: Phaser.Scale.RESIZE,
       autoCenter: Phaser.Scale.CENTER_BOTH,

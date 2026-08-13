@@ -33,6 +33,7 @@ interface PhaserGameProps {
   daysPlayed: number;
   sandboxSettings: SandboxSettings;
   sandboxSpawnRequest?: { seq: number; action: SandboxSpawnAction } | null;
+  cameraZoomRequest?: { seq: number; direction: 1 | -1 } | null;
   hireRequest: { seq: number; role: UnitRole } | null;
   placeRequest: { seq: number; kind: BuildKind } | null;
   cancelPlaceToken: number;
@@ -76,6 +77,7 @@ export function PhaserGame({
   daysPlayed,
   sandboxSettings,
   sandboxSpawnRequest,
+  cameraZoomRequest,
   hireRequest,
   placeRequest,
   cancelPlaceToken,
@@ -294,6 +296,13 @@ export function PhaserGame({
       sandboxSpawnRequest.action
     );
   }, [sandboxSpawnRequest]);
+
+  useEffect(() => {
+    if (!cameraZoomRequest) return;
+    gameRef.current?.events.emit(KingdomEvents.CAMERA_ZOOM, {
+      direction: cameraZoomRequest.direction,
+    });
+  }, [cameraZoomRequest]);
 
   useEffect(() => {
     if (!commandRequest) return;

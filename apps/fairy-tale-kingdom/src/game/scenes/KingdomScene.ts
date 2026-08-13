@@ -32,6 +32,7 @@ import {
   type CommandDetachmentPayload,
   type DestroyCampPayload,
   type FocusCampPayload,
+  type CameraZoomPayload,
   type HireSubjectPayload,
   type PayRansomPayload,
   type SandboxSpawnPayload,
@@ -418,7 +419,7 @@ export class KingdomScene extends Phaser.Scene {
     this.applyNightOverlay();
 
     this.add
-      .text(12, 12, 'Drag to look · scroll / pinch to zoom · click a subject, monster, camp, or building', {
+      .text(12, 12, 'Drag to look · pinch or +/− to zoom · tap a subject, monster, camp, or building', {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
         color: '#e8f5e9',
@@ -625,6 +626,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.on(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
+    this.game.events.on(KingdomEvents.CAMERA_ZOOM, this.onCameraZoom);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -765,7 +767,15 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.off(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
+    this.game.events.off(KingdomEvents.CAMERA_ZOOM, this.onCameraZoom);
   }
+
+  private onCameraZoom = (payload: CameraZoomPayload) => {
+    const cam = this.cameras.main;
+    const factor =
+      payload.direction >= 0 ? ZOOM_KEY_FACTOR : 1 / ZOOM_KEY_FACTOR;
+    this.applyZoomAt(cam.width / 2, cam.height / 2, factor);
+  };
 
   private onSandboxSpawn = (payload: SandboxSpawnPayload) => {
     switch (payload.type) {

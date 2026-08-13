@@ -16,12 +16,14 @@ interface QuestionPanelProps {
   settings: AppSettings;
   ready: boolean;
   onGoldEarned: () => Promise<number> | number;
+  onClose?: () => void;
 }
 
 export function QuestionPanel({
   settings,
   ready,
   onGoldEarned,
+  onClose,
 }: QuestionPanelProps) {
   const [question, setQuestion] = useState<LearningQuestion | null>(null);
   const [wrongValue, setWrongValue] = useState<string | number | null>(null);
@@ -95,10 +97,25 @@ export function QuestionPanel({
     }
   };
 
+  const header = (
+    <div className="sheet-header">
+      <h2>Questions</h2>
+      {onClose && (
+        <button
+          type="button"
+          className="inspector-close touch-btn"
+          onClick={onClose}
+        >
+          Close
+        </button>
+      )}
+    </div>
+  );
+
   if (!ready) {
     return (
       <section className="panel">
-        <h2>Questions</h2>
+        {header}
         <p className="muted">Loading shared settings…</p>
       </section>
     );
@@ -107,7 +124,7 @@ export function QuestionPanel({
   if (!configured) {
     return (
       <section className="panel">
-        <h2>Questions</h2>
+        {header}
         <p className="muted">
           Configure a curriculum in Knowledge Quest, then come back to earn gold.
         </p>
@@ -117,17 +134,26 @@ export function QuestionPanel({
 
   return (
     <section className="panel question-panel">
-      <div className="inspector-header">
+      <div className="sheet-header">
         <h2>Questions</h2>
         <div className="question-tools">
           {canReplay && (
-            <button type="button" className="inspector-close" onClick={replay}>
+            <button type="button" className="inspector-close touch-btn" onClick={replay}>
               Replay
             </button>
           )}
-          <button type="button" className="inspector-close" onClick={loadQuestion}>
+          <button type="button" className="inspector-close touch-btn" onClick={loadQuestion}>
             Next
           </button>
+          {onClose && (
+            <button
+              type="button"
+              className="inspector-close touch-btn"
+              onClick={onClose}
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
       {question && (
