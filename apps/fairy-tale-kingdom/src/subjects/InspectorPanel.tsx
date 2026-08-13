@@ -25,6 +25,33 @@ export function InspectorPanel({
 }: InspectorPanelProps) {
   const [troopCount, setTroopCount] = useState(3);
 
+  const canToggle = Boolean(onExpand || onCollapse);
+
+  const actions = (
+    <div className="inspector-follow-actions">
+      {canToggle && (
+        <button
+          type="button"
+          className="inspector-close touch-btn"
+          aria-expanded={!collapsed}
+          onClick={() => {
+            if (collapsed) onExpand?.();
+            else onCollapse?.();
+          }}
+        >
+          {collapsed ? 'Details' : 'Hide'}
+        </button>
+      )}
+      <button
+        type="button"
+        className="inspector-close touch-btn"
+        onClick={onClose}
+      >
+        Unfollow
+      </button>
+    </div>
+  );
+
   if (collapsed) {
     return (
       <section
@@ -39,24 +66,7 @@ export function InspectorPanel({
               {subject.activityLabel ? ` · ${subject.activityLabel}` : ''}
             </p>
           </div>
-          <div className="inspector-follow-actions">
-            {onExpand && (
-              <button
-                type="button"
-                className="inspector-close touch-btn"
-                onClick={onExpand}
-              >
-                Details
-              </button>
-            )}
-            <button
-              type="button"
-              className="inspector-close touch-btn"
-              onClick={onClose}
-            >
-              Unfollow
-            </button>
-          </div>
+          {actions}
         </div>
       </section>
     );
@@ -66,24 +76,7 @@ export function InspectorPanel({
     <section className="panel inspector-panel" aria-live="polite">
       <div className="inspector-header">
         <h2>{subject.name}</h2>
-        <div className="inspector-follow-actions">
-          {onCollapse && (
-            <button
-              type="button"
-              className="inspector-close touch-btn"
-              onClick={onCollapse}
-            >
-              Hide
-            </button>
-          )}
-          <button
-            type="button"
-            className="inspector-close touch-btn"
-            onClick={onClose}
-          >
-            Unfollow
-          </button>
-        </div>
+        {actions}
       </div>
       <p className="inspector-role">{subject.roleLabel}</p>
       <p className="muted">{subject.genderLabel}</p>

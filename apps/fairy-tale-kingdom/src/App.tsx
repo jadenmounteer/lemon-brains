@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { config } from './config';
 import type { UnitRole } from './game/art/assetManifest';
 import { PhaserGame } from './game/PhaserGame';
@@ -202,6 +202,10 @@ export default function App() {
   const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
   /** Subject inspector expanded; collapsed = follow bar only (keeps camera follow). */
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
+  /** Track selection id so snapshot refresh ticks don't reset expand/collapse. */
+  const selectedSubjectIdRef = useRef<string | null>(null);
+  /** Ignore scrim taps that are leftovers from the Details expand gesture. */
+  const ignoreScrimUntilRef = useRef(0);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
@@ -460,6 +464,7 @@ export default function App() {
     setShowQuestions(false);
     setShowRansom(false);
     setSelected(null);
+    selectedSubjectIdRef.current = null;
     setSelectedBuilding(null);
     setSelectedCamp(null);
     setInspectorExpanded(false);
@@ -472,6 +477,7 @@ export default function App() {
     setShowQuestions(false);
     setShowRansom(false);
     setSelected(null);
+    selectedSubjectIdRef.current = null;
     setSelectedBuilding(null);
     setSelectedCamp(null);
     setInspectorExpanded(false);
@@ -694,6 +700,10 @@ export default function App() {
             focusCampRequest={focusCampRequest}
             navalRequest={navalRequest}
             onSubjectSelected={(s) => {
+              const nextId = s?.id ?? null;
+              const idChanged = nextId !== selectedSubjectIdRef.current;
+              selectedSubjectIdRef.current = nextId;
+
               if (s) {
                 setShowMarket(false);
                 setShowQuestions(false);
@@ -701,12 +711,14 @@ export default function App() {
                 setMenuOpen(false);
                 setSelectedBuilding(null);
                 setSelectedCamp(null);
-                // Mobile: start collapsed so follow-cam stays visible.
-                const narrow =
-                  typeof window !== 'undefined' &&
-                  window.matchMedia('(max-width: 720px)').matches;
-                setInspectorExpanded(!narrow);
-              } else {
+                // Only when switching people — refresh ticks must not collapse Details.
+                if (idChanged) {
+                  const narrow =
+                    typeof window !== 'undefined' &&
+                    window.matchMedia('(max-width: 720px)').matches;
+                  setInspectorExpanded(!narrow);
+                }
+              } else if (idChanged) {
                 setInspectorExpanded(false);
               }
               setSelected(s);
@@ -717,6 +729,7 @@ export default function App() {
                 setShowQuestions(false);
                 setMenuOpen(false);
                 setSelected(null);
+                selectedSubjectIdRef.current = null;
                 setInspectorExpanded(false);
               }
               setSelectedBuilding(b);
@@ -727,6 +740,7 @@ export default function App() {
                 setShowQuestions(false);
                 setMenuOpen(false);
                 setSelected(null);
+                selectedSubjectIdRef.current = null;
                 setInspectorExpanded(false);
               }
               setSelectedCamp(c);
@@ -834,6 +848,7 @@ export default function App() {
                 className="sheet-scrim side-scrim"
                 aria-label="Close panel"
                 onClick={() => {
+                  if (performance.now() < ignoreScrimUntilRef.current) return;
                   closePlaySheets();
                 }}
               />
@@ -857,10 +872,14 @@ export default function App() {
                   subject={selected}
                   militaryAvailable={stats.militaryAvailable}
                   collapsed={!inspectorExpanded}
-                  onExpand={() => setInspectorExpanded(true)}
+                  onExpand={() => {
+                    ignoreScrimUntilRef.current = performance.now() + 500;
+                    setInspectorExpanded(true);
+                  }}
                   onCollapse={() => setInspectorExpanded(false)}
                   onClose={() => {
                     setSelected(null);
+                    selectedSubjectIdRef.current = null;
                     setInspectorExpanded(false);
                     setDeselectToken((n) => n + 1);
                   }}
