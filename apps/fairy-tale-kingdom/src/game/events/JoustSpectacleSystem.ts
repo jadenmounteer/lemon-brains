@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PROP_KEYS } from '../art/assetManifest';
+import { isMilitaryRole, PROP_KEYS } from '../art/assetManifest';
 import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
@@ -60,6 +60,8 @@ export class JoustSpectacleSystem {
     this.horses.clear();
     this.clashFlash?.destroy();
     this.clashFlash = null;
+    // Restore knight + spectator schedules (festival / joust leftovers)
+    this.subjects.clearGatherActivities(['festival', 'joust']);
     this.knightIds = [];
   }
 
@@ -116,7 +118,8 @@ export class JoustSpectacleSystem {
         (s) =>
           s.sprite.active &&
           !this.knightIds.includes(s.data.id) &&
-          s.data.allegiance !== 'camp'
+          s.data.allegiance !== 'camp' &&
+          !isMilitaryRole(s.data.role)
       )
       .slice(0, 10);
     crowd.forEach((s, i) => {

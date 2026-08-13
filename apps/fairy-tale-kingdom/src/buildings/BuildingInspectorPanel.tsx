@@ -30,6 +30,11 @@ export function BuildingInspectorPanel({
           <span className="muted">Influence</span> {building.influenceRadius}px
         </p>
       )}
+      {building.loyaltyLabel ? (
+        <p>
+          <span className="muted">Loyalty</span> {building.loyaltyLabel}
+        </p>
+      ) : null}
       {typeof building.royalCapacity === 'number' && (
         <p>
           <span className="muted">Royal slots</span>{' '}

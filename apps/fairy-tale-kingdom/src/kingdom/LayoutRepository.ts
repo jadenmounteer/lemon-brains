@@ -42,6 +42,7 @@ export interface SavedBuilding {
   attachedWallId?: string;
   /** Degrees — bridges use 0 or 90 */
   rotation?: number;
+  loyaltyKeepId?: string | null;
 }
 
 export interface SavedSubject {
@@ -82,6 +83,7 @@ export interface SavedSubject {
   interrupt?: SubjectInterrupt | null;
   campId?: string | null;
   allegiance?: 'kingdom' | 'camp';
+  loyaltyKeepId?: string | null;
 }
 
 export interface LayoutRoyaltyState {

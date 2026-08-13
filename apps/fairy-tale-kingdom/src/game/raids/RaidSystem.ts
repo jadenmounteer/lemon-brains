@@ -36,6 +36,8 @@ type RaiderState =
   | 'investing'
   | 'routing'
   | 'retreating'
+  | 'carrying'
+  | 'feasting'
   | 'done';
 
 export type SiegePhase = 'none' | 'muster' | 'reduce' | 'storm' | 'routing';
@@ -70,6 +72,9 @@ export interface ActiveRaider {
   /** Smart-general detachment: burn outer fields while main host sieges */
   siegeRole: 'main' | 'field_raid';
   strategyFieldId: string | null;
+  /** Giant abduction — subject tucked under the arm. */
+  carriedSubjectId: string | null;
+  feastMs: number;
 }
 
 const LABELS: Record<RaidKind, string> = {
@@ -638,7 +643,7 @@ export class RaidSystem {
     sprite.setDepth(25);
     sprite.setOrigin(0.5, 1);
     if (kind === 'giant') {
-      sprite.setScale(1.4);
+      sprite.setScale(2.35);
     } else if (kind === 'goblin') {
       sprite.setScale(0.85);
     }
@@ -684,6 +689,8 @@ export class RaidSystem {
       isGeneral: Boolean(home?.isGeneral),
       siegeRole: home?.siegeRole ?? 'main',
       strategyFieldId: home?.strategyFieldId ?? null,
+      carriedSubjectId: null,
+      feastMs: 0,
     };
     this.raiders.push(raider);
     if (kind !== 'enemy_army' && !home?.aggroOnly) this.repath(raider);
@@ -732,8 +739,24 @@ export class RaidSystem {
       return;
     }
 
+    if (raider.state === 'feasting') {
+      this.tickGiantFeast(raider, deltaMs);
+      return;
+    }
+
+    if (raider.state === 'carrying') {
+      this.tickGiantCarry(raider, deltaMs);
+      return;
+    }
+
     if (raider.state === 'retreating') {
       this.tickRetreat(raider, deltaMs);
+      return;
+    }
+
+    // Giants hunt villagers instead of racing the keep for gold
+    if (raider.kind === 'giant') {
+      this.tickGiantHunt(raider, deltaMs, think);
       return;
     }
 
@@ -864,9 +887,10 @@ export class RaidSystem {
           ) {
             this.captureRoyal(target.data.id);
           } else {
-            let dmg = CombatBalance.raiderMelee;
-            if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
-            this.subjects?.damageSubject(target.data.id, dmg);
+            this.subjects?.damageSubject(
+              target.data.id,
+              CombatBalance.raiderMelee
+            );
           }
         }
         return;
@@ -891,11 +915,13 @@ export class RaidSystem {
         } else {
           this.faceToward(raider, b.x, b.y);
           raider.sprite.play(idleAnimKey(raider.kind), true);
-          let dmg = CombatBalance.raiderBurn;
-          if (raider.kind === 'giant') dmg *= CombatBalance.giantDamageMult;
-          const destroyed = this.buildings?.damageBuilding(b.id, dmg, {
-            fire: true,
-          });
+          const destroyed = this.buildings?.damageBuilding(
+            b.id,
+            CombatBalance.raiderBurn,
+            {
+              fire: true,
+            }
+          );
           if (destroyed && b.kind === 'house') {
             this.subjects?.onHouseDestroyed(b.id);
           }
@@ -1137,6 +1163,169 @@ export class RaidSystem {
     this.stepToward(raider, raider.homeX, raider.homeY, deltaMs);
   }
 
+  private tickGiantHunt(
+    raider: ActiveRaider,
+    deltaMs: number,
+    think: boolean
+  ): void {
+    if (!raider.sprite.active || raider.state === 'done') return;
+    if (think) {
+      const prey = this.nearestGiantPrey(raider.sprite.x, raider.sprite.y, 220);
+      if (prey) {
+        raider.targetSubjectId = prey.data.id;
+        const d = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          prey.sprite.x,
+          prey.sprite.y
+        );
+        if (d < 28) {
+          this.grabVillager(raider, prey.data.id);
+          return;
+        }
+        this.stepToward(raider, prey.sprite.x, prey.sprite.y, deltaMs);
+        return;
+      }
+      // No prey nearby — smash a building or idle-path toward settlement, never steal gold
+      const burn = this.buildings?.burnablesNear(
+        raider.sprite.x,
+        raider.sprite.y,
+        CombatBalance.pillageRadius
+      );
+      if (burn) {
+        raider.state = 'burning';
+        raider.targetBuildingId = burn.id;
+      } else if (raider.state === 'pathing' || raider.state === 'fighting') {
+        raider.state = 'pathing';
+        if (!raider.path.length) this.repath(raider);
+      }
+    }
+    if (raider.state === 'burning' && raider.targetBuildingId) {
+      const b = this.buildings?.getById(raider.targetBuildingId);
+      if (b) {
+        this.stepToward(raider, b.x, b.y, deltaMs);
+        const d = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          b.x,
+          b.y
+        );
+        if (d < 30 && think) {
+          this.buildings?.damageBuilding(b.id, CombatBalance.raiderBurn * CombatBalance.giantDamageMult);
+        }
+      }
+      return;
+    }
+    if (!raider.path.length) {
+      this.repath(raider);
+    }
+    if (!raider.path.length) {
+      this.stepToward(raider, this.keep.x, this.keep.y + 20, deltaMs);
+      return;
+    }
+    const waypoint = raider.path[raider.pathIndex] ?? raider.path[raider.path.length - 1]!;
+    const wd = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      waypoint.x,
+      waypoint.y
+    );
+    if (wd < 10) {
+      raider.pathIndex = Math.min(raider.pathIndex + 1, raider.path.length - 1);
+      return;
+    }
+    this.stepToward(raider, waypoint.x, waypoint.y, deltaMs);
+  }
+
+  private tickGiantCarry(raider: ActiveRaider, deltaMs: number): void {
+    // Keep victim attached visually (hidden under arm — bob the giant)
+    if (raider.carriedSubjectId) {
+      const victim = this.subjects?.getById(raider.carriedSubjectId);
+      if (victim) {
+        victim.sprite.setPosition(raider.sprite.x - 8, raider.sprite.y - 10);
+        victim.sprite.setVisible(false);
+      }
+    }
+    const dist = Phaser.Math.Distance.Between(
+      raider.sprite.x,
+      raider.sprite.y,
+      raider.homeX,
+      raider.homeY
+    );
+    if (dist < 28) {
+      raider.state = 'feasting';
+      raider.feastMs = 2200;
+      raider.sprite.play(idleAnimKey(raider.kind), true);
+      return;
+    }
+    this.stepToward(raider, raider.homeX, raider.homeY, deltaMs);
+  }
+
+  private tickGiantFeast(raider: ActiveRaider, deltaMs: number): void {
+    raider.feastMs -= deltaMs;
+    if (raider.feastMs > 0) return;
+    if (raider.carriedSubjectId) {
+      this.subjects?.devourSubject(raider.carriedSubjectId);
+      raider.carriedSubjectId = null;
+    }
+    raider.looted = true;
+    this.returnRaiderHome(raider);
+  }
+
+  private grabVillager(raider: ActiveRaider, subjectId: string): void {
+    raider.carriedSubjectId = subjectId;
+    raider.targetSubjectId = subjectId;
+    raider.state = 'carrying';
+    raider.path = [];
+    this.subjects?.beginAbducted(subjectId);
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: 'A giant grabs a villager!',
+    });
+  }
+
+  private nearestGiantPrey(x: number, y: number, radius: number) {
+    if (!this.subjects) return null;
+    const preferred = new Set([
+      'peasant',
+      'child',
+      'jester',
+      'physician',
+      'bishop',
+      'executioner',
+    ]);
+    let best: ReturnType<SubjectSystem['getById']> = undefined;
+    let bestD = radius;
+    let bestScore = Infinity;
+    for (const s of this.subjects.listManaged()) {
+      if (!s.sprite.active || !s.sprite.visible) continue;
+      if (s.data.allegiance === 'camp') continue;
+      if (s.interrupt?.kind === 'abducted') continue;
+      if (isRoyalRole(s.data.role)) continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d > radius) continue;
+      const score = preferred.has(s.data.role) ? d : d + 80;
+      if (score < bestScore) {
+        bestScore = score;
+        bestD = d;
+        best = s;
+      }
+    }
+    void bestD;
+    return best ?? null;
+  }
+
+  private freeCarriedVictim(raider: ActiveRaider): void {
+    if (!raider.carriedSubjectId) return;
+    const id = raider.carriedSubjectId;
+    raider.carriedSubjectId = null;
+    const victim = this.subjects?.getById(id);
+    if (victim) {
+      victim.sprite.setVisible(true);
+      victim.sprite.setPosition(raider.sprite.x, raider.sprite.y);
+      this.subjects?.freeAbducted(id);
+    }
+  }
+
   private returnRaiderHome(raider: ActiveRaider): void {
     if (raider.state === 'done') return;
     raider.state = 'done';
@@ -1342,6 +1531,7 @@ export class RaidSystem {
 
   private killRaider(raider: ActiveRaider, countKill = true): void {
     if (raider.state === 'done') return;
+    this.freeCarriedVictim(raider);
     raider.state = 'done';
     const campId = raider.homeCampId;
     raider.camp?.destroy();
@@ -1433,14 +1623,12 @@ export class RaidSystem {
     if (!raider.sprite.active || raider.state === 'done') return;
     if (raider.kind === 'enemy_army') return;
     if (raider.looted || raider.state === 'retreating') return;
+    // Giants never steal gold — they hunt villagers instead
+    if (raider.kind === 'giant') return;
 
     const stealKey: StealKind =
       raider.stealKind ??
-      (raider.kind === 'giant'
-        ? 'giant'
-        : raider.kind === 'goblin'
-          ? 'goblin'
-          : 'bandit');
+      (raider.kind === 'goblin' ? 'goblin' : 'bandit');
     let amount = WarBalance.stealAmount(stealKey);
     if (this.buildings?.hasTavern()) {
       amount = Math.max(1, Math.floor(amount * 0.75));
@@ -1450,9 +1638,7 @@ export class RaidSystem {
         ? 'Thieves'
         : stealKey === 'goblin'
           ? 'Goblins'
-          : stealKey === 'giant'
-            ? 'Giants'
-            : 'Bandits';
+          : 'Bandits';
     this.scene.game.events.emit(KingdomEvents.GOLD_STOLEN, {
       amount,
       kind: stealKey,

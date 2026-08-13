@@ -111,6 +111,7 @@ export class TaskSystem {
       managed.data.activityLabel = 'Found no food';
     }
     this.subjects.clearInterrupt(subjectId);
+    this.subjects.resyncFromSchedule(subjectId);
   }
 
   private nearTavern(x: number, y: number): boolean {

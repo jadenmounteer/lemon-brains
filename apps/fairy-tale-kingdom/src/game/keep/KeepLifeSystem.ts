@@ -41,7 +41,7 @@ export class KeepLifeSystem {
   update(deltaMs: number): void {
     this.beatMs -= deltaMs;
     if (this.beatMs > 0) return;
-    this.beatMs = 2800 + Math.random() * 2200;
+    this.beatMs = 5200 + Math.random() * 3800;
 
     const keep = this.buildings.getById(KEEP_ID);
     if (!keep) return;
@@ -53,20 +53,34 @@ export class KeepLifeSystem {
           s.sprite.active &&
           s.data.zone === 'keep' &&
           !s.moving &&
-          s.data.allegiance !== 'camp'
+          s.data.allegiance !== 'camp' &&
+          s.data.activity !== 'festival' &&
+          s.data.activity !== 'ball' &&
+          // Don't yank farmers/guards who are just visiting the keep zone
+          (s.data.job === undefined ||
+            s.data.job === 'cook' ||
+            s.data.job === 'servant' ||
+            s.data.job === 'steward' ||
+            s.data.job === 'scribe' ||
+            s.data.job === 'cupbearer' ||
+            ['king', 'queen', 'prince', 'princess', 'duke', 'duchess', 'jester', 'fairy_godmother'].includes(
+              s.data.role
+            ))
       );
     if (inside.length === 0) return;
 
     const beat = this.pickBeat(inside);
     const actors = inside.filter((s) => this.matchesBeat(s, beat));
-    const pool = actors.length ? actors : inside;
+    // Only nudge/speak for people whose schedule matches the beat
+    const pool = actors.length ? actors : [];
+    if (pool.length === 0) return;
     const star = pool[Math.floor(Math.random() * pool.length)]!;
     const line =
       LINES[beat][Math.floor(Math.random() * LINES[beat].length)]!;
     this.bubbles.say(star.sprite, line);
     star.data.thought = line;
 
-    if (Math.random() < 0.45 && !star.moving) {
+    if (Math.random() < 0.22 && !star.moving) {
       const room = this.nudgeRoom(star, beat);
       const dest = roomPoint(keep, room, star.data.id);
       this.subjects.nudgeToward(star.data.id, dest.x, dest.y, 28);

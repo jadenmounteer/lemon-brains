@@ -200,7 +200,12 @@ export class KingdomScene extends Phaser.Scene {
     });
     this.buildings = new BuildingSystem(this, { x: cx, y: cy }, () =>
       this.subjects.unitBodies()
-    , () => this.schedulePersist());
+    , () => {
+      this.subjects.rebalanceCivilianJobs();
+      this.subjects.reassignLoyalties();
+      this.buildings.reassignBuildingLoyalties();
+      this.schedulePersist();
+    });
     this.buildings.setKeepSprite(keepSprite);
     this.buildings.setPathGrid(this.pathGrid);
     this.buildings.setMapData(this.mapData);
@@ -222,6 +227,7 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters.setVfx(this.siegeVfx);
     this.monsters.setClock(this.subjects.clock);
     this.monsters.setOnChanged(() => this.schedulePersist());
+    this.subjects.setMonsters(this.monsters);
 
     this.buildings.setOnDestroyed((b) => {
       if (b.kind === 'house' || b.kind === 'manor') {
@@ -1372,6 +1378,9 @@ export class KingdomScene extends Phaser.Scene {
     snap: ReturnType<BuildingSystem['select']>
   ): void {
     this.registry.set('selectedBuildingId', snap?.id ?? null);
+    const keepId =
+      snap && snap.kind === 'keep' ? snap.id : null;
+    this.subjects.setLoyaltyHighlight(keepId);
     this.game.events.emit(KingdomEvents.BUILDING_SELECTED, snap);
   }
 

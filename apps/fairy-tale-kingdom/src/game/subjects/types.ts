@@ -50,6 +50,8 @@ export interface BuildingSnapshot {
   royalCapacity?: number;
   influenceRadius?: number;
   capacityLines?: string[];
+  /** Keep this building answers to (fief), when set. */
+  loyaltyLabel?: string;
 }
 
 /** Named garrison entry for an encampment, shown in the camp inspector. */
@@ -164,7 +166,8 @@ export type InterruptKind =
   | 'fish'
   | 'crew'
   | 'exorcise'
-  | 'defect';
+  | 'defect'
+  | 'abducted';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -224,6 +227,8 @@ export interface Subject {
   campId?: string | null;
   /** 'camp' subjects live at a bandit/thief/gypsy camp instead of the kingdom. */
   allegiance?: 'kingdom' | 'camp';
+  /** Nearest keep this subject serves (crown or duke/duchess fief). */
+  loyaltyKeepId?: string | null;
 }
 
 /** Snapshot sent across the Phaser → React bridge */
@@ -265,6 +270,8 @@ export interface SubjectSnapshot {
   pregnantLabel?: string;
   spouseLabel?: string;
   titleLabel?: string;
+  /** Keep / liege this subject is loyal to. */
+  loyaltyLabel?: string;
 }
 
 export interface DaySnapshot {

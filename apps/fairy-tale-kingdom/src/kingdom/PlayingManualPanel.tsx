@@ -84,6 +84,32 @@ export function PlayingManualPanel({ onClose }: PlayingManualPanelProps) {
   return (
     <div className="manual-overlay" role="dialog" aria-label="Playing manual">
       <div className="manual-shell">
+        <header className="manual-mobile-bar">
+          <h1 className="manual-mobile-title">Playing Manual</h1>
+          <button
+            type="button"
+            className="manual-close-btn"
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </header>
+
+        <nav className="manual-chips" aria-label="Manual sections">
+          {sections.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={
+                active === s.id ? 'manual-chip active' : 'manual-chip'
+              }
+              onClick={() => jump(s.id)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+
         <aside className="manual-glossary">
           <h2>Glossary</h2>
           <nav>
@@ -104,6 +130,7 @@ export function PlayingManualPanel({ onClose }: PlayingManualPanelProps) {
             Close
           </button>
         </aside>
+
         <div className="manual-scroll-wrap">
           <div className="manual-scroll-cap" aria-hidden="true" />
           <div className="manual-scroll" ref={scrollRef}>

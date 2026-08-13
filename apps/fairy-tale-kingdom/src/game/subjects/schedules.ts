@@ -47,11 +47,11 @@ function withMeals(
 
 const peasantBase: ScheduleSlot[] = [
   { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
-  { startHour: 6, endHour: 12, activity: 'work', zone: 'field', label: 'Working the fields' },
-  { startHour: 12, endHour: 14, activity: 'idle_keep', zone: 'keep', label: 'Resting by the keep' },
+  { startHour: 6, endHour: 13, activity: 'work', zone: 'field', label: 'Working the fields' },
+  { startHour: 13, endHour: 14, activity: 'idle_keep', zone: 'keep', label: 'Resting by the keep' },
   { startHour: 14, endHour: 18, activity: 'gather', zone: 'path', label: 'Carrying goods along the path' },
-  { startHour: 18, endHour: 21, activity: 'idle_keep', zone: 'keep', label: 'Chatting near the keep' },
-  { startHour: 21, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
+  { startHour: 18, endHour: 20, activity: 'idle_keep', zone: 'keep', label: 'Chatting near the keep' },
+  { startHour: 20, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
 ];
 
 const guardBase: ScheduleSlot[] = [

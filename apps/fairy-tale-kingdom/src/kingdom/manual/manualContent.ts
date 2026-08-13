@@ -133,7 +133,20 @@ export function buildManualSections(): ManualSection[] {
             'Watch castle life unfold: follow a cook through supper prep, or the king at morning court. Tap anyone to follow; open Details for job, room (“At: Banquet hall”), thoughts, and happiness.',
             'Answer Knowledge Quest questions for gold → hire workers and place buildings from Market.',
             'Promote careers from career wishes (menu on mobile) when building capacity frees up.',
-            'Watch festivals, staged weddings, mounted jousts, and camp life. When raids loom, trust sphere patrols — or send a general’s detachment.',
+            'Watch festivals, staged weddings, mounted jousts, and camp life. When raids loom, soldiers and archers leave the revel to hold their keep’s perimeter; guards keep patrolling the fief’s roads.',
+          ],
+        },
+        {
+          title: 'Food first, then the castle',
+          body: [
+            'New peasants fill field farmer slots before bakeries, docks, markets, and finally castle staff. Place a field early so the realm eats — cooks and servants appear once farms are staffed (or a single steward if you have no fields yet).',
+            'Subjects commute on roads across their keep’s loyalty territory: houses on one fringe, fields and docks on another. Night sleep, meal hours, and work sites stick to real buildings — royals sleep in chambers; villagers eat at home; court and castle staff dine in the banquet hall.',
+          ],
+        },
+        {
+          title: 'Keep loyalty',
+          body: [
+            'Every subject and building answers to the nearest keep (the crown keep or a duke/duchess seat). Inspectors show Loyalty. Select a keep to tint its loyal folk — patrols, work, and defense stay in that fief.',
           ],
         },
         {
@@ -165,7 +178,7 @@ export function buildManualSections(): ManualSection[] {
       ],
       entries: [
         hireEntry('peasant', 'unit:peasant', [
-          'The backbone of the realm. Jobs include farmer, baker, merchant, fisherman, and castle staff (cook, servant, steward, scribe, cupbearer) at the keep. They flee indoors when cordons or raids scream danger, dance at festivals, marry, and raise children when beds allow.',
+          'The backbone of the realm. Jobs fill food-first: farmer → baker → fisherman → merchant, then castle staff (cook, servant, steward, scribe, cupbearer). They commute to real workplaces, flee when raids scream danger, join capped festival crowds (military stays on duty), marry, and raise children when beds allow.',
         ]),
         {
           artKey: 'unit:child',
@@ -175,13 +188,13 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         hireEntry('guard', 'unit:guard', [
-          'Home sphere: dungeon (keep fallback). Patrols roads and posts, arrests thieves and necromancers when a dungeon exists, recovers stolen gold, and shouts cordon orders during outbreaks.',
+          'Patrol the loyalty keep’s roads, houses, and civic posts. Arrest thieves and necromancers when a dungeon exists, recover stolen gold, and keep walking raid roads while soldiers hold the perimeter.',
         ]),
         hireEntry('soldier', 'unit:soldier', [
-          'Home sphere: barracks. Clears zombies, joins general detachments, escorts, and holds the street when guards quarantine.',
+          'Defend their keep’s perimeter when any raid or siege hits. Peacetime they patrol the fief; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
         ]),
         hireEntry('archer', 'unit:archer', [
-          'Deadlier from wall-tops and watchtower range. Barracks-bound patrol with soldiers.',
+          'Prefer battlements with line-of-sight toward raiders threatening their fief. Climb stairs in a raid; otherwise patrol with the army of their keep.',
         ]),
         hireEntry('elite_guard', 'unit:elite_guard', [
           'Hardened melee for late pressure. Needs king & queen plus barracks capacity.',
@@ -190,7 +203,7 @@ export function buildManualSections(): ManualSection[] {
           'Master bowmen for sieges and dragon-adjacent chaos. Royalty + barracks.',
         ]),
         hireEntry('knight', 'unit:knight', [
-          'Slays sleeping dragons in caves. Two or more unlock royal jousts when the crown and a crowd are present.',
+          'Hunt schedule pathfinds to living monsters across the map (sleeping dragons first). Two or more unlock royal jousts when the crown and a civilian crowd are present.',
         ]),
         hireEntry('general', 'unit:general', [
           'Issue detachment commands against camps, monsters, or vampire castles. Strategy is your hand on the frontier war.',
@@ -482,9 +495,8 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Civilian jobs',
           body: [
-            'Farmer → fields. Baker → bakery. Merchant → market. Fisherman → dock (boats sail short loops and return food).',
-            'Castle staff → keep: cook, servant, steward, scribe, cupbearer (see Castle life).',
-            'Jobs bind a workplace — inspectors show Works at (and At: room inside the keep).',
+            'Hire order is food-first: Farmer → fields, then Baker → bakery, Fisherman → dock, Merchant → market, then Castle staff → keep (cook, servant, steward, scribe, cupbearer). Surplus staff rebalance onto new fields when you place them.',
+            'Jobs bind a workplace in the subject’s loyalty territory when possible. Inspectors show Works at, At (keep room), and Loyalty.',
           ],
         },
         {
@@ -557,7 +569,7 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'enemy:giant',
           title: 'Giant',
           body: [
-            'Slow power. Chieftains hold until strong, then smash. Camp naps and perimeter stomps fill the day between assaults.',
+            'Massive club brutes. They do not steal gold — they grab villagers, carry them to camp, and eat them. Kill the giant mid-retreat to free the captive. Camps show oversized lean-tos and propped clubs between stomps.',
           ],
         },
         {
@@ -713,7 +725,8 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Raids & sieges',
           body: [
-            'Stealers grab gold and flee home. Sieges bring engines, burning, and keep focus. Drawbridges slam; peasants repair; festivals pause for fear.',
+            'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus. Drawbridges slam; peasants repair.',
+            'Any raid kicks military off balls and festivals: soldiers and archers hold their loyalty keep’s perimeter or walls; guards keep patrolling threatened roads in the fief.',
           ],
         },
       ],
@@ -722,11 +735,11 @@ export function buildManualSections(): ManualSection[] {
       id: 'roads',
       label: 'Roads & bridges',
       intro: [
-        'You paint the kingdom’s veins. Patrols prefer your dirt roads; rivers need your timber.',
+        'You paint the kingdom’s veins. Commuters and patrols prefer your dirt roads; rivers need your timber.',
       ],
       entries: [
         buildEntry('road', 'prop:road', [
-          'Snap to grass. Link keep to fields, docks, and walls so guards actually walk where you care.',
+          'Snap to grass. Link each keep’s houses to its fields, docks, and walls so peasants commute and guards walk where you care.',
         ]),
         buildEntry('bridge', 'prop:bridge', [
           'Must cover water with land (or road) on both ends. Press R while placing to flip 0°/90°.',
@@ -735,23 +748,30 @@ export function buildManualSections(): ManualSection[] {
     },
     {
       id: 'spheres',
-      label: 'Military spheres',
+      label: 'Military spheres & loyalty',
       intro: [
-        'Select barracks or dungeon to see the influence ring (keeps show theirs too).',
+        'Select a keep to see its influence ring and tint everyone loyal to that seat. Barracks and dungeon rings still mark military posts.',
       ],
       entries: [
         {
-          artKey: 'prop:dungeon',
-          title: 'Guard sphere (dungeon)',
+          artKey: 'prop:keep',
+          title: 'Keep fiefs',
           body: [
-            'Guards post and patrol inside. They inspect civic buildings, prefer roads, and bark “All clear on this street.” Leave only for arrests, cordons, or general orders.',
+            'Nearest-keep loyalty: work, roam, and defend stay in that fief. Dukes and duchesses seat satellite keeps. The inspector’s Loyalty line names the liege (Crown or a named keep).',
+          ],
+        },
+        {
+          artKey: 'prop:dungeon',
+          title: 'Guards on the roads',
+          body: [
+            'Guards patrol roads, houses, and civic posts inside their keep’s territory — not only the dungeon circle. During raids they keep walking threatened streets while the army holds the wall.',
           ],
         },
         {
           artKey: 'prop:barracks',
-          title: 'Army sphere (barracks)',
+          title: 'Army on the perimeter',
           body: [
-            'Soldiers, archers, knights, elites. Same road-loving patrol, same return-home rule after exceptions.',
+            'Soldiers, archers, knights, and elites muster to their keep’s threatened side (walls when available). After the raid, schedules resume.',
           ],
         },
       ],
@@ -761,6 +781,7 @@ export function buildManualSections(): ManualSection[] {
       label: 'Festivals',
       intro: [
         'No generic street fair filler — if no type qualifies when the timer fires, the realm simply waits. Royal balls stay separate.',
+        'Festivals invite a small nearest civilian crowd (about ten); balls about a dozen including court. Soldiers, archers, guards, and knights stay on duty. Joust crowds clear when the spectacle ends.',
         'While a festival runs, celebrants dance, talk (paired chat bubbles), mime music, cheer “Ooh! / Ahh! / Huzzah!”, and share feasts. Happiness rises; harvest festivals also nudge field yields.',
       ],
       entries: festivals,

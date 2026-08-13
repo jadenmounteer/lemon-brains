@@ -60,6 +60,8 @@ export interface BuildingRecord {
   closed?: boolean;
   /** Degrees — bridges use 0 or 90 */
   rotation?: number;
+  /** Nearest keep this building answers to. */
+  loyaltyKeepId?: string | null;
 }
 
 export interface Aabb {
@@ -239,6 +241,7 @@ export class BuildingSystem {
         maxHp: b.maxHp,
         attachedWallId: b.attachedWallId,
         rotation: b.rotation,
+        loyaltyKeepId: b.loyaltyKeepId,
       });
     }
     this.snapOrphanDrawbridges();
@@ -246,6 +249,7 @@ export class BuildingSystem {
     this.refreshWallTextures();
     this.applyDrawbridgeState();
     this.rebuildPathGrid();
+    this.reassignBuildingLoyalties();
   }
 
   serialize(): SavedBuilding[] {
@@ -258,6 +262,7 @@ export class BuildingSystem {
       maxHp: b.maxHp,
       attachedWallId: b.attachedWallId,
       rotation: b.rotation,
+      loyaltyKeepId: b.loyaltyKeepId ?? null,
     }));
   }
 
@@ -559,6 +564,114 @@ export class BuildingSystem {
     }
     const b = this.buildings.find((k) => k.id === id && k.kind === 'keep' && k.hp > 0);
     return b ? { x: b.x, y: b.y } : null;
+  }
+
+  /** Nearest standing keep id by world distance (primary or placed). */
+  nearestKeepId(x: number, y: number): string | null {
+    const keeps = this.listKeepTargets();
+    if (!keeps.length) return null;
+    let best = keeps[0]!;
+    let bestD = Phaser.Math.Distance.Between(x, y, best.x, best.y);
+    for (let i = 1; i < keeps.length; i++) {
+      const k = keeps[i]!;
+      const d = Phaser.Math.Distance.Between(x, y, k.x, k.y);
+      if (d < bestD) {
+        bestD = d;
+        best = k;
+      }
+    }
+    return best.id;
+  }
+
+  /** True if (x,y) is closer to keepId than to any other keep (Voronoi cell). */
+  inKeepTerritory(keepId: string, x: number, y: number): boolean {
+    const nearest = this.nearestKeepId(x, y);
+    return nearest === keepId;
+  }
+
+  /** Random walkable-ish point biased toward keepId's influence. */
+  keepTerritoryPoint(keepId: string, seedX?: number, seedY?: number): Point {
+    const pt = this.getKeepTargetPoint(keepId) ?? this.getActiveKeepPoint();
+    const radius = this.getInfluenceRadius();
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * radius * 0.85;
+    const baseX = seedX ?? pt.x;
+    const baseY = seedY ?? pt.y;
+    // Prefer a point near the seed still inside the keep's Voronoi cell
+    const candidates: Point[] = [
+      { x: pt.x + Math.cos(angle) * dist, y: pt.y + Math.sin(angle) * dist },
+      {
+        x: baseX + (Math.random() - 0.5) * 80,
+        y: baseY + (Math.random() - 0.5) * 80,
+      },
+      pt,
+    ];
+    for (const c of candidates) {
+      if (this.inKeepTerritory(keepId, c.x, c.y)) return c;
+    }
+    return pt;
+  }
+
+  reassignBuildingLoyalties(): void {
+    for (const b of this.buildings) {
+      if (b.kind === 'keep') {
+        b.loyaltyKeepId = b.id;
+        continue;
+      }
+      b.loyaltyKeepId = this.nearestKeepId(b.x, b.y);
+    }
+  }
+
+  loyaltyLabelForKeep(keepId: string | null | undefined): string {
+    if (!keepId) return 'None';
+    if (keepId === KEEP_ID) return 'Crown (The Keep)';
+    const b = this.getById(keepId);
+    if (b) return `${this.displayName(b)}'s fief`;
+    return 'A keep';
+  }
+
+  /** Defense muster near a specific keep, facing an optional threat. */
+  defenseMusterPointForKeep(
+    keepId: string,
+    threat?: Point | null
+  ): Point {
+    const keep = this.getKeepTargetPoint(keepId) ?? this.getActiveKeepPoint();
+    const walls = this.buildings.filter(
+      (b) =>
+        (b.kind === 'wall' || b.kind === 'drawbridge' || b.kind === 'watchtower') &&
+        b.hp > 0 &&
+        this.inKeepTerritory(keepId, b.x, b.y)
+    );
+    if (walls.length && threat) {
+      let best = walls[0]!;
+      let bestD = Phaser.Math.Distance.Between(best.x, best.y, threat.x, threat.y);
+      for (let i = 1; i < walls.length; i++) {
+        const w = walls[i]!;
+        const d = Phaser.Math.Distance.Between(w.x, w.y, threat.x, threat.y);
+        if (d < bestD) {
+          bestD = d;
+          best = w;
+        }
+      }
+      const dx = best.x - keep.x;
+      const dy = best.y - keep.y;
+      const len = Math.hypot(dx, dy) || 1;
+      return {
+        x: best.x + (dx / len) * 18,
+        y: best.y + (dy / len) * 18,
+      };
+    }
+    if (threat) {
+      const dx = threat.x - keep.x;
+      const dy = threat.y - keep.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const r = Math.min(this.getInfluenceRadius() * 0.45, 140);
+      return {
+        x: keep.x + (dx / len) * r,
+        y: keep.y + (dy / len) * r,
+      };
+    }
+    return this.defenseMusterPoint();
   }
 
   /** Damage a specific keep (primary or placed). Returns true if all keeps are gone. */
@@ -1300,6 +1413,7 @@ export class BuildingSystem {
         residents,
         workers,
         capacityLines: capacityLinesFor('keep'),
+        loyaltyLabel: this.loyaltyLabelForKeep(KEEP_ID),
       };
     }
     const b = this.getById(id);
@@ -1314,6 +1428,9 @@ export class BuildingSystem {
       hp: b.hp,
       maxHp: b.maxHp,
       workers,
+      loyaltyLabel: this.loyaltyLabelForKeep(
+        b.kind === 'keep' ? b.id : b.loyaltyKeepId
+      ),
     };
     if (b.kind === 'drawbridge') {
       snap.statusLabel = b.closed ? 'Closed (raid)' : 'Open';
@@ -1383,6 +1500,7 @@ export class BuildingSystem {
       maxHp?: number;
       attachedWallId?: string;
       rotation?: number;
+      loyaltyKeepId?: string | null;
     }
   ): BuildingRecord {
     const id = forcedId ?? `${kind}-${this.nextId++}`;
@@ -1439,10 +1557,16 @@ export class BuildingSystem {
       attachedWallId: opts?.attachedWallId,
       closed,
       rotation,
+      loyaltyKeepId:
+        opts?.loyaltyKeepId ??
+        (kind === 'keep' ? id : this.nearestKeepId(px, py)),
     };
     this.buildings.push(record);
     this.tintByHp(record);
     this.recomputeHouseLabels();
+    if (kind === 'keep') {
+      this.reassignBuildingLoyalties();
+    }
     return record;
   }
 

@@ -131,6 +131,11 @@ export function InspectorPanel({
       <p>
         <span className="muted">Lives at</span> {subject.homeLabel}
       </p>
+      {subject.loyaltyLabel ? (
+        <p>
+          <span className="muted">Loyalty</span> {subject.loyaltyLabel}
+        </p>
+      ) : null}
       <p>
         <span className="muted">Now:</span> {subject.activityLabel}
       </p>

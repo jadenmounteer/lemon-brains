@@ -59,7 +59,7 @@ export class CombatSystem {
 
     if (raidActive) {
       this.subjects.tickFleeAndClimb(this.raids, deltaMs);
-      this.subjects.tickDefenseMuster(this.raids.isArmySiege());
+      this.subjects.tickDefenseMuster(true, this.raids);
     }
 
     for (const [id, cd] of [...this.ballistaCooldown]) {

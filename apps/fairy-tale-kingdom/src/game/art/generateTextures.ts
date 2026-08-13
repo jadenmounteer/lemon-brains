@@ -244,6 +244,10 @@ function drawUnitFrame(
     drawGoblinFrame(ctx, originX, facing, walkStep);
     return;
   }
+  if (role === 'giant') {
+    drawGiantFrame(ctx, originX, facing, walkStep);
+    return;
+  }
   if (
     role === 'king' ||
     role === 'queen' ||
@@ -261,7 +265,7 @@ function drawUnitFrame(
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
   const cloth = clothFor(role);
-  const tall = role === 'giant' ? -2 : 0;
+  const tall = 0;
   const skinTone = role === 'zombie' ? palette.skinZombie : palette.skin;
 
   fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
@@ -330,8 +334,6 @@ function drawUnitFrame(
   } else if (role === 'bandit' || role === 'gypsy') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 12 + baseY, 2, 5, palette.metal);
-  } else if (role === 'giant') {
-    fillRect(ctx, originX + 4, 2 + baseY + tall, 8, 3, palette.woodDark);
   } else if (role === 'general') {
     fillRect(ctx, originX + 5, 3 + baseY, 6, 2, palette.metal);
     fillRect(ctx, originX + 6, 4 + baseY, 4, 1, palette.gold);
@@ -349,6 +351,65 @@ function drawUnitFrame(
   } else {
     pixel(ctx, originX + 7, 6 + baseY + tall, palette.ink);
     pixel(ctx, originX + 9, 6 + baseY + tall, palette.ink);
+  }
+}
+
+/** Massive club-wielding giant: stone skin, hide wrap, swinging club on walk. */
+function drawGiantFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const clubSwing =
+    walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 2 : walkStep === 3 ? 1 : 0;
+  const y = bob - 1;
+  const skin = 0x9a8a6a;
+  const skinDark = 0x6a5a42;
+  const hide = palette.clothGiant;
+
+  // Shadow / boots
+  fillRect(ctx, originX + 3, 21, 10, 2, palette.ink);
+  fillRect(ctx, originX + 4 - leg, 17 + y, 4, 4, skinDark);
+  fillRect(ctx, originX + 9 + leg, 17 + y, 4, 4, skinDark);
+
+  // Thick torso
+  fillRect(ctx, originX + 3, 8 + y, 10, 10, skin);
+  fillRect(ctx, originX + 4, 9 + y, 8, 8, hide);
+  fillRect(ctx, originX + 3, 8 + y, 1, 10, palette.ink);
+  fillRect(ctx, originX + 12, 8 + y, 1, 10, palette.ink);
+
+  // Arms
+  fillRect(ctx, originX + 1, 9 + y, 3, 8, skin);
+  fillRect(ctx, originX + 12, 9 + y, 3, 8, skin);
+
+  // Oversized head + brow
+  fillRect(ctx, originX + 4, 2 + y, 8, 7, skin);
+  fillRect(ctx, originX + 4, 2 + y, 8, 2, skinDark);
+  fillRect(ctx, originX + 3, 2 + y, 1, 6, palette.ink);
+  fillRect(ctx, originX + 12, 2 + y, 1, 6, palette.ink);
+
+  if (facing === 'left') {
+    pixel(ctx, originX + 6, 5 + y, palette.ink);
+    // Club raised left
+    fillRect(ctx, originX + 0, 6 + y - clubSwing, 2, 10 + clubSwing, palette.woodDark);
+    fillRect(ctx, originX + 0, 4 + y - clubSwing, 3, 3, palette.wood);
+  } else if (facing === 'right') {
+    pixel(ctx, originX + 10, 5 + y, palette.ink);
+    fillRect(ctx, originX + 14, 6 + y - clubSwing, 2, 10 + clubSwing, palette.woodDark);
+    fillRect(ctx, originX + 13, 4 + y - clubSwing, 3, 3, palette.wood);
+  } else if (facing === 'up') {
+    fillRect(ctx, originX + 4, 2 + y, 8, 3, hide);
+    fillRect(ctx, originX + 14, 7 + y - clubSwing, 2, 9, palette.woodDark);
+  } else {
+    pixel(ctx, originX + 6, 5 + y, palette.ink);
+    pixel(ctx, originX + 9, 5 + y, palette.ink);
+    fillRect(ctx, originX + 6, 7 + y, 4, 1, palette.ink);
+    // Club over shoulder / swinging
+    fillRect(ctx, originX + 13, 5 + y - clubSwing, 2, 11 + clubSwing, palette.woodDark);
+    fillRect(ctx, originX + 12, 3 + y - clubSwing, 4, 3, palette.wood);
   }
 }
 
@@ -1904,14 +1965,17 @@ function drawGoblinCamp(scene: Phaser.Scene) {
 
 /** Sparse, oversized camp: a bonfire, a hide lean-to, and a huge log seat. */
 function drawGiantCamp(scene: Phaser.Scene) {
-  const w = 60;
-  const h = 42;
+  const w = 72;
+  const h = 52;
   const tex = createCanvas(scene, PROP_KEYS.giantCamp, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 24, 52, 16, palette.dirt);
-  fillRect(ctx, 6, 34, 22, 6, palette.woodDark); // felled-log seat
-  fillRect(ctx, 6, 34, 22, 1, palette.wood);
-  drawTent(ctx, 30, 10, 22, 18, palette.clothGiant);
+  fillRect(ctx, 4, 30, 64, 18, palette.dirt);
+  fillRect(ctx, 6, 40, 28, 8, palette.woodDark); // felled-log seat
+  fillRect(ctx, 6, 40, 28, 2, palette.wood);
+  // Oversized club propped by the lean-to
+  fillRect(ctx, 8, 12, 3, 26, palette.woodDark);
+  fillRect(ctx, 6, 8, 7, 6, palette.wood);
+  drawTent(ctx, 34, 8, 30, 26, palette.clothGiant);
   fillRect(ctx, 34, 4, 4, 8, palette.woodDark); // crude bone/pole marker
   fillRect(ctx, 33, 2, 6, 3, palette.cream);
   drawFirePit(ctx, 12, 38);

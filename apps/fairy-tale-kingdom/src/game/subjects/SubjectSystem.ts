@@ -40,6 +40,7 @@ import {
 } from '../keep/KeepLayout';
 import type { BuildKind } from '../../marketplace/catalog';
 import type { PathGrid } from '../path/PathGrid';
+import type { MonsterSystem } from '../monsters/MonsterSystem';
 import type { RaidSystem } from '../raids/RaidSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
@@ -67,6 +68,28 @@ import type {
 } from './types';
 import { randomPointInZone, ringOffset, type Point, type WorldBounds } from './zones';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+
+const FESTIVAL_GUEST_CAP = 10;
+const BALL_GUEST_CAP = 12;
+const PATH_HOP_BUDGET = 12;
+
+const FOOD_BIND_KINDS: BuildKind[] = ['field', 'bakery', 'dock', 'market', 'keep'];
+
+const LOYALTY_TINTS = [0xc4a35a, 0x6a8caf, 0xc47a8a, 0x7a9e6a, 0xb08ad4];
+
+/** Roles never invited to festivals/balls — they stay on duty. */
+function isDutyMilitaryRole(role: UnitRole): boolean {
+  return (
+    role === 'soldier' ||
+    role === 'archer' ||
+    role === 'elite_guard' ||
+    role === 'elite_archer' ||
+    role === 'guard' ||
+    role === 'knight' ||
+    role === 'general' ||
+    role === 'dungeon_keeper'
+  );
+}
 
 export type ManagedSubject = {
   data: Subject;
@@ -140,6 +163,7 @@ export class SubjectSystem {
   private security: SecuritySystem | null = null;
   private encampments: EncampmentSystem | null = null;
   private bubbles: SpeechBubbleSystem | null = null;
+  private monsters: MonsterSystem | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
@@ -149,6 +173,7 @@ export class SubjectSystem {
     | null = null;
   private daysPlayed = 0;
   private patrolInspectionIdx = new Map<string, number>();
+  private loyaltyHighlightKeepId: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -175,6 +200,10 @@ export class SubjectSystem {
 
   setBubbles(bubbles: SpeechBubbleSystem): void {
     this.bubbles = bubbles;
+  }
+
+  setMonsters(monsters: MonsterSystem): void {
+    this.monsters = monsters;
   }
 
   setOnChanged(cb: () => void): void {
@@ -215,6 +244,23 @@ export class SubjectSystem {
     this.raidMode = active;
     if (active && !was) {
       this.cancelInterrupts(['repair', 'chat', 'harvest']);
+      // Kick military off parties so they can defend
+      for (const s of this.subjects) {
+        if (!isDutyMilitaryRole(s.data.role) && !isMilitaryRole(s.data.role)) {
+          continue;
+        }
+        if (
+          s.data.activity === 'ball' ||
+          s.data.activity === 'festival' ||
+          s.data.activity === 'joust' ||
+          s.data.activity === 'feast'
+        ) {
+          const slot = slotAtHour(s.data.role, this.clock.hour, s.data.job);
+          s.data.activity = slot.activity;
+          s.data.activityLabel = slot.label;
+          s.data.zone = slot.zone;
+        }
+      }
       // Don't leave the kingdom frozen in sleep poses when a raid starts at night
       for (const s of this.subjects) {
         if (s.presenceAnim === 'sleep' || s.data.activity === 'sleep') {
@@ -224,15 +270,25 @@ export class SubjectSystem {
     }
     if (!active && was) {
       this.cancelInterrupts(['defend', 'flee']);
+      for (const s of this.subjects) {
+        if (s.data.onWall && isMilitaryRole(s.data.role)) {
+          // Climb-down handled by existing wall APIs when schedules resume
+        }
+      }
     }
   }
 
-  beginDefend(subjectId: string, x: number, y: number): void {
+  beginDefend(
+    subjectId: string,
+    x: number,
+    y: number,
+    label = 'Holding the perimeter'
+  ): void {
     const managed = this.getById(subjectId);
     if (!managed || !isMilitaryRole(managed.data.role)) return;
     managed.interrupt = { kind: 'defend' };
     managed.data.activity = 'defend';
-    managed.data.activityLabel = 'Defending the walls';
+    managed.data.activityLabel = label;
     this.nudgeToward(subjectId, x, y, 55);
   }
 
@@ -247,32 +303,93 @@ export class SubjectSystem {
     this.nudgeToward(subjectId, awayX, awayY, 70);
   }
 
-  tickDefenseMuster(armySiege: boolean): void {
-    if (!armySiege || !this.buildings) {
+  /**
+   * Muster defense for any active raid (bandit/giant/goblin/siege).
+   * Guards keep patrolling their fief; soldiers/archers hold perimeter/walls.
+   */
+  tickDefenseMuster(raidActive: boolean, raids?: RaidSystem | null): void {
+    if (!raidActive || !this.buildings) {
       this.cancelInterrupts(['defend']);
       return;
     }
-    const muster = this.buildings.defenseMusterPoint();
     let i = 0;
     for (const managed of this.subjects) {
       if (!isMilitaryRole(managed.data.role)) continue;
       if (managed.data.sick) continue;
-      if (managed.data.onWall) continue;
+      if (managed.data.allegiance === 'camp') continue;
       if (managed.interrupt?.kind === 'flee') continue;
+      if (managed.interrupt?.kind === 'abducted') continue;
+
+      const keepId =
+        managed.data.loyaltyKeepId ??
+        this.buildings.nearestKeepId(managed.sprite.x, managed.sprite.y) ??
+        KEEP_ID;
+      const keepPt =
+        this.buildings.getKeepTargetPoint(keepId) ??
+        this.buildings.getActiveKeepPoint();
+      const threat = raids?.nearestRaider(keepPt.x, keepPt.y, 900) ?? null;
+      const threatPt = threat
+        ? { x: threat.sprite.x, y: threat.sprite.y }
+        : null;
+
+      const role = managed.data.role;
+      const isGuardPatrol =
+        role === 'guard' || role === 'dungeon_keeper';
+
+      if (isGuardPatrol) {
+        // Guards keep walking roads in their fief, biased toward the threat
+        if (managed.interrupt?.kind === 'defend') {
+          this.clearInterrupt(managed.data.id);
+        }
+        if (!managed.moving && Math.random() < 0.08) {
+          const fallback = this.buildings.keepTerritoryPoint(keepId);
+          let dest = this.pickPatrolTarget(managed, fallback);
+          if (threatPt && Math.random() < 0.55) {
+            dest = {
+              x: (dest.x + threatPt.x) / 2,
+              y: (dest.y + threatPt.y) / 2,
+            };
+          }
+          managed.data.activity = 'patrol';
+          managed.data.activityLabel = 'Patrolling the raid roads';
+          this.nudgeToward(managed.data.id, dest.x, dest.y, 50);
+        }
+        continue;
+      }
+
+      const muster = this.buildings.defenseMusterPointForKeep(keepId, threatPt);
       const ox = ((i % 5) - 2) * 14;
       const oy = Math.floor(i / 5) * 12;
       i += 1;
+      const tx = muster.x + ox;
+      const ty = muster.y + oy;
+      const isArcher =
+        role === 'archer' || role === 'elite_archer';
+      const label = isArcher
+        ? 'Archers on the wall'
+        : 'Holding the perimeter';
+
+      if (isArcher && !managed.data.onWall && Math.random() < 0.12) {
+        this.tryClimbNearestStairs(managed.data.id);
+      }
+
+      if (managed.data.onWall) {
+        managed.data.activityLabel = label;
+        continue;
+      }
+
       if (managed.interrupt?.kind !== 'defend') {
-        this.beginDefend(managed.data.id, muster.x + ox, muster.y + oy);
+        this.beginDefend(managed.data.id, tx, ty, label);
       } else if (!managed.moving) {
         const d = Phaser.Math.Distance.Between(
           managed.sprite.x,
           managed.sprite.y,
-          muster.x + ox,
-          muster.y + oy
+          tx,
+          ty
         );
         if (d > 40) {
-          this.nudgeToward(managed.data.id, muster.x + ox, muster.y + oy, 55);
+          managed.data.activityLabel = label;
+          this.nudgeToward(managed.data.id, tx, ty, 55);
         }
       }
     }
@@ -798,14 +915,33 @@ export class SubjectSystem {
       y: this.world.height / 2,
     };
     const court = this.findBallCourtyard(keep);
-    const guests = this.subjects.filter(
-      (s) =>
-        s.data.allegiance !== 'camp' &&
-        (livesAtKeep(s.data.role) ||
-          s.data.role === 'peasant' ||
-          s.data.role === 'jester' ||
-          s.data.role === 'fairy_godmother')
-    );
+    const guests = this.subjects
+      .filter(
+        (s) =>
+          s.data.allegiance !== 'camp' &&
+          !isDutyMilitaryRole(s.data.role) &&
+          (livesAtKeep(s.data.role) ||
+            s.data.role === 'peasant' ||
+            s.data.role === 'jester' ||
+            s.data.role === 'fairy_godmother' ||
+            s.data.role === 'child')
+      )
+      .sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(
+            a.sprite.x,
+            a.sprite.y,
+            court.x,
+            court.y
+          ) -
+          Phaser.Math.Distance.Between(
+            b.sprite.x,
+            b.sprite.y,
+            court.x,
+            court.y
+          )
+      )
+      .slice(0, BALL_GUEST_CAP);
     guests.forEach((s, i) => {
       s.data.activity = 'ball';
       s.data.activityLabel = 'Attending the royal ball';
@@ -855,7 +991,37 @@ export class SubjectSystem {
         x: this.world.width / 2,
         y: this.world.height / 2,
       };
-    const guests = this.subjects.filter((s) => s.data.allegiance !== 'camp');
+    const guests = this.subjects
+      .filter(
+        (s) =>
+          s.data.allegiance !== 'camp' &&
+          !isDutyMilitaryRole(s.data.role) &&
+          !isMilitaryRole(s.data.role) &&
+          (s.data.role === 'peasant' ||
+            s.data.role === 'child' ||
+            s.data.role === 'jester' ||
+            s.data.role === 'fairy_godmother' ||
+            livesAtKeep(s.data.role) ||
+            s.data.role === 'physician' ||
+            s.data.role === 'bishop' ||
+            s.data.role === 'executioner')
+      )
+      .sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(
+            a.sprite.x,
+            a.sprite.y,
+            anchor.x,
+            anchor.y
+          ) -
+          Phaser.Math.Distance.Between(
+            b.sprite.x,
+            b.sprite.y,
+            anchor.x,
+            anchor.y
+          )
+      )
+      .slice(0, FESTIVAL_GUEST_CAP);
     guests.forEach((s, i) => {
       s.data.activity = 'festival';
       s.data.activityLabel = 'Celebrating at the festival';
@@ -868,11 +1034,18 @@ export class SubjectSystem {
 
   /** Drop temporary gather/flee labels so schedules resume. */
   clearGatherActivities(
-    kinds: Array<'ball' | 'festival' | 'flee'> = ['ball', 'festival', 'flee']
+    kinds: Array<'ball' | 'festival' | 'flee' | 'joust'> = [
+      'ball',
+      'festival',
+      'flee',
+      'joust',
+    ]
   ): void {
     const set = new Set(kinds);
     for (const s of this.subjects) {
-      if (!set.has(s.data.activity as 'ball' | 'festival' | 'flee')) continue;
+      if (!set.has(s.data.activity as 'ball' | 'festival' | 'flee' | 'joust')) {
+        continue;
+      }
       const slot = slotAtHour(s.data.role, this.clock.hour, s.data.job);
       s.data.activity = slot.activity;
       s.data.activityLabel = slot.label;
@@ -964,28 +1137,142 @@ export class SubjectSystem {
       );
     }
 
-    // Wall units eat in place; others may stroll toward a tavern/home for flavor
-    // but the meal completes on a timer even if they never arrive.
+    // Wall units eat in place; others stroll to banquet / home / barracks.
     if (managed.data.onWall) return;
     if (livesAtKeep(managed.data.role) || isCastleJob(managed.data.job)) {
-      const keep = this.buildings?.getById(KEEP_ID);
+      const keepId =
+        managed.data.loyaltyKeepId ??
+        managed.data.workplaceId ??
+        KEEP_ID;
+      const keep =
+        this.buildings?.getById(keepId) ?? this.buildings?.getById(KEEP_ID);
       if (keep) {
         const pt = roomPoint(keep, 'banquet', managed.data.id);
+        managed.data.activityLabel = 'Dining in the banquet hall';
         this.nudgeToward(subjectId, pt.x, pt.y, 50);
         return;
       }
+    }
+    if (isMilitaryRole(managed.data.role)) {
+      const barracks = this.buildings?.list().find((b) => b.kind === 'barracks' && b.hp > 0);
+      const home = this.homePointFor(managed.data.houseId);
+      if (barracks && managed.data.workplaceId === barracks.id) {
+        this.nudgeToward(subjectId, barracks.x, barracks.y, 50);
+        return;
+      }
+      if (home) {
+        this.nudgeToward(subjectId, home.x, home.y, 50);
+        return;
+      }
+    }
+    const home = this.homePointFor(managed.data.houseId);
+    if (home) {
+      managed.data.activityLabel = 'Eating at home';
+      this.nudgeToward(subjectId, home.x, home.y, 50);
+      return;
     }
     const tavern = this.buildings
       ?.list()
       .find((b) => b.kind === 'tavern' && b.hp > 0);
     if (tavern) {
       this.nudgeToward(subjectId, tavern.x, tavern.y, 50);
+    }
+  }
+
+  /** Resume the clock schedule after an interrupt (meals, parties, etc.). */
+  resyncFromSchedule(subjectId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed) return;
+    const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
+    managed.data.activity = slot.activity;
+    managed.data.activityLabel = slot.label;
+    managed.data.zone = slot.zone;
+  }
+
+  assignLoyalty(managed: ManagedSubject): void {
+    if (!this.buildings || managed.data.allegiance === 'camp') {
+      managed.data.loyaltyKeepId = null;
       return;
     }
-    const home = this.homePointFor(managed.data.houseId);
-    if (home) {
-      this.nudgeToward(subjectId, home.x, home.y, 50);
+    if (livesAtKeep(managed.data.role) && managed.data.houseId) {
+      const houseKeep = this.buildings.getById(managed.data.houseId);
+      if (houseKeep?.kind === 'keep') {
+        managed.data.loyaltyKeepId = houseKeep.id;
+        return;
+      }
+      if (managed.data.houseId === KEEP_ID) {
+        managed.data.loyaltyKeepId = KEEP_ID;
+        return;
+      }
     }
+    managed.data.loyaltyKeepId = this.buildings.nearestKeepId(
+      managed.sprite.x,
+      managed.sprite.y
+    );
+  }
+
+  reassignLoyalties(): void {
+    for (const s of this.subjects) this.assignLoyalty(s);
+    this.applyLoyaltyHighlight();
+  }
+
+  setLoyaltyHighlight(keepId: string | null): void {
+    this.loyaltyHighlightKeepId = keepId;
+    this.applyLoyaltyHighlight();
+  }
+
+  private applyLoyaltyHighlight(): void {
+    const keepId = this.loyaltyHighlightKeepId;
+    const tint = keepId
+      ? LOYALTY_TINTS[
+          Math.abs(keepId.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) %
+            LOYALTY_TINTS.length
+        ]!
+      : null;
+    for (const s of this.subjects) {
+      if (s.data.id === this.selectedId) {
+        s.sprite.setTint(0xfff0c0);
+        continue;
+      }
+      if (keepId && tint && s.data.loyaltyKeepId === keepId) {
+        s.sprite.setTint(tint);
+      } else {
+        s.sprite.clearTint();
+        this.applyHpTint(s);
+      }
+    }
+  }
+
+  beginAbducted(subjectId: string, giantRaiderId?: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed) return;
+    managed.interrupt = { kind: 'abducted', targetId: giantRaiderId };
+    managed.data.activity = 'flee';
+    managed.data.activityLabel = 'Carried off by a giant!';
+    managed.sprite.setVisible(false);
+    managed.moving = false;
+  }
+
+  freeAbducted(subjectId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed) return;
+    managed.interrupt = null;
+    managed.sprite.setVisible(true);
+    this.resyncFromSchedule(subjectId);
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${managed.data.name} was freed from the giant!`,
+    });
+  }
+
+  devourSubject(subjectId: string): void {
+    const managed = this.getById(subjectId);
+    if (!managed) return;
+    const { id, houseId, name } = managed.data;
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `A giant carried off ${name}!`,
+    });
+    this.removeSubject(managed);
+    this.onDeath?.(id, houseId, name);
   }
 
   healNearestInjured(physicianId: string): boolean {
@@ -1234,6 +1521,7 @@ export class SubjectSystem {
         skipBirthLog: true,
         campId: s.campId,
         allegiance: s.allegiance,
+        loyaltyKeepId: s.loyaltyKeepId,
       });
       const managed = this.getById(s.id);
       if (managed) {
@@ -1256,13 +1544,15 @@ export class SubjectSystem {
     // Sickness / quarantine disabled — clear leftover sick/flee state from older saves
     for (const s of this.subjects) {
       s.data.sick = false;
-      if (s.data.activity === 'flee') {
+      if (s.data.activity === 'flee' && s.interrupt?.kind !== 'abducted') {
         const slot = slotAtHour(s.data.role, this.clock.hour, s.data.job);
         s.data.activity = slot.activity;
         s.data.activityLabel = slot.label;
         s.data.zone = slot.zone;
       }
     }
+    this.reassignLoyalties();
+    this.rebalanceCivilianJobs();
   }
 
   serialize(): SavedSubject[] {
@@ -1304,6 +1594,7 @@ export class SubjectSystem {
       interrupt: s.interrupt,
       campId: s.data.campId,
       allegiance: s.data.allegiance,
+      loyaltyKeepId: s.data.loyaltyKeepId ?? null,
     }));
   }
 
@@ -1449,6 +1740,7 @@ export class SubjectSystem {
         : pickName(2000 + this.nextSubjectId * 41);
     this.createSubject(role, houseId, id, name);
     const managed = this.subjects[this.subjects.length - 1]!;
+    this.assignLoyalty(managed);
     this.bindWorkplace(managed, role);
     this.scene.time.delayedCall(200, () => this.nudgeTowardSchedule(managed));
     this.onChanged?.();
@@ -1540,10 +1832,7 @@ export class SubjectSystem {
     this.selectedId = id;
     if (!id) {
       this.marker?.setVisible(false);
-      for (const s of this.subjects) {
-        s.sprite.clearTint();
-        this.applyHpTint(s);
-      }
+      this.applyLoyaltyHighlight();
       return null;
     }
 
@@ -1554,14 +1843,8 @@ export class SubjectSystem {
       return null;
     }
 
-    for (const s of this.subjects) {
-      if (s.data.id === id) {
-        s.sprite.setTint(0xfff0c0);
-      } else {
-        s.sprite.clearTint();
-        this.applyHpTint(s);
-      }
-    }
+    this.applyLoyaltyHighlight();
+    managed.sprite.setTint(0xfff0c0);
 
     this.marker
       ?.setPosition(managed.sprite.x, managed.sprite.y - 2)
@@ -1594,6 +1877,7 @@ export class SubjectSystem {
         if (
           managed.data.activity === 'ball' ||
           managed.data.activity === 'festival' ||
+          managed.data.activity === 'joust' ||
           managed.data.activity === 'flee'
         ) {
           continue;
@@ -1934,7 +2218,7 @@ export class SubjectSystem {
         { x, y }
       );
       if (path && path.length > 1) {
-        let hop = Math.min(3, path.length - 1);
+        let hop = Math.min(PATH_HOP_BUDGET, path.length - 1);
         while (
           hop > 1 &&
           !this.pathGrid.isSegmentClear(
@@ -2262,6 +2546,7 @@ export class SubjectSystem {
       skipBirthLog?: boolean;
       campId?: string | null;
       allegiance?: Subject['allegiance'];
+      loyaltyKeepId?: string | null;
     }
   ): void {
     const slot = slotAtHour(role, this.clock.hour, opts?.job);
@@ -2339,6 +2624,7 @@ export class SubjectSystem {
       lowHappyHours: opts?.lowHappyHours ?? 0,
       campId: opts?.campId ?? null,
       allegiance: opts?.allegiance ?? 'kingdom',
+      loyaltyKeepId: opts?.loyaltyKeepId ?? null,
     };
 
     const managed: ManagedSubject = {
@@ -2353,6 +2639,9 @@ export class SubjectSystem {
     this.applyHpTint(managed);
     this.applyBodyScale(managed);
     this.subjects.push(managed);
+    if (opts?.loyaltyKeepId == null && data.allegiance !== 'camp') {
+      this.assignLoyalty(managed);
+    }
   }
 
   private roleAtBuildingCap(role: UnitRole): boolean {
@@ -2388,18 +2677,157 @@ export class SubjectSystem {
     return null;
   }
 
+  private fieldsHaveOpenFarmerSlots(exceptId?: string): boolean {
+    if (!this.buildings) return false;
+    for (const b of this.buildings.list()) {
+      if (b.kind !== 'field' || b.hp <= 0) continue;
+      const cap = BUILDING_ROLE_CAPACITY.field?.peasant ?? 0;
+      const used = this.subjects.filter(
+        (s) =>
+          s.data.workplaceId === b.id &&
+          s.data.role === 'peasant' &&
+          s.data.id !== exceptId
+      ).length;
+      if (used < cap) return true;
+    }
+    return false;
+  }
+
+  private fieldCount(): number {
+    return (
+      this.buildings?.list().filter((b) => b.kind === 'field' && b.hp > 0)
+        .length ?? 0
+    );
+  }
+
+  private castleStaffCount(exceptId?: string): number {
+    return this.subjects.filter(
+      (s) => isCastleJob(s.data.job) && s.data.id !== exceptId
+    ).length;
+  }
+
+  /** True when keep staff may be hired (food posts filled, or lonely keep seed). */
+  private canAssignCastleJob(exceptId?: string): boolean {
+    if (this.fieldsHaveOpenFarmerSlots(exceptId)) return false;
+    if (this.fieldCount() === 0) {
+      return this.castleStaffCount(exceptId) < 1;
+    }
+    return true;
+  }
+
+  private workplaceCandidatesForPeasant(
+    managed: ManagedSubject
+  ): BuildingRecord[] {
+    if (!this.buildings) return [];
+    const loyalty = managed.data.loyaltyKeepId;
+    const byKind = new Map<BuildKind, BuildingRecord[]>();
+    for (const kind of FOOD_BIND_KINDS) byKind.set(kind, []);
+
+    for (const b of this.buildings.list()) {
+      if (b.hp <= 0) continue;
+      if (!FOOD_BIND_KINDS.includes(b.kind)) continue;
+      byKind.get(b.kind)!.push(b);
+    }
+    const primary = this.buildings.getById(KEEP_ID);
+    if (primary && !byKind.get('keep')!.some((k) => k.id === KEEP_ID)) {
+      byKind.get('keep')!.unshift(primary);
+    }
+
+    const ordered: BuildingRecord[] = [];
+    for (const kind of FOOD_BIND_KINDS) {
+      const list = byKind.get(kind) ?? [];
+      list.sort((a, b) => {
+        const aLoyal =
+          loyalty &&
+          (a.kind === 'keep'
+            ? a.id === loyalty
+            : a.loyaltyKeepId === loyalty)
+            ? 0
+            : 1;
+        const bLoyal =
+          loyalty &&
+          (b.kind === 'keep'
+            ? b.id === loyalty
+            : b.loyaltyKeepId === loyalty)
+            ? 0
+            : 1;
+        if (aLoyal !== bLoyal) return aLoyal - bLoyal;
+        const da = Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          a.x,
+          a.y
+        );
+        const db = Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          b.x,
+          b.y
+        );
+        return da - db;
+      });
+      ordered.push(...list);
+    }
+    return ordered;
+  }
+
   private bindWorkplace(managed: ManagedSubject, role: UnitRole): void {
     if (!this.buildings) return;
-    const candidates = [...this.buildings.list()];
-    const keep = this.buildings.getById(KEEP_ID);
-    if (keep && role === 'peasant') {
-      // Seed early castle life, then fill farms/shops before more staff
-      const castleStaff = this.subjects.filter((s) =>
-        isCastleJob(s.data.job)
-      ).length;
-      if (castleStaff < 3) candidates.unshift(keep);
-      else candidates.push(keep);
+
+    if (role === 'peasant') {
+      const candidates = this.workplaceCandidatesForPeasant(managed);
+      for (const b of candidates) {
+        if (b.hp <= 0) continue;
+        const caps = BUILDING_ROLE_CAPACITY[b.kind as BuildKind];
+        const cap = caps?.[role];
+        if (cap == null) continue;
+        const used = this.subjects.filter(
+          (s) =>
+            s.data.workplaceId === b.id &&
+            (s.data.role === role || s.data.id === managed.data.id)
+        ).length;
+        if (used >= cap && managed.data.workplaceId !== b.id) continue;
+
+        if (b.kind === 'keep') {
+          if (!this.canAssignCastleJob(managed.data.id)) continue;
+          const castleJob = this.openCastleJob(managed.data.id);
+          if (!castleJob) continue;
+          managed.data.workplaceId = b.id;
+          managed.data.job = castleJob;
+          return;
+        }
+
+        managed.data.workplaceId = b.id;
+        const job = civilianJobForBuilding(b.kind);
+        if (job) managed.data.job = job;
+        return;
+      }
+      return;
     }
+
+    // Non-peasant: nearest capacity building (prefer loyalty territory)
+    const loyalty = managed.data.loyaltyKeepId;
+    const candidates = [...this.buildings.list()].sort((a, b) => {
+      const aLoyal = loyalty && a.loyaltyKeepId === loyalty ? 0 : 1;
+      const bLoyal = loyalty && b.loyaltyKeepId === loyalty ? 0 : 1;
+      if (aLoyal !== bLoyal) return aLoyal - bLoyal;
+      return (
+        Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          a.x,
+          a.y
+        ) -
+        Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          b.x,
+          b.y
+        )
+      );
+    });
+    const keep = this.buildings.getById(KEEP_ID);
+    if (keep) candidates.push(keep);
 
     for (const b of candidates) {
       if (b.hp <= 0) continue;
@@ -2412,19 +2840,37 @@ export class SubjectSystem {
           (s.data.role === role || s.data.id === managed.data.id)
       ).length;
       if (used >= cap && managed.data.workplaceId !== b.id) continue;
-
-      if (b.kind === 'keep') {
-        const castleJob = this.openCastleJob(managed.data.id);
-        if (!castleJob) continue;
-        managed.data.workplaceId = KEEP_ID;
-        managed.data.job = castleJob;
-        return;
-      }
-
       managed.data.workplaceId = b.id;
       const job = civilianJobForBuilding(b.kind);
       if (job) managed.data.job = job;
       return;
+    }
+  }
+
+  /** Move surplus castle staff onto open field slots; rebind unbound peasants food-first. */
+  rebalanceCivilianJobs(): void {
+    if (!this.buildings) return;
+    const peasants = this.subjects.filter(
+      (s) => s.data.role === 'peasant' && s.data.allegiance !== 'camp'
+    );
+
+    // Pull castle staff onto open fields first
+    if (this.fieldsHaveOpenFarmerSlots()) {
+      const staff = peasants
+        .filter((s) => isCastleJob(s.data.job))
+        .slice()
+        .reverse();
+      for (const s of staff) {
+        if (!this.fieldsHaveOpenFarmerSlots(s.data.id)) break;
+        s.data.workplaceId = undefined;
+        s.data.job = undefined;
+        this.bindWorkplace(s, 'peasant');
+      }
+    }
+
+    for (const s of peasants) {
+      if (s.data.workplaceId && s.data.job) continue;
+      this.bindWorkplace(s, 'peasant');
     }
   }
 
@@ -2483,6 +2929,7 @@ export class SubjectSystem {
       if (
         managed.data.activity === 'ball' ||
         managed.data.activity === 'festival' ||
+        managed.data.activity === 'joust' ||
         managed.data.activity === 'flee'
       ) {
         continue;
@@ -2494,7 +2941,10 @@ export class SubjectSystem {
       managed.data.zone = slot.zone;
       if (
         slot.activity !== 'sleep' &&
-        (prev === 'sleep' || managed.presenceAnim === 'sleep')
+        slot.activity !== 'chamber' &&
+        (prev === 'sleep' ||
+          prev === 'chamber' ||
+          managed.presenceAnim === 'sleep')
       ) {
         this.clearActivityAnim(managed);
       } else if (prev !== slot.activity && managed.presenceAnim) {
@@ -2551,12 +3001,36 @@ export class SubjectSystem {
       return { ...wander, sticky: false, mode: 'zone' };
     }
 
-    if (slot.activity === 'sleep') {
+    if (slot.activity === 'sleep' || slot.activity === 'chamber') {
+      if (slot.activity === 'chamber' && this.buildings) {
+        const keepId =
+          managed.data.loyaltyKeepId ??
+          managed.data.houseId ??
+          KEEP_ID;
+        const keep =
+          this.buildings.getById(keepId) ?? this.buildings.getById(KEEP_ID);
+        if (keep) {
+          const pt = roomPoint(keep, 'chambers', managed.data.id);
+          return {
+            ...pt,
+            sticky: true,
+            mode: 'sleep',
+            buildingId: keep.id,
+          };
+        }
+      }
       const bed = this.sleepBedPoint(managed);
       if (bed) {
         return { ...bed, sticky: true, mode: 'sleep' };
       }
       return { ...fallback, sticky: true, mode: 'sleep' };
+    }
+
+    if (slot.activity === 'hunt') {
+      const hunt = this.resolveHuntTarget(managed);
+      if (hunt) {
+        return { ...hunt, sticky: true, mode: 'zone' };
+      }
     }
 
     if (slot.activity === 'patrol') {
@@ -2566,7 +3040,14 @@ export class SubjectSystem {
 
     // Keep room from schedule (royals / castle staff)
     if (slot.zone === 'keep' && this.buildings) {
-      const keep = this.buildings.getById(KEEP_ID);
+      const keepId =
+        managed.data.loyaltyKeepId ??
+        (managed.data.workplaceId &&
+        this.buildings.getById(managed.data.workplaceId)?.kind === 'keep'
+          ? managed.data.workplaceId
+          : KEEP_ID);
+      const keep =
+        this.buildings.getById(keepId) ?? this.buildings.getById(KEEP_ID);
       if (keep) {
         const room: KeepRoomId =
           slot.room ??
@@ -2583,7 +3064,7 @@ export class SubjectSystem {
           y: pt.y,
           sticky,
           mode: sticky ? 'work' : 'zone',
-          buildingId: KEEP_ID,
+          buildingId: keep.id,
         };
       }
     }
@@ -2753,6 +3234,7 @@ export class SubjectSystem {
       if (
         managed.data.activity === 'ball' ||
         managed.data.activity === 'festival' ||
+        managed.data.activity === 'joust' ||
         managed.data.activity === 'flee'
       ) {
         if (managed.presenceAnim) this.clearActivityAnim(managed);
@@ -2771,14 +3253,24 @@ export class SubjectSystem {
 
       if (!site.sticky || !onSite) {
         if (managed.presenceAnim) this.clearActivityAnim(managed);
+        if (!onSite && pulse && site.sticky) {
+          managed.data.activityLabel = this.commuteLabel(managed, slot, site);
+        }
         continue;
       }
 
       if (pulse) {
-        if (site.mode === 'sleep' || slot.activity === 'sleep') {
-          // Once near home, snap onto the bed slot so the roof lifts
-          if (!this.isInsideHome(managed)) {
-            const bed = this.sleepBedPoint(managed);
+        if (
+          site.mode === 'sleep' ||
+          slot.activity === 'sleep' ||
+          slot.activity === 'chamber'
+        ) {
+          // Once near bed/chamber, snap onto the sleep slot
+          if (!this.isInsideHome(managed) || slot.activity === 'chamber') {
+            const bed =
+              slot.activity === 'chamber'
+                ? { x: site.x, y: site.y }
+                : this.sleepBedPoint(managed);
             if (bed) {
               const doorDist = Phaser.Math.Distance.Between(
                 managed.sprite.x,
@@ -2793,7 +3285,10 @@ export class SubjectSystem {
             }
           }
           this.playSleepAnim(managed.data.id);
-          managed.data.activityLabel = 'Sleeping at home';
+          managed.data.activityLabel =
+            slot.activity === 'chamber'
+              ? 'Sleeping in chambers'
+              : 'Sleeping at home';
         } else if (site.mode === 'work' || this.isStickyActivity(slot.activity)) {
           this.playWorkAnim(managed.data.id);
           if (
@@ -2835,7 +3330,7 @@ export class SubjectSystem {
     managed.data.activityLabel = slot.label;
     managed.data.zone = slot.zone;
 
-    let site = this.resolveScheduleSite(managed, slot);
+    const site = this.resolveScheduleSite(managed, slot);
     let target = { x: site.x, y: site.y };
 
     // Soft block: civilians prefer not to path into an active security cordon.
@@ -2862,9 +3357,80 @@ export class SubjectSystem {
         target.y
       );
       if (dist <= PRESENCE_ARRIVE_R) return;
+      managed.data.activityLabel = this.commuteLabel(managed, slot, site);
     }
 
-    this.nudgeToward(managed.data.id, target.x, target.y, 40);
+    // Stagger repath slightly so crowds fan out on roads
+    const stagger = (managed.data.id.charCodeAt(managed.data.id.length - 1) % 5) * 40;
+    this.scene.time.delayedCall(stagger, () => {
+      if (!managed.sprite.active || managed.moving || managed.interrupt) return;
+      this.nudgeToward(managed.data.id, target.x, target.y, 40);
+    });
+  }
+
+  private commuteLabel(
+    managed: ManagedSubject,
+    slot: ScheduleSlot,
+    site: ScheduleSite
+  ): string {
+    if (slot.activity === 'hunt') return 'Hunting across the wilds';
+    if (slot.activity === 'sleep' || slot.activity === 'chamber') {
+      return 'Heading home';
+    }
+    if (site.buildingId && this.buildings) {
+      const b = this.buildings.getById(site.buildingId);
+      if (b?.kind === 'field') return 'Walking to the fields';
+      if (b?.kind === 'dock') return 'Walking to the docks';
+      if (b?.kind === 'keep') return 'Marching to the keep';
+      if (b?.kind === 'bakery') return 'Walking to the bakery';
+      if (b?.kind === 'market') return 'Walking to the market';
+    }
+    if (slot.zone === 'field') return 'Walking to the fields';
+    if (slot.zone === 'keep') return 'Marching to the keep';
+    if (slot.zone === 'home') return 'Heading home';
+    return managed.data.activityLabel || slot.label;
+  }
+
+  private resolveHuntTarget(
+    managed: ManagedSubject
+  ): { x: number; y: number } | null {
+    if (!this.monsters) return null;
+    if (managed.data.role === 'knight' || managed.data.role === 'witch_hunter') {
+      const sleepers = this.monsters.sleepingDragons();
+      let best: { kind: string; sprite: { x: number; y: number } } | null =
+        null;
+      let bestD = Infinity;
+      for (const m of sleepers) {
+        const d = Phaser.Math.Distance.Between(
+          managed.sprite.x,
+          managed.sprite.y,
+          m.sprite.x,
+          m.sprite.y
+        );
+        if (d < bestD) {
+          bestD = d;
+          best = m;
+        }
+      }
+      if (!best) {
+        best = this.monsters.nearestMonster(
+          managed.sprite.x,
+          managed.sprite.y,
+          5000
+        );
+      }
+      if (best) {
+        const kind = best.kind;
+        managed.data.activityLabel =
+          kind === 'dragon'
+            ? 'Hunting a dragon'
+            : kind === 'troll'
+              ? 'Tracking a troll'
+              : `Hunting a ${kind}`;
+        return { x: best.sprite.x, y: best.sprite.y };
+      }
+    }
+    return null;
   }
 
   /** Camp garrison wander freely within their camp's influence sphere. */
@@ -2895,28 +3461,29 @@ export class SubjectSystem {
   ]);
 
   /**
-   * Guards patrol around the dungeon, soldiers/archers/knights/elites around the barracks
-   * (the keep is the fallback for either if that building doesn't exist yet). They stay
-   * within that influence sphere, preferring roads/bridges and cycling through nearby civic
-   * buildings as inspection stops.
+   * Patrol within the unit's loyalty keep territory (roads, civic posts, approaches).
    */
   private pickPatrolTarget(managed: ManagedSubject, fallback: Point): Point {
     if (!this.buildings) return fallback;
     if (!SubjectSystem.MILITARY_PATROL_ROLES.has(managed.data.role)) return fallback;
-    const workplaceId = managed.data.workplaceId;
+    const keepId =
+      managed.data.loyaltyKeepId ??
+      this.buildings.nearestKeepId(managed.sprite.x, managed.sprite.y) ??
+      KEEP_ID;
     const origin =
-      (workplaceId ? this.buildings.getById(workplaceId) : null) ??
-      (managed.data.role === 'guard'
-        ? this.buildings.getDungeonPoint()
-        : this.buildings.getBarracksPoint()) ??
+      this.buildings.getKeepTargetPoint(keepId) ??
       this.buildings.getActiveKeepPoint();
     if (!origin) return fallback;
-    const radius = this.buildings.getMilitaryInfluenceRadius();
 
-    if (Math.random() < 0.3) {
+    if (Math.random() < 0.35) {
       const posts = this.buildings
-        .listInspectableBuildingsInSphere(origin.x, origin.y, radius)
-        .filter((b) => PATROL_INSPECTION_KINDS.includes(b.kind));
+        .list()
+        .filter(
+          (b) =>
+            b.hp > 0 &&
+            PATROL_INSPECTION_KINDS.includes(b.kind) &&
+            this.buildings!.inKeepTerritory(keepId, b.x, b.y)
+        );
       if (posts.length) {
         const idx = this.patrolInspectionIdx.get(managed.data.id) ?? 0;
         const post = posts[idx % posts.length]!;
@@ -2927,26 +3494,33 @@ export class SubjectSystem {
 
     const roadPts = this.buildings
       .listRoadPoints()
-      .filter(
-        (p) => Phaser.Math.Distance.Between(origin.x, origin.y, p.x, p.y) <= radius
-      );
+      .filter((p) => this.buildings!.inKeepTerritory(keepId, p.x, p.y));
     if (roadPts.length) {
       return roadPts[Math.floor(Math.random() * roadPts.length)]!;
     }
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.random() * radius;
-    return {
-      x: Phaser.Math.Clamp(
-        origin.x + Math.cos(angle) * dist,
-        32,
-        this.world.width - 32
-      ),
-      y: Phaser.Math.Clamp(
-        origin.y + Math.sin(angle) * dist,
-        32,
-        this.world.height - 32
-      ),
-    };
+
+    // Houses / fields / docks in the fief
+    const civic = this.buildings
+      .list()
+      .filter(
+        (b) =>
+          b.hp > 0 &&
+          (b.kind === 'house' ||
+            b.kind === 'field' ||
+            b.kind === 'dock' ||
+            b.kind === 'manor') &&
+          this.buildings!.inKeepTerritory(keepId, b.x, b.y)
+      );
+    if (civic.length) {
+      const b = civic[Math.floor(Math.random() * civic.length)]!;
+      return { x: b.x, y: b.y };
+    }
+
+    return this.buildings.keepTerritoryPoint(
+      keepId,
+      managed.sprite.x,
+      managed.sprite.y
+    );
   }
 
   private toSnapshot(managed: ManagedSubject): SubjectSnapshot {
@@ -3005,6 +3579,9 @@ export class SubjectSystem {
           'a workplace')
         : 'No assigned workplace',
       roomLabel: this.roomLabelFor(managed),
+      loyaltyLabel: this.buildings?.loyaltyLabelForKeep(
+        managed.data.loyaltyKeepId
+      ),
     };
   }
 
