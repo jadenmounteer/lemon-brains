@@ -288,6 +288,45 @@ a {
   margin-bottom: 0.35rem;
 }
 
+.inspector-follow-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.inspector-follow-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.inspector-follow-meta h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspector-follow-meta .muted {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspector-follow-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.inspector-collapsed {
+  padding: 0.65rem 0.85rem;
+}
+
 .inspector-close {
   min-height: 44px;
   min-width: 44px;
@@ -939,6 +978,18 @@ a {
     gap: 0;
     overflow: hidden;
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .side-panels.sheet-stack.follow-peek {
+    max-height: none;
+    pointer-events: none;
+  }
+
+  .side-panels.sheet-stack.follow-peek > .panel {
+    pointer-events: auto;
+    max-height: none;
+    overflow: visible;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.35);
   }
 
   .side-panels.sheet-stack > .panel {

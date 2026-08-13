@@ -7,6 +7,10 @@ interface InspectorPanelProps {
   onClose: () => void;
   onTransformPeasant?: () => void;
   onCommandTroops?: (troopCount: number) => void;
+  /** When true, show a compact follow bar instead of the full sheet. */
+  collapsed?: boolean;
+  onExpand?: () => void;
+  onCollapse?: () => void;
 }
 
 export function InspectorPanel({
@@ -15,16 +19,71 @@ export function InspectorPanel({
   onClose,
   onTransformPeasant,
   onCommandTroops,
+  collapsed = false,
+  onExpand,
+  onCollapse,
 }: InspectorPanelProps) {
   const [troopCount, setTroopCount] = useState(3);
+
+  if (collapsed) {
+    return (
+      <section
+        className="panel inspector-panel inspector-collapsed"
+        aria-live="polite"
+      >
+        <div className="inspector-follow-bar">
+          <div className="inspector-follow-meta">
+            <h2>{subject.name}</h2>
+            <p className="muted">
+              {subject.roleLabel}
+              {subject.activityLabel ? ` · ${subject.activityLabel}` : ''}
+            </p>
+          </div>
+          <div className="inspector-follow-actions">
+            {onExpand && (
+              <button
+                type="button"
+                className="inspector-close touch-btn"
+                onClick={onExpand}
+              >
+                Details
+              </button>
+            )}
+            <button
+              type="button"
+              className="inspector-close touch-btn"
+              onClick={onClose}
+            >
+              Unfollow
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel inspector-panel" aria-live="polite">
       <div className="inspector-header">
         <h2>{subject.name}</h2>
-        <button type="button" className="inspector-close" onClick={onClose}>
-          Close
-        </button>
+        <div className="inspector-follow-actions">
+          {onCollapse && (
+            <button
+              type="button"
+              className="inspector-close touch-btn"
+              onClick={onCollapse}
+            >
+              Hide
+            </button>
+          )}
+          <button
+            type="button"
+            className="inspector-close touch-btn"
+            onClick={onClose}
+          >
+            Unfollow
+          </button>
+        </div>
       </div>
       <p className="inspector-role">{subject.roleLabel}</p>
       <p className="muted">{subject.genderLabel}</p>

@@ -200,6 +200,8 @@ export default function App() {
   } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
+  /** Subject inspector expanded; collapsed = follow bar only (keeps camera follow). */
+  const [inspectorExpanded, setInspectorExpanded] = useState(false);
   const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
@@ -460,6 +462,7 @@ export default function App() {
     setSelected(null);
     setSelectedBuilding(null);
     setSelectedCamp(null);
+    setInspectorExpanded(false);
     setDeselectToken((n) => n + 1);
     setCareerTodosVisible(false);
   }, [setCareerTodosVisible]);
@@ -471,6 +474,7 @@ export default function App() {
     setSelected(null);
     setSelectedBuilding(null);
     setSelectedCamp(null);
+    setInspectorExpanded(false);
     setDeselectToken((n) => n + 1);
     setShowMarket((v) => !v);
   }, []);
@@ -482,13 +486,23 @@ export default function App() {
     setShowQuestions((v) => !v);
   }, []);
 
+  const followingPeek = Boolean(selected && !inspectorExpanded);
+  const sheetNeedsScrim =
+    showMarket ||
+    showQuestions ||
+    showRansom ||
+    todosVisible ||
+    !!selectedBuilding ||
+    !!selectedCamp ||
+    (Boolean(selected) && inspectorExpanded);
+
   const chromeBlockingZoom =
     menuOpen ||
     menuOverlayOpen ||
     showMarket ||
     showQuestions ||
     showRansom ||
-    !!selected ||
+    (Boolean(selected) && inspectorExpanded) ||
     !!selectedBuilding ||
     !!selectedCamp ||
     todosVisible ||
@@ -685,6 +699,15 @@ export default function App() {
                 setShowQuestions(false);
                 setShowRansom(false);
                 setMenuOpen(false);
+                setSelectedBuilding(null);
+                setSelectedCamp(null);
+                // Mobile: start collapsed so follow-cam stays visible.
+                const narrow =
+                  typeof window !== 'undefined' &&
+                  window.matchMedia('(max-width: 720px)').matches;
+                setInspectorExpanded(!narrow);
+              } else {
+                setInspectorExpanded(false);
               }
               setSelected(s);
             }}
@@ -693,6 +716,8 @@ export default function App() {
                 setShowMarket(false);
                 setShowQuestions(false);
                 setMenuOpen(false);
+                setSelected(null);
+                setInspectorExpanded(false);
               }
               setSelectedBuilding(b);
             }}
@@ -701,6 +726,8 @@ export default function App() {
                 setShowMarket(false);
                 setShowQuestions(false);
                 setMenuOpen(false);
+                setSelected(null);
+                setInspectorExpanded(false);
               }
               setSelectedCamp(c);
             }}
@@ -801,15 +828,19 @@ export default function App() {
 
         {showSidePanels && showSide && (
           <>
-            <button
-              type="button"
-              className="sheet-scrim side-scrim"
-              aria-label="Close panel"
-              onClick={() => {
-                closePlaySheets();
-              }}
-            />
-            <aside className="side-panels sheet-stack">
+            {sheetNeedsScrim && (
+              <button
+                type="button"
+                className="sheet-scrim side-scrim"
+                aria-label="Close panel"
+                onClick={() => {
+                  closePlaySheets();
+                }}
+              />
+            )}
+            <aside
+              className={`side-panels sheet-stack${followingPeek ? ' follow-peek' : ''}`}
+            >
               {todosVisible && (
                 <TodoPanel
                   todos={stats.careerTodos ?? []}
@@ -825,8 +856,12 @@ export default function App() {
                 <InspectorPanel
                   subject={selected}
                   militaryAvailable={stats.militaryAvailable}
+                  collapsed={!inspectorExpanded}
+                  onExpand={() => setInspectorExpanded(true)}
+                  onCollapse={() => setInspectorExpanded(false)}
                   onClose={() => {
                     setSelected(null);
+                    setInspectorExpanded(false);
                     setDeselectToken((n) => n + 1);
                   }}
                   onTransformPeasant={() => {
