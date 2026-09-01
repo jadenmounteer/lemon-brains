@@ -25,7 +25,9 @@ describe('grant pregnancy placement', () => {
     const mother = {
       pregnant: false,
       spouseId: 'f1',
-      goal: { kind: 'have_child' },
+      goal: { kind: 'have_child' } as { kind: string } | null,
+      pregnantDaysLeft: undefined as number | undefined,
+      pendingChildHouseId: undefined as string | undefined,
     };
     const ok = applyGrantPregnancy(mother, 'house-b');
     expect(ok).toBe(true);

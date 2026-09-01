@@ -11,6 +11,7 @@ import {
   type AnimRole,
 } from './assetManifest';
 import { FORT_TILE } from '../buildings/buildingShared';
+import { palette } from './palette';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -32,6 +33,45 @@ function fillRect(
 
 function pixel(ctx: Ctx, x: number, y: number, color: number) {
   fillRect(ctx, x, y, 1, 1, color);
+}
+
+/** Staggered stone brick fill for castle walls. */
+function fillStoneBricks(
+  ctx: Ctx,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  brickW = 8,
+  brickH = 5
+) {
+  fillRect(ctx, x, y, w, h, palette.stoneDark);
+  for (let row = 0; row < h; row += brickH) {
+    const offset = (Math.floor(row / brickH) % 2) * Math.floor(brickW / 2);
+    for (let col = -brickW; col < w + brickW; col += brickW) {
+      const bx = x + col + offset;
+      const tone =
+        (col + row) % (brickW * 2) < brickW ? palette.stone : palette.stoneDark;
+      fillRect(ctx, bx, y + row, brickW - 1, brickH - 1, tone);
+    }
+  }
+}
+
+function strokeRectInk(ctx: Ctx, x: number, y: number, w: number, h: number) {
+  fillRect(ctx, x, y, w, 1, palette.ink);
+  fillRect(ctx, x, y + h - 1, w, 1, palette.ink);
+  fillRect(ctx, x, y, 1, h, palette.ink);
+  fillRect(ctx, x + w - 1, y, 1, h, palette.ink);
+}
+
+function fillFlagstoneFloor(ctx: Ctx, x: number, y: number, w: number, h: number) {
+  fillRect(ctx, x, y, w, h, palette.stoneDark);
+  for (let py = y; py < y + h; py += 6) {
+    for (let px = x + ((py - y) % 12 === 0 ? 0 : 4); px < x + w - 4; px += 8) {
+      fillRect(ctx, px, py, 7, 5, palette.stone);
+      pixel(ctx, px + 3, py + 2, 0x9a9a90);
+    }
+  }
 }
 
 function createCanvas(
@@ -944,92 +984,96 @@ function drawPeasantVariantSheets(scene: Phaser.Scene): void {
 }
 
 function drawKeep(scene: Phaser.Scene) {
-  const scale = 5;
+  const scale = 2;
   const baseW = 160;
-  const baseH = 124;
+  const baseH = 120;
   const w = baseW * scale;
   const h = baseH * scale;
   const tex = createCanvas(scene, PROP_KEYS.keep, w, h);
   const ctx = tex.getContext();
   ctx.scale(scale, scale);
-  // Outer bailey wall
-  fillRect(ctx, 6, 28, 148, 88, palette.stone);
-  fillRect(ctx, 6, 28, 148, 2, palette.ink);
-  fillRect(ctx, 6, 28, 2, 88, palette.ink);
-  fillRect(ctx, 152, 28, 2, 88, palette.ink);
+
+  // Outer bailey stone walls
+  fillStoneBricks(ctx, 6, 28, 148, 88);
+  strokeRectInk(ctx, 6, 28, 148, 88);
   // Battlements
   for (let i = 0; i < 14; i++) {
-    fillRect(ctx, 8 + i * 10, 12, 8, 18, palette.stone);
-    fillRect(ctx, 8 + i * 10, 12, 8, 1, palette.ink);
+    fillStoneBricks(ctx, 8 + i * 10, 10, 8, 18, 4, 4);
+    fillRect(ctx, 8 + i * 10, 10, 8, 1, palette.ink);
   }
   // Corner towers
-  fillRect(ctx, 4, 20, 18, 28, palette.stoneDark);
-  fillRect(ctx, 138, 20, 18, 28, palette.stoneDark);
-  fillRect(ctx, 8, 16, 10, 8, palette.roof);
-  fillRect(ctx, 142, 16, 10, 8, palette.roof);
-  // Keep keep (inner hall block)
-  fillRect(ctx, 40, 36, 80, 52, palette.stoneDark);
-  fillRect(ctx, 44, 40, 72, 44, palette.stone);
-  // Gate / doors
-  fillRect(ctx, 68, 88, 24, 28, palette.woodDark);
-  fillRect(ctx, 76, 96, 8, 12, palette.ink);
+  fillStoneBricks(ctx, 4, 18, 18, 30, 6, 5);
+  fillStoneBricks(ctx, 138, 18, 18, 30, 6, 5);
+  strokeRectInk(ctx, 4, 18, 18, 30);
+  strokeRectInk(ctx, 138, 18, 18, 30);
+  fillRect(ctx, 8, 14, 10, 8, palette.roof);
+  fillRect(ctx, 142, 14, 10, 8, palette.roof);
+  // Inner keep block
+  fillStoneBricks(ctx, 40, 34, 80, 54, 8, 5);
+  strokeRectInk(ctx, 40, 34, 80, 54);
+  // Gate arch
+  fillRect(ctx, 66, 84, 28, 32, palette.ink);
+  fillRect(ctx, 68, 86, 24, 28, palette.woodDark);
+  fillRect(ctx, 72, 90, 16, 20, 0x1a1010);
+  fillRect(ctx, 70, 84, 20, 6, palette.stone);
+  fillRect(ctx, 74, 82, 12, 4, palette.stoneDark);
   // Windows
-  fillRect(ctx, 52, 50, 10, 8, palette.cream);
-  fillRect(ctx, 98, 50, 10, 8, palette.cream);
-  fillRect(ctx, 70, 48, 20, 10, palette.gold);
+  fillRect(ctx, 50, 48, 10, 10, palette.ink);
+  fillRect(ctx, 52, 50, 6, 6, palette.cream);
+  fillRect(ctx, 100, 48, 10, 10, palette.ink);
+  fillRect(ctx, 102, 50, 6, 6, palette.cream);
+  fillRect(ctx, 68, 44, 24, 12, palette.ink);
+  fillRect(ctx, 70, 46, 20, 8, palette.cream);
   // Banner
-  fillRect(ctx, 74, 34, 12, 16, palette.clothKing);
-  pixel(ctx, 78, 40, palette.gold);
-  // Kitchen chimney
-  fillRect(ctx, 128, 42, 10, 22, palette.stoneDark);
-  fillRect(ctx, 130, 38, 6, 6, palette.ink);
+  fillRect(ctx, 74, 30, 12, 16, palette.clothKing);
+  pixel(ctx, 78, 36, palette.gold);
+  // Chimney
+  fillStoneBricks(ctx, 126, 38, 10, 24, 4, 4);
+  fillRect(ctx, 128, 34, 6, 6, palette.ink);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.keepInterior, w, h);
   const ic = int.getContext();
   ic.scale(scale, scale);
-  // Base stone floor
-  fillRect(ic, 6, 28, 148, 88, palette.stoneDark);
-  // Courtyard (south-center, lighter)
+  fillFlagstoneFloor(ic, 6, 28, 148, 88);
+  strokeRectInk(ic, 6, 28, 148, 88);
+  // Courtyard (gate area south)
   fillRect(ic, 50, 78, 60, 32, 0x8a9a70);
-  fillRect(ic, 72, 100, 16, 12, palette.dirt);
-  // Great hall (center-west)
+  fillRect(ic, 72, 96, 16, 12, palette.dirt);
+  // Great hall + throne
   fillRect(ic, 20, 40, 56, 40, palette.wood);
   fillRect(ic, 24, 44, 18, 14, 0x6b2040);
-  // Throne dais
-  fillRect(ic, 48, 44, 22, 20, palette.stone);
+  fillStoneBricks(ic, 48, 44, 22, 20, 6, 4);
   fillRect(ic, 52, 48, 14, 12, palette.gold);
   fillRect(ic, 55, 46, 8, 4, palette.cream);
-  // Banner
   fillRect(ic, 40, 36, 6, 12, palette.clothKing);
-  // Banquet hall (east)
+  // Banquet
   fillRect(ic, 90, 48, 48, 36, palette.wood);
   fillRect(ic, 96, 58, 36, 8, palette.woodDark);
-  fillRect(ic, 98, 54, 4, 4, palette.wood);
-  fillRect(ic, 124, 54, 4, 4, palette.wood);
-  fillRect(ic, 110, 54, 4, 4, palette.wood);
-  // Kitchen (NE) + hearth
-  fillRect(ic, 118, 30, 34, 28, palette.stone);
-  fillRect(ic, 124, 40, 16, 12, palette.stoneDark);
-  fillRect(ic, 128, 44, 8, 6, palette.ink);
-  fillRect(ic, 130, 46, 4, 3, 0xff6622);
-  // Servants quarters (SW)
+  for (let i = 0; i < 4; i++) {
+    fillRect(ic, 98 + i * 8, 54, 4, 4, palette.wood);
+  }
+  // Kitchen + hearth
+  fillStoneBricks(ic, 118, 28, 34, 28, 6, 4);
+  fillRect(ic, 124, 38, 16, 12, palette.stoneDark);
+  fillRect(ic, 128, 42, 8, 6, palette.ink);
+  fillRect(ic, 130, 44, 4, 3, 0xff6622);
+  // Servants
   fillRect(ic, 10, 78, 36, 30, palette.wood);
   fillRect(ic, 14, 84, 12, 6, palette.cream);
   fillRect(ic, 28, 84, 12, 6, palette.cream);
-  // Royal chambers (NW)
+  // Royal chambers
   fillRect(ic, 10, 32, 40, 28, 0x4a3058);
   fillRect(ic, 16, 42, 14, 8, palette.clothKing);
   fillRect(ic, 32, 42, 12, 8, palette.cream);
-  // Solar (N)
+  // Solar
   fillRect(ic, 70, 30, 36, 22, 0x3a4a68);
   fillRect(ic, 78, 38, 20, 8, palette.woodDark);
-  fillRect(ic, 84, 34, 8, 4, palette.cream);
-  // Chapel nook (W)
+  // Chapel nook
   fillRect(ic, 8, 52, 20, 22, 0x2a3048);
   fillRect(ic, 14, 58, 8, 10, palette.gold);
-  // Armory nook (SE)
-  fillRect(ic, 118, 86, 30, 24, palette.stone);
+  // Armory
+  fillStoneBricks(ic, 118, 86, 30, 24, 6, 4);
   fillRect(ic, 124, 92, 6, 12, palette.metal);
   fillRect(ic, 134, 94, 8, 8, palette.woodDark);
   int.refresh();
@@ -1353,29 +1397,74 @@ function drawDrawbridge(scene: Phaser.Scene) {
   closed.refresh();
 }
 
-function drawStairs(scene: Phaser.Scene) {
+function drawStairsFacing(
+  scene: Phaser.Scene,
+  key: string,
+  facing: 'north' | 'south' | 'east' | 'west'
+) {
   const w = FORT_TILE;
   const h = FORT_TILE * 2;
-  const tex = createCanvas(scene, PROP_KEYS.stairs, w, h);
+  const tex = createCanvas(scene, key, w, h);
   const ctx = tex.getContext();
-  // Wall backing (flush with fort segment)
-  fillRect(ctx, 0, h * 0.35, w, h * 0.55, palette.stone);
-  fillRect(ctx, 0, h * 0.35, w, 2, palette.ink);
-  // Exterior stone steps climbing the wall face
-  for (let i = 0; i < 5; i++) {
-    const stepW = w - 8 - i * 4;
-    const stepX = 4 + i * 2;
-    const stepY = h - 8 - i * 14;
-    fillRect(ctx, stepX, stepY, stepW, 10, palette.stone);
-    fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
+
+  // Grass/dirt footing at bottom (south-facing default)
+  fillRect(ctx, 0, h - 16, w, 16, palette.grassDark);
+  fillRect(ctx, 2, h - 14, w - 4, 4, palette.dirt);
+
+  const wallOnTop = facing === 'south';
+  const wallOnBottom = facing === 'north';
+  const wallOnLeft = facing === 'east';
+
+  if (wallOnTop) {
+    fillStoneBricks(ctx, 0, h * 0.32, w, h * 0.38, 6, 4);
+    for (let i = 0; i < 5; i++) {
+      const stepW = w - 8 - i * 5;
+      const stepX = 4 + i * 2.5;
+      const stepY = h - 20 - i * 12;
+      fillRect(ctx, stepX, stepY, stepW, 8, palette.stone);
+      fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
+    }
+    fillRect(ctx, w / 2 - 10, h * 0.2, 20, 10, palette.stoneDark);
+  } else if (wallOnBottom) {
+    fillStoneBricks(ctx, 0, h * 0.3, w, h * 0.38, 6, 4);
+    for (let i = 0; i < 5; i++) {
+      const stepW = w - 8 - i * 5;
+      const stepX = 4 + i * 2.5;
+      const stepY = 16 + i * 12;
+      fillRect(ctx, stepX, stepY, stepW, 8, palette.stone);
+      fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
+    }
+  } else if (wallOnLeft) {
+    fillStoneBricks(ctx, w * 0.55, 0, w * 0.4, h, 4, 6);
+    for (let i = 0; i < 5; i++) {
+      const stepH = 8;
+      const stepX = w - 20 - i * 10;
+      const stepY = 8 + i * 10;
+      fillRect(ctx, stepX, stepY, 10, stepH, palette.stone);
+      fillRect(ctx, stepX, stepY, 2, stepH, palette.ink);
+    }
+  } else {
+    fillStoneBricks(ctx, 0, 0, w * 0.4, h, 4, 6);
+    for (let i = 0; i < 5; i++) {
+      const stepH = 8;
+      const stepX = 8 + i * 10;
+      const stepY = 8 + i * 10;
+      fillRect(ctx, stepX, stepY, 10, stepH, palette.stone);
+      fillRect(ctx, stepX + 8, stepY, 2, stepH, palette.ink);
+    }
   }
-  // Parapet notch at top
-  fillRect(ctx, w / 2 - 10, h * 0.22, 20, 12, palette.stoneDark);
-  fillRect(ctx, w / 2 - 10, h * 0.22, 20, 2, palette.ink);
-  // Side wall cheeks
-  fillRect(ctx, 0, h * 0.4, 5, h * 0.45, palette.stoneDark);
-  fillRect(ctx, w - 5, h * 0.4, 5, h * 0.45, palette.stoneDark);
+
+  strokeRectInk(ctx, 0, Math.floor(h * 0.32), w, Math.floor(h * 0.38));
   tex.refresh();
+}
+
+function drawStairs(scene: Phaser.Scene) {
+  drawStairsFacing(scene, PROP_KEYS.stairsSouth, 'south');
+  drawStairsFacing(scene, PROP_KEYS.stairsNorth, 'north');
+  drawStairsFacing(scene, PROP_KEYS.stairsEast, 'east');
+  drawStairsFacing(scene, PROP_KEYS.stairsWest, 'west');
+  // Legacy key maps to south-facing
+  drawStairsFacing(scene, PROP_KEYS.stairs, 'south');
 }
 
 function drawField(scene: Phaser.Scene) {
@@ -1590,47 +1679,76 @@ function drawCave(scene: Phaser.Scene) {
 function drawCathedral(scene: Phaser.Scene) {
   const scale = 5;
   const baseW = 64;
-  const baseH = 60;
+  const baseH = 56;
   const w = baseW * scale;
   const h = baseH * scale;
   const tex = createCanvas(scene, PROP_KEYS.cathedral, w, h);
   const ctx = tex.getContext();
   ctx.scale(scale, scale);
-  fillRect(ctx, 8, 22, 48, 34, palette.stone);
-  fillRect(ctx, 8, 22, 48, 2, palette.ink);
+
+  fillStoneBricks(ctx, 8, 22, 48, 34);
+  strokeRectInk(ctx, 8, 22, 48, 34);
+  // Steep roof planes
   for (let row = 0; row < 12; row++) {
-    fillRect(ctx, 10 + row, 10 + row, 44 - row * 2, 1, palette.clothBishop);
+    fillRect(ctx, 10 + row, 10 + row, 44 - row * 2, 2, palette.clothBishop);
+    fillRect(ctx, 10 + row, 10 + row, 44 - row * 2, 1, palette.ink);
   }
-  fillRect(ctx, 26, 4, 12, 20, palette.stone);
+  // Central spire
+  fillStoneBricks(ctx, 26, 4, 12, 20, 4, 4);
   fillRect(ctx, 28, 2, 8, 4, palette.gold);
   fillRect(ctx, 30, 0, 4, 3, palette.gold);
+  // Rose window
+  fillRect(ctx, 26, 30, 12, 10, palette.ink);
+  fillRect(ctx, 28, 32, 8, 6, 0x7ec8e3);
+  // Grand portal
+  fillRect(ctx, 24, 40, 16, 16, palette.ink);
   fillRect(ctx, 26, 42, 12, 14, palette.woodDark);
-  fillRect(ctx, 14, 30, 6, 8, palette.cream);
-  fillRect(ctx, 44, 30, 6, 8, palette.cream);
+  fillRect(ctx, 28, 44, 4, 10, palette.wood);
+  fillRect(ctx, 34, 44, 4, 10, palette.wood);
+  fillRect(ctx, 22, 52, 20, 4, palette.stoneDark);
+  // Lancet windows
+  fillRect(ctx, 12, 28, 6, 10, palette.ink);
+  fillRect(ctx, 14, 30, 2, 6, palette.cream);
+  fillRect(ctx, 46, 28, 6, 10, palette.ink);
+  fillRect(ctx, 48, 30, 2, 6, 0x7ec8e3);
+  // Buttress hints
+  fillRect(ctx, 6, 26, 4, 28, palette.stoneDark);
+  fillRect(ctx, 54, 26, 4, 28, palette.stoneDark);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.cathedralInterior, w, h);
   const ic = int.getContext();
   ic.scale(scale, scale);
-  fillRect(ic, 8, 22, 48, 34, palette.stoneDark);
-  fillRect(ic, 10, 24, 44, 30, 0x3a3a48);
-  // aisle + altar
-  fillRect(ic, 28, 26, 8, 22, palette.cream);
-  fillRect(ic, 24, 28, 16, 6, palette.wood);
-  fillRect(ic, 28, 26, 8, 4, palette.gold);
-  // pews
-  fillRect(ic, 12, 36, 10, 4, palette.woodDark);
-  fillRect(ic, 12, 42, 10, 4, palette.woodDark);
-  fillRect(ic, 42, 36, 10, 4, palette.woodDark);
-  fillRect(ic, 42, 42, 10, 4, palette.woodDark);
-  // stained light
-  fillRect(ic, 14, 28, 4, 6, 0x7ec8e3);
-  fillRect(ic, 46, 28, 4, 6, palette.clothBishop);
-  // candles
-  fillRect(ic, 26, 30, 1, 4, palette.cream);
-  fillRect(ic, 37, 30, 1, 4, palette.cream);
-  pixel(ic, 26, 29, 0xffcc44);
-  pixel(ic, 37, 29, 0xffcc44);
+  fillFlagstoneFloor(ic, 8, 22, 48, 34);
+  strokeRectInk(ic, 8, 22, 48, 34);
+  // Central aisle
+  fillRect(ic, 28, 24, 8, 30, palette.cream);
+  // Vault ribs
+  for (let i = 0; i < 5; i++) {
+    fillRect(ic, 12 + i * 10, 22, 1, 8, palette.stoneDark);
+  }
+  // Pews left
+  for (const py of [30, 38, 46]) {
+    fillRect(ic, 12, py, 12, 4, palette.woodDark);
+    fillRect(ic, 12, py + 4, 12, 2, palette.wood);
+  }
+  // Pews right
+  for (const py of [30, 38, 46]) {
+    fillRect(ic, 40, py, 12, 4, palette.woodDark);
+    fillRect(ic, 40, py + 4, 12, 2, palette.wood);
+  }
+  // Altar
+  fillRect(ic, 26, 24, 12, 8, palette.gold);
+  fillRect(ic, 28, 26, 8, 4, palette.cream);
+  fillRect(ic, 30, 22, 4, 4, palette.gold);
+  // Stained glass light
+  fillRect(ic, 12, 26, 4, 8, 0x7ec8e3);
+  fillRect(ic, 48, 26, 4, 8, palette.clothBishop);
+  pixel(ic, 14, 28, 0xffcc44);
+  pixel(ic, 50, 28, 0xffcc44);
+  // Candles
+  fillRect(ic, 24, 28, 1, 4, palette.cream);
+  fillRect(ic, 39, 28, 1, 4, palette.cream);
   int.refresh();
 }
 
@@ -1675,34 +1793,62 @@ function drawInfirmary(scene: Phaser.Scene) {
 }
 
 function drawDungeon(scene: Phaser.Scene) {
-  const w = 40;
-  const h = 36;
+  const scale = 5;
+  const baseW = 40;
+  const baseH = 32;
+  const w = baseW * scale;
+  const h = baseH * scale;
   const tex = createCanvas(scene, PROP_KEYS.dungeon, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 10, 32, 24, palette.stoneDark);
-  fillRect(ctx, 4, 10, 32, 2, palette.ink);
-  fillRect(ctx, 14, 18, 12, 16, palette.ink);
-  fillRect(ctx, 16, 20, 8, 12, 0x1a1018);
-  fillRect(ctx, 8, 14, 4, 4, palette.metal);
-  fillRect(ctx, 28, 14, 4, 4, palette.metal);
+  ctx.scale(scale, scale);
+
+  fillStoneBricks(ctx, 4, 8, 32, 22);
+  strokeRectInk(ctx, 4, 8, 32, 22);
+  // Iron gate
+  fillRect(ctx, 14, 16, 12, 14, palette.ink);
+  fillRect(ctx, 16, 18, 8, 10, 0x1a1018);
+  for (let i = 0; i < 4; i++) {
+    fillRect(ctx, 17 + i * 2, 18, 1, 10, palette.metal);
+  }
+  // Barred windows
+  fillRect(ctx, 6, 12, 5, 5, palette.ink);
+  fillRect(ctx, 7, 13, 3, 3, 0x2a2830);
+  fillRect(ctx, 29, 12, 5, 5, palette.ink);
+  fillRect(ctx, 30, 13, 3, 3, 0x2a2830);
+  // Torch brackets
+  fillRect(ctx, 8, 14, 3, 4, palette.metal);
+  pixel(ctx, 9, 13, 0xff6622);
+  fillRect(ctx, 29, 14, 3, 4, palette.metal);
+  pixel(ctx, 30, 13, 0xff6622);
+  // Moss flecks
+  pixel(ctx, 6, 24, palette.grassDark);
+  pixel(ctx, 34, 20, palette.forest);
+  // Chains
+  fillRect(ctx, 32, 18, 2, 8, palette.metal);
+  fillRect(ctx, 33, 24, 3, 2, palette.metal);
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.dungeonInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 4, 10, 32, 24, 0x2a2830);
-  fillRect(ic, 6, 12, 28, 20, 0x1a1820);
-  // corridor
-  fillRect(ic, 16, 12, 8, 20, 0x252530);
-  // cells
+  ic.scale(scale, scale);
+  fillRect(ic, 4, 8, 32, 22, 0x1a1820);
+  fillFlagstoneFloor(ic, 6, 10, 28, 18);
+  // Central corridor
+  fillRect(ic, 16, 12, 8, 16, 0x252530);
+  // Four cells
   for (let i = 0; i < 4; i++) {
-    const cx = 8 + i * 7;
-    fillRect(ic, cx, 14, 6, 10, palette.ink);
-    fillRect(ic, cx + 1, 15, 4, 8, 0x0a0810);
-    fillRect(ic, cx + 2, 16, 2, 6, palette.metal);
+    const cx = 7 + i * 7;
+    fillRect(ic, cx, 12, 6, 10, palette.ink);
+    fillRect(ic, cx + 1, 13, 4, 8, 0x0a0810);
+    fillRect(ic, cx + 2, 14, 2, 6, palette.metal);
   }
-  // keeper desk
-  fillRect(ic, 28, 22, 8, 4, palette.woodDark);
-  fillRect(ic, 30, 20, 4, 2, palette.cream);
+  // Keeper desk
+  fillRect(ic, 28, 20, 8, 4, palette.woodDark);
+  fillRect(ic, 30, 18, 4, 2, palette.cream);
+  pixel(ic, 31, 19, palette.gold);
+  // Wall torches
+  pixel(ic, 10, 14, 0xff6622);
+  pixel(ic, 28, 14, 0xff6622);
   int.refresh();
 }
 
@@ -2138,6 +2284,10 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.drawbridge,
     PROP_KEYS.drawbridgeClosed,
     PROP_KEYS.stairs,
+    PROP_KEYS.stairsNorth,
+    PROP_KEYS.stairsSouth,
+    PROP_KEYS.stairsEast,
+    PROP_KEYS.stairsWest,
     PROP_KEYS.field,
     PROP_KEYS.granary,
     PROP_KEYS.barracks,

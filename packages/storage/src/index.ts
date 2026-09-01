@@ -5,6 +5,12 @@ export {
   SETTINGS_STORAGE_KEY,
 } from './settings.repository';
 export {
+  LAUNCH_SETTINGS_QUERY_KEY,
+  encodeLaunchSettings,
+  decodeLaunchSettings,
+  readLaunchSettingsFromUrl,
+} from './launch-settings';
+export {
   ProgressRepository,
   PROGRESS_STORAGE_KEY,
   DEFAULT_PROGRESS,

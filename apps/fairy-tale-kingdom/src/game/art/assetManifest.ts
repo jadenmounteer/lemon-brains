@@ -96,6 +96,10 @@ export const PROP_KEYS = {
   drawbridge: 'prop-drawbridge',
   drawbridgeClosed: 'prop-drawbridge-closed',
   stairs: 'prop-stairs',
+  stairsNorth: 'prop-stairs-n',
+  stairsSouth: 'prop-stairs-s',
+  stairsEast: 'prop-stairs-e',
+  stairsWest: 'prop-stairs-w',
   field: 'prop-field',
   granary: 'prop-granary',
   barracks: 'prop-barracks',
@@ -161,6 +165,21 @@ export const HEARTH_FIRE_ANIM = 'hearth-fire';
 /** N=1 E=2 S=4 W=8 neighbor bitmask → `prop-wall-{mask}` */
 export function wallTextureKey(mask: number): string {
   return `prop-wall-${mask & 15}`;
+}
+
+export function stairsTextureKey(
+  facing: 'north' | 'south' | 'east' | 'west'
+): string {
+  switch (facing) {
+    case 'north':
+      return PROP_KEYS.stairsNorth;
+    case 'south':
+      return PROP_KEYS.stairsSouth;
+    case 'east':
+      return PROP_KEYS.stairsEast;
+    case 'west':
+      return PROP_KEYS.stairsWest;
+  }
 }
 
 /** Future drop-in paths relative to public/ (assetUrl) */

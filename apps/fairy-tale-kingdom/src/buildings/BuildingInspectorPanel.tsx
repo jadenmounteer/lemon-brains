@@ -1,5 +1,11 @@
 import type { UnitRole } from '../game/art/assetManifest';
 import type { KingdomStats } from '../game/subjects/types';
+import type { CivilianJob } from '../game/jobs/capacities';
+import {
+  CASTLE_JOBS,
+  CASTLE_JOB_CAPACITY,
+  jobLabel,
+} from '../game/jobs/capacities';
 import {
   canTrain,
   hireCatalogName,
@@ -19,7 +25,7 @@ interface BuildingInspectorPanelProps {
   stats: KingdomStats;
   /** Sandbox: when false for a role, hide that train row. */
   enabledRoles?: Partial<Record<UnitRole, boolean>>;
-  onTrain: (buildingId: string, role: UnitRole) => void;
+  onTrain: (buildingId: string, role: UnitRole, castleJob?: CivilianJob) => void;
   onMove?: (buildingId: string) => void;
   onDemolish?: (buildingId: string) => void;
   onClose: () => void;
@@ -37,7 +43,9 @@ export function BuildingInspectorPanel({
   onClose,
 }: BuildingInspectorPanelProps) {
   const canAfford = (cost: number) => infiniteGold || gold >= cost;
-  const trainRoles = TRAINABLE_ROLES[building.kind] ?? [];
+  const trainRoles = (TRAINABLE_ROLES[building.kind] ?? []).filter(
+    (role) => !(building.kind === 'keep' && role === 'peasant')
+  );
   const royalUsedAtKeep =
     building.kind === 'keep' ? (building.royalUsed ?? 0) : undefined;
   const refund = buildingRefundCost(building.kind);
@@ -149,6 +157,30 @@ export function BuildingInspectorPanel({
         <>
           <h3 className="inspector-subhead">Train</h3>
           <ul className="market-list">
+            {building.kind === 'keep' &&
+              CASTLE_JOBS.map((job) => {
+                const cap =
+                  CASTLE_JOB_CAPACITY[
+                    job as keyof typeof CASTLE_JOB_CAPACITY
+                  ];
+                const used =
+                  building.workers?.filter((w) => w.jobLabel === jobLabel(job))
+                    .length ?? 0;
+                const allowed = used < cap && stats.freeBeds > 0;
+                const cost = hireCost('peasant');
+                return (
+                  <li key={job}>
+                    <button
+                      type="button"
+                      className="market-buy"
+                      disabled={!allowed || !canAfford(cost)}
+                      onClick={() => onTrain(building.id, 'peasant', job)}
+                    >
+                      Train {jobLabel(job)} — {cost}g
+                    </button>
+                  </li>
+                );
+              })}
             {trainRoles.map((role) => {
               if (enabledRoles?.[role] === false) return null;
               const workersAtBuilding =

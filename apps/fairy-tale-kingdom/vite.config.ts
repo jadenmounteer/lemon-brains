@@ -3,10 +3,11 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 
 const pagesBase = '/lemon-brains/games/fairy-tale-kingdom/';
+const devBase = '/games/fairy-tale-kingdom/';
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
-  base: mode === 'production' ? pagesBase : '/',
+  base: mode === 'production' ? pagesBase : devBase,
   resolve: {
     alias: {
       '@knowledge-quest/learning': resolve(

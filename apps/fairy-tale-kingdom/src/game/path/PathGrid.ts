@@ -50,6 +50,17 @@ export class PathGrid {
     this.clearTerrainCell(Math.floor(x / this.tile), Math.floor(y / this.tile));
   }
 
+  /** Clear a building block without touching terrain (doorways through structures). */
+  clearBlockedAtWorld(x: number, y: number): void {
+    const col = Math.floor(x / this.tile);
+    const row = Math.floor(y / this.tile);
+    if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) return;
+    const i = row * this.cols + col;
+    if (!this.terrainBlocked[i]) {
+      this.blocked[i] = false;
+    }
+  }
+
   applyTerrainFromMap(mapData: number[][], isBlockedTile: (t: number) => boolean): void {
     this.terrainBlocked.fill(false);
     for (let r = 0; r < mapData.length && r < this.rows; r++) {

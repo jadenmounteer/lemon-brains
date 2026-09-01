@@ -7,6 +7,7 @@ import {
 } from '@knowledge-quest/learning';
 import {
   LocalStorageAdapter,
+  readLaunchSettingsFromUrl,
   SettingsRepository,
 } from '@knowledge-quest/storage';
 
@@ -25,10 +26,16 @@ export class SettingsService {
 
   init(): Promise<void> {
     if (!this.initPromise) {
-      this.initPromise = this.repository.load().then((settings) => {
-        this.settings = settings;
+      this.initPromise = (async () => {
+        const fromLaunch = readLaunchSettingsFromUrl();
+        if (fromLaunch) {
+          await this.repository.save(fromLaunch);
+          this.settings = fromLaunch;
+        } else {
+          this.settings = await this.repository.load();
+        }
         this.settingsSubject.next(this.settings);
-      });
+      })();
     }
     return this.initPromise;
   }

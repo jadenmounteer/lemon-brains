@@ -15,6 +15,7 @@ export function dispatchGameCommand(
       game.events.emit(KingdomEvents.TRAIN_AT_BUILDING, {
         buildingId: command.buildingId,
         role: command.role,
+        castleJob: command.castleJob,
       });
       break;
     case 'BEGIN_PLACE':

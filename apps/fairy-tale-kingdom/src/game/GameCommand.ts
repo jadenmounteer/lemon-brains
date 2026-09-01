@@ -1,11 +1,18 @@
 import type { BuildKind, NavalKind } from '../marketplace/catalog';
 import type { SandboxSpawnAction } from '../kingdom/sandboxSettings';
+import type { CivilianJob } from './jobs/capacities';
 import type { UnitRole } from './art/assetManifest';
 
 /** React → Phaser command channel (replaces many `{ seq, … }` props). */
 export type GameCommand =
   | { type: 'HIRE_SUBJECT'; seq: number; role: UnitRole }
-  | { type: 'TRAIN_AT_BUILDING'; seq: number; buildingId: string; role: UnitRole }
+  | {
+      type: 'TRAIN_AT_BUILDING';
+      seq: number;
+      buildingId: string;
+      role: UnitRole;
+      castleJob?: CivilianJob;
+    }
   | { type: 'BEGIN_PLACE'; seq: number; kind: BuildKind; maxWallCells?: number }
   | { type: 'CANCEL_PLACE'; seq: number }
   | { type: 'BEGIN_RELOCATE'; seq: number; buildingId: string }

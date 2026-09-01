@@ -126,6 +126,23 @@ export function LearningPanel({
 
   const settingsStrip = (
     <div className="learning-settings-strip">
+      <label className="learning-curriculum">
+        Curriculum
+        <select
+          value={settings.curriculumId}
+          onChange={(e) => {
+            void onUpdateSettings({
+              curriculumId: e.target.value as AppSettings['curriculumId'],
+            });
+          }}
+        >
+          {registry.list().map((curriculum) => (
+            <option key={curriculum.id} value={curriculum.id}>
+              {curriculum.label}
+            </option>
+          ))}
+        </select>
+      </label>
       <label className="learning-toggle">
         <input
           type="checkbox"

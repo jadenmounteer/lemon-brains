@@ -31,8 +31,10 @@ npm run start:fairy-tale-kingdom
 | App | URL |
 |-----|-----|
 | Knowledge Quest | http://localhost:4300/ |
-| Lemon Brains | http://localhost:4200/ |
-| Fairy Tale Kingdom | http://localhost:4400/ |
+| Lemon Brains | http://localhost:4300/games/lemon-brains/ (proxied) |
+| Fairy Tale Kingdom | http://localhost:4300/games/fairy-tale-kingdom/ (proxied) |
+
+Games share curriculum settings with the host when launched from **Choose a game**. You can also run Fairy Tale Kingdom alone at http://localhost:4400/games/fairy-tale-kingdom/ for Phaser-only dev.
 
 1. Open the host
 2. Configure learning

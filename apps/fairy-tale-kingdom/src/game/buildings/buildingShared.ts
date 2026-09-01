@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
-import { PROP_KEYS, TILE_SIZE, UNIT_WIDTH, wallTextureKey } from '../art/assetManifest';
+import { PROP_KEYS, UNIT_WIDTH, stairsTextureKey, wallTextureKey } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import { isFortKind } from '../combat/stats';
 import type { Point } from '../subjects/zones';
 
 export const KEEP_ID = 'keep';
-/** Fort cell size — wide enough for ~3 NPCs abreast on battlements. */
 export const FORT_TILE = UNIT_WIDTH * 3;
 /** @deprecated Fixed 3-cell runs — drag placement uses fortLineCells instead. */
 export const WALL_PLACE_CELLS = 3;
@@ -76,6 +75,8 @@ export interface BuildingRecord {
   hearthSprite?: Phaser.GameObjects.Sprite;
   labelIndex: number;
   attachedWallId?: string;
+  /** Which way stairs climb onto the attached wall (ground side opposite). */
+  stairsFacing?: StairsFacing;
   closed?: boolean;
   rotation?: number;
   loyaltyKeepId?: string | null;
@@ -110,7 +111,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   road: { w: 16, h: 16 },
   bridge: { w: 56, h: 20 },
   dock: { w: 40, h: 28 },
-  keep: { w: 800, h: 600 },
+  keep: { w: 320, h: 240 },
 };
 
 /** Snap world coord to fortification cell center. */
@@ -122,6 +123,38 @@ export function fortSnap(n: number): number {
 
 export function fortKey(x: number, y: number): string {
   return `${fortSnap(x)},${fortSnap(y)}`;
+}
+
+export type StairsFacing = 'north' | 'south' | 'east' | 'west';
+
+/** Ground cell center one fort tile from the wall on the given side. */
+export function stairsCellBesideWall(
+  wallX: number,
+  wallY: number,
+  facing: StairsFacing
+): Point {
+  switch (facing) {
+    case 'south':
+      return { x: wallX, y: wallY + FORT_TILE };
+    case 'north':
+      return { x: wallX, y: wallY - FORT_TILE };
+    case 'east':
+      return { x: wallX + FORT_TILE, y: wallY };
+    case 'west':
+      return { x: wallX - FORT_TILE, y: wallY };
+  }
+}
+
+/** True when two world points sit on orthogonally adjacent fort cells. */
+export function isAdjacentFortCell(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): boolean {
+  const dc = Math.abs(fortIndex(ax) - fortIndex(bx));
+  const dr = Math.abs(fortIndex(ay) - fortIndex(by));
+  return dc + dr === 1;
 }
 
 export function footprintAabb(
@@ -171,7 +204,8 @@ export function snapCoord(n: number): number {
 export function textureFor(
   kind: BuildKind,
   closed: boolean,
-  wallMask: number
+  wallMask: number,
+  stairsFacing: StairsFacing = 'south'
 ): string {
   switch (kind) {
     case 'house':
@@ -183,7 +217,7 @@ export function textureFor(
     case 'drawbridge':
       return closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge;
     case 'stairs':
-      return PROP_KEYS.stairs;
+      return stairsTextureKey(stairsFacing);
     case 'field':
       return PROP_KEYS.field;
     case 'granary':

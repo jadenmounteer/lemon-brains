@@ -21,8 +21,16 @@ import {
   KEEP_ID,
   type Aabb,
   type BuildingRecord,
+} from '../buildings/buildingShared';
+import {
   type BuildingSystem,
 } from '../buildings/BuildingSystem';
+import {
+  buildingDoorApproach,
+  interiorWaypoints,
+  isInteriorBuilding,
+  pointInsideFootprint,
+} from '../path/interiorPathRouter';
 import { isDwelling } from '../combat/stats';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
@@ -184,7 +192,8 @@ export class SubjectSystem {
       applyBodyScale: (managed) => this.applyBodyScale(managed),
       nudgeTowardSchedule: (managed) => this.nudgeTowardSchedule(managed),
       roleAtBuildingCap: (role) => this.roleAtBuildingCap(role),
-      openCastleJob: (exceptId) => this.openCastleJob(exceptId),
+      openCastleJob: (exceptId, preferred) =>
+        this.openCastleJob(exceptId, preferred),
       transformRole: (id, role, opts) => this.transformRole(id, role, opts),
       notifyChanged: () => this.notifyChanged(),
       linkRoyalSpouses: () => this.linkRoyalSpousesIfBothPresent(),
@@ -1523,8 +1532,39 @@ export class SubjectSystem {
     this.ensureMarker();
   }
 
-  hireAtBuilding(buildingId: string, role: UnitRole): boolean {
-    return this.spawner.hireAtBuilding(buildingId, role);
+  hireAtBuilding(
+    buildingId: string,
+    role: UnitRole,
+    opts?: { castleJob?: CivilianJob }
+  ): boolean {
+    return this.spawner.hireAtBuilding(buildingId, role, opts);
+  }
+
+  private findInteriorBuildingAt(
+    x: number,
+    y: number
+  ): (BuildingRecord & { kind: BuildingRecord['kind'] | 'keep' }) | null {
+    if (!this.buildings) return null;
+    if (this.buildings.getKeepHp() > 0) {
+      const keepPt = this.buildings.getKeepPoint();
+      if (pointInsideFootprint('keep', keepPt, x, y)) {
+        return {
+          id: KEEP_ID,
+          kind: 'keep',
+          x: keepPt.x,
+          y: keepPt.y,
+        } as BuildingRecord;
+      }
+    }
+    for (const b of this.buildings.list()) {
+      if (
+        isInteriorBuilding(b.kind) &&
+        pointInsideFootprint(b.kind, b, x, y)
+      ) {
+        return b;
+      }
+    }
+    return null;
   }
 
   restore(saved: SavedSubject[]): void {
@@ -2038,6 +2078,56 @@ export class SubjectSystem {
     let x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
     let y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
 
+    const interiorBuilding = this.findInteriorBuildingAt(x, y);
+    if (
+      interiorBuilding &&
+      !pointInsideFootprint(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      )
+    ) {
+      const approach = buildingDoorApproach(
+        interiorBuilding.kind,
+        interiorBuilding
+      );
+      this.nudgeToward(id, approach.x, approach.y, speed, () => {
+        const inner = interiorWaypoints(
+          interiorBuilding.kind,
+          interiorBuilding,
+          approach.x,
+          approach.y,
+          x,
+          y,
+          id
+        );
+        this.followWaypoints(id, inner, speed, onArrive);
+      });
+      return;
+    }
+    if (
+      interiorBuilding &&
+      pointInsideFootprint(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      )
+    ) {
+      const inner = interiorWaypoints(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y,
+        x,
+        y,
+        id
+      );
+      this.followWaypoints(id, inner, speed, onArrive);
+      return;
+    }
+
     // If stranded on water/mountain, teleport onto the nearest open land first
     if (this.pathGrid?.isWorldBlocked(managed.sprite.x, managed.sprite.y)) {
       const safe = this.snapToWalkable(managed.sprite.x, managed.sprite.y);
@@ -2131,6 +2221,27 @@ export class SubjectSystem {
       managed.sprite.setPosition(safe.x, safe.y);
       managed.sprite.setDepth(20 + safe.y * 0.01);
     }
+  }
+
+  private followWaypoints(
+    id: string,
+    points: { x: number; y: number }[],
+    speed: number,
+    onArrive?: () => void
+  ): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || points.length === 0) {
+      onArrive?.();
+      return;
+    }
+    const [next, ...rest] = points;
+    this.tweenMove(managed, next!.x, next!.y, speed, () => {
+      if (rest.length === 0) {
+        onArrive?.();
+      } else {
+        this.followWaypoints(id, rest, speed, onArrive);
+      }
+    });
   }
 
   private tweenMove(
@@ -2450,7 +2561,20 @@ export class SubjectSystem {
     return this.countRole(role) >= totalCap;
   }
 
-  private openCastleJob(exceptId?: string): CivilianJob | null {
+  private openCastleJob(
+    exceptId?: string,
+    preferred?: CivilianJob
+  ): CivilianJob | null {
+    if (preferred) {
+      const cap =
+        CASTLE_JOB_CAPACITY[
+          preferred as keyof typeof CASTLE_JOB_CAPACITY
+        ];
+      const used = this.registry.all.filter(
+        (s) => s.data.job === preferred && s.data.id !== exceptId
+      ).length;
+      return used < cap ? preferred : null;
+    }
     for (const job of CASTLE_JOBS) {
       const cap =
         CASTLE_JOB_CAPACITY[

@@ -46,6 +46,8 @@ export interface SavedBuilding {
   maxHp: number;
   /** Stairs only — wall they snap to */
   attachedWallId?: string;
+  /** Stairs only — ground side / climb direction */
+  stairsFacing?: 'north' | 'south' | 'east' | 'west';
   /** Degrees — bridges use 0 or 90 */
   rotation?: number;
   loyaltyKeepId?: string | null;

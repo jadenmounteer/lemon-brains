@@ -8,6 +8,7 @@ import {
   textureFor,
   WALL_MAX_DRAG_CELLS,
   type BuildingRecord,
+  type StairsFacing,
 } from './buildingShared';
 
 /** Host callbacks for placement commit and validation. */
@@ -27,7 +28,7 @@ export interface BuildingPlacementHost {
   findWallSnap(
     worldX: number,
     worldY: number
-  ): { x: number; y: number; wallId: string } | null;
+  ): { x: number; y: number; wallId: string; facing: StairsFacing } | null;
   findGateSnap(
     worldX: number,
     worldY: number
@@ -43,6 +44,7 @@ export interface BuildingPlacementHost {
       hp?: number;
       maxHp?: number;
       attachedWallId?: string;
+      stairsFacing?: StairsFacing;
       rotation?: number;
       loyaltyKeepId?: string | null;
     }
@@ -74,6 +76,7 @@ export class BuildingPlacement {
   private wallGhostExtras: Phaser.GameObjects.Image[] = [];
   private ghostValid = false;
   private ghostWallId: string | null = null;
+  private ghostStairsFacing: StairsFacing | null = null;
   private ghostReplaceWallId: string | null = null;
   private wallRunPreview: Point[] = [];
   private wallDragStart: Point | null = null;
@@ -207,7 +210,9 @@ export class BuildingPlacement {
       const snap = this.host.findWallSnap(worldX, worldY);
       if (snap) {
         this.ghost.setPosition(snap.x, snap.y);
+        this.ghost.setTexture(textureFor('stairs', false, 0, snap.facing));
         this.ghostWallId = snap.wallId;
+        this.ghostStairsFacing = snap.facing;
         this.ghostValid = this.host.canPlaceAt(
           'stairs',
           snap.x,
@@ -220,6 +225,7 @@ export class BuildingPlacement {
       } else {
         this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
         this.ghostWallId = null;
+        this.ghostStairsFacing = null;
         this.ghostValid = false;
       }
     } else if (kind === 'drawbridge') {
@@ -349,6 +355,10 @@ export class BuildingPlacement {
       }
       this.host.addBuilding(kind, x, y, undefined, {
         attachedWallId: wallId,
+        stairsFacing:
+          kind === 'stairs'
+            ? this.ghostStairsFacing ?? undefined
+            : undefined,
         rotation,
       });
     }

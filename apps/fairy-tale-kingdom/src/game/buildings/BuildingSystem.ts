@@ -51,11 +51,14 @@ import {
   footprintAabb,
   bridgeAabb,
   intersects,
+  isAdjacentFortCell,
   pointInAabb,
+  stairsCellBesideWall,
   textureFor,
   snapCoord,
   type Aabb,
   type BuildingRecord,
+  type StairsFacing,
 } from './buildingShared';
 
 const KEEP_BLURB =
@@ -328,6 +331,7 @@ export class BuildingSystem {
         hp: b.hp,
         maxHp: b.maxHp,
         attachedWallId: b.attachedWallId,
+        stairsFacing: b.stairsFacing,
         rotation: b.rotation,
         loyaltyKeepId: b.loyaltyKeepId,
       });
@@ -350,6 +354,7 @@ export class BuildingSystem {
       hp: b.hp,
       maxHp: b.maxHp,
       attachedWallId: b.attachedWallId,
+      stairsFacing: b.stairsFacing,
       rotation: b.rotation,
       loyaltyKeepId: b.loyaltyKeepId ?? null,
     }));
@@ -1421,6 +1426,7 @@ export class BuildingSystem {
       hp?: number;
       maxHp?: number;
       attachedWallId?: string;
+      stairsFacing?: StairsFacing;
       rotation?: number;
       loyaltyKeepId?: string | null;
     }
@@ -1443,14 +1449,18 @@ export class BuildingSystem {
     const px = isFortKind(kind) ? fortSnap(x) : x;
     const py = isFortKind(kind) ? fortSnap(y) : y;
     const rotation = kind === 'bridge' ? opts?.rotation ?? 0 : undefined;
+    const stairsFacing =
+      kind === 'stairs' ? opts?.stairsFacing ?? 'south' : undefined;
     const tex =
       kind === 'bridge' && rotation === 90
         ? PROP_KEYS.bridgeV
-        : textureFor(kind, Boolean(closed), 0);
+        : kind === 'stairs'
+          ? textureFor(kind, false, 0, stairsFacing)
+          : textureFor(kind, Boolean(closed), 0);
     const sprite = this.scene.add
       .image(px, py, tex)
       .setDepth(kind === 'wall' || kind === 'stairs' || kind === 'watchtower' ? 9 : 8)
-      .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85);
+      .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' || kind === 'stairs' ? 0.75 : 0.85);
     this.makeInteractive(sprite, id);
     let interiorSprite: Phaser.GameObjects.Image | undefined;
     let hearthSprite: Phaser.GameObjects.Sprite | undefined;
@@ -1477,6 +1487,7 @@ export class BuildingSystem {
       hearthSprite,
       labelIndex: 0,
       attachedWallId: opts?.attachedWallId,
+      stairsFacing,
       closed,
       rotation,
       loyaltyKeepId:
@@ -1661,19 +1672,7 @@ export class BuildingSystem {
     }
     if (bestGap) return bestGap;
 
-    // No gap: snap onto the nearest wall segment and replace it with a gate.
-    let bestWall: BuildingRecord | null = null;
-    let bestWallD = GATE_SNAP_DIST;
-    for (const w of this.buildings) {
-      if (w.kind !== 'wall') continue;
-      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
-      if (d < bestWallD) {
-        bestWallD = d;
-        bestWall = w;
-      }
-    }
-    if (!bestWall) return null;
-    return { x: bestWall.x, y: bestWall.y, replaceWallId: bestWall.id };
+    return null;
   }
 
   private snapOrphanDrawbridges(): void {
@@ -1689,23 +1688,34 @@ export class BuildingSystem {
   }
 
   /**
-   * Stairs mount flush on the wall segment (same fort cell), with steps on the exterior face.
+   * Stairs snap to the fort cell beside a wall segment (exterior ground side).
    */
   findWallSnap(
     worldX: number,
     worldY: number
-  ): { x: number; y: number; wallId: string } | null {
-    let best: { x: number; y: number; wallId: string } | null = null;
+  ): { x: number; y: number; wallId: string; facing: StairsFacing } | null {
+    let bestWall: BuildingRecord | null = null;
     let bestD = STAIR_SNAP_DIST;
     for (const w of this.buildings) {
       if (w.kind !== 'wall') continue;
       const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
       if (d < bestD) {
         bestD = d;
-        best = { x: w.x, y: w.y, wallId: w.id };
+        bestWall = w;
       }
     }
-    return best;
+    if (!bestWall) return null;
+
+    const dx = worldX - bestWall.x;
+    const dy = worldY - bestWall.y;
+    let facing: StairsFacing;
+    if (Math.abs(dx) > Math.abs(dy)) {
+      facing = dx > 0 ? 'east' : 'west';
+    } else {
+      facing = dy > 0 ? 'south' : 'north';
+    }
+    const cell = stairsCellBesideWall(bestWall.x, bestWall.y, facing);
+    return { x: cell.x, y: cell.y, wallId: bestWall.id, facing };
   }
 
   private tileAt(worldX: number, worldY: number): number | null {
@@ -1802,7 +1812,8 @@ export class BuildingSystem {
     if (kind === 'stairs' && wallId) {
       const wall = this.getById(wallId);
       if (!wall || wall.kind !== 'wall') return false;
-      if (fortKey(wall.x, wall.y) !== fortKey(x, y)) return false;
+      if (!isAdjacentFortCell(x, y, wall.x, wall.y)) return false;
+      if (this.wallAt(x, y)) return false;
       const hasStairs = this.buildings.some(
         (s) => s.kind === 'stairs' && s.attachedWallId === wallId
       );

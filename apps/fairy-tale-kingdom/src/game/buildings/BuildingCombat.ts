@@ -1,7 +1,12 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '../art/assetManifest';
-import { isBlockingKind, isBurnable, isFortKind } from '../combat/stats';
+import { isBlockingKind, isBurnable, isFortKind, hasInterior } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
+import {
+  buildingDoorApproach,
+  buildingDoorThreshold,
+  buildingDoorWorld,
+} from '../path/interiorPathRouter';
 import type { SiegeVfx } from '../siege/SiegeVfx';
 import { KingdomEvents } from '../subjects/events';
 import type { BuildKind } from '../../marketplace/catalog';
@@ -64,6 +69,19 @@ export class BuildingCombat {
       }
       if (isBlockingKind(b.kind, Boolean(b.closed))) {
         this.host.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
+      } else if (hasInterior(b.kind)) {
+        this.host.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
+        const origin = { x: b.x, y: b.y };
+        const approach = buildingDoorApproach(b.kind, origin);
+        const threshold = buildingDoorThreshold(b.kind, origin);
+        const door = buildingDoorWorld(b.kind, origin);
+        for (const pt of [approach, door, threshold]) {
+          for (let dy = -16; dy <= 16; dy += 8) {
+            for (let dx = -20; dx <= 20; dx += 8) {
+              this.host.pathGrid.clearBlockedAtWorld(pt.x + dx, pt.y + dy);
+            }
+          }
+        }
       }
     }
   }

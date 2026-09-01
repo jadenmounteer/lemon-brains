@@ -64,7 +64,7 @@ export type SubjectSpawnerDeps = {
   applyBodyScale: (managed: ManagedSubject) => void;
   nudgeTowardSchedule: (managed: ManagedSubject) => void;
   roleAtBuildingCap: (role: UnitRole) => boolean;
-  openCastleJob: (exceptId?: string) => CivilianJob | null;
+  openCastleJob: (exceptId?: string, preferred?: CivilianJob) => CivilianJob | null;
   transformRole: (
     id: string,
     role: UnitRole,
@@ -283,7 +283,11 @@ export class SubjectSpawner {
     this.deps.notifyChanged();
   }
 
-  hireAtBuilding(buildingId: string, role: UnitRole): boolean {
+  hireAtBuilding(
+    buildingId: string,
+    role: UnitRole,
+    opts?: { castleJob?: CivilianJob }
+  ): boolean {
     const buildings = this.deps.getBuildings();
     if (!buildings) return false;
 
@@ -331,7 +335,11 @@ export class SubjectSpawner {
       this.toast(`No free posts for a ${roleLabel(role)} — expand capacity`);
       return false;
     }
-    if (role === 'peasant' && target.kind === 'keep' && !this.deps.openCastleJob()) {
+    if (
+      role === 'peasant' &&
+      target.kind === 'keep' &&
+      !this.deps.openCastleJob(undefined, opts?.castleJob)
+    ) {
       this.toast('No open castle staff posts at this keep');
       return false;
     }
@@ -398,7 +406,8 @@ export class SubjectSpawner {
     const managed = this.deps.registry.getById(id)!;
     managed.data.workplaceId = target.id;
     if (role === 'peasant' && target.kind === 'keep') {
-      const castleJob = this.deps.openCastleJob(managed.data.id);
+      const castleJob =
+        opts?.castleJob ?? this.deps.openCastleJob(managed.data.id);
       if (castleJob) managed.data.job = castleJob;
     } else {
       const job = civilianJobForBuilding(target.kind);

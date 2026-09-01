@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CurriculumRegistry } from '@knowledge-quest/learning';
+import { encodeLaunchSettings } from '@knowledge-quest/storage';
 import { environment } from '../../../environments/environment';
 import { SettingsService } from '../../services/settings.service';
 
@@ -60,10 +61,10 @@ export class GamesComponent {
     if (!game.enabled || !game.url || !this.canPlay) {
       return;
     }
-    await this.settingsService.updateSettings(
-      this.settingsService.getCurrentSettings()
-    );
+    const current = this.settingsService.getCurrentSettings();
+    await this.settingsService.updateSettings(current);
     const separator = game.url.includes('?') ? '&' : '?';
-    window.location.href = `${game.url}${separator}game=${encodeURIComponent(game.id)}`;
+    const settingsParam = encodeLaunchSettings(current);
+    window.location.href = `${game.url}${separator}game=${encodeURIComponent(game.id)}&kqSettings=${settingsParam}`;
   }
 }

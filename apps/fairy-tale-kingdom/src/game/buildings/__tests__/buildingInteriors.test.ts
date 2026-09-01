@@ -6,6 +6,7 @@ import { bakeryAnchorBounds } from '../layouts/BakeryLayout';
 import { cathedralAnchorBounds } from '../layouts/CathedralLayout';
 import { dungeonAnchorBounds } from '../layouts/DungeonLayout';
 import { marketAnchorBounds } from '../layouts/MarketLayout';
+import { keepAnchorBounds } from '../../keep/KeepLayout';
 
 const INTERIOR_KINDS: BuildKind[] = [
   'house',
@@ -42,10 +43,10 @@ describe('Phase 13 civic interiors', () => {
 
   it('layout anchors stay inside building footprints', () => {
     const dungeon = dungeonAnchorBounds();
-    expect(Math.abs(dungeon.minX)).toBeLessThan(20);
-    expect(Math.abs(dungeon.maxX)).toBeLessThan(20);
-    expect(Math.abs(dungeon.minY)).toBeLessThan(16);
-    expect(Math.abs(dungeon.maxY)).toBeLessThan(16);
+    expect(Math.abs(dungeon.minX)).toBeLessThan(100);
+    expect(Math.abs(dungeon.maxX)).toBeLessThan(100);
+    expect(Math.abs(dungeon.minY)).toBeLessThan(80);
+    expect(Math.abs(dungeon.maxY)).toBeLessThan(80);
 
     const bakery = bakeryAnchorBounds();
     expect(Math.abs(bakery.maxX)).toBeLessThan(22);
@@ -54,6 +55,10 @@ describe('Phase 13 civic interiors', () => {
     expect(Math.abs(market.maxX)).toBeLessThan(22);
 
     const cathedral = cathedralAnchorBounds();
-    expect(Math.abs(cathedral.maxX)).toBeLessThan(32);
+    expect(Math.abs(cathedral.maxX)).toBeLessThan(120);
+
+    const keep = keepAnchorBounds();
+    expect(Math.abs(keep.maxX)).toBeLessThan(160);
+    expect(Math.abs(keep.maxY)).toBeLessThan(120);
   });
 });

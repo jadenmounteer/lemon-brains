@@ -1,0 +1,17 @@
+{
+  "/games/fairy-tale-kingdom": {
+    "target": "http://localhost:4400",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true
+  },
+  "/games/lemon-brains": {
+    "target": "http://localhost:4200",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true,
+    "pathRewrite": {
+      "^/games/lemon-brains": ""
+    }
+  }
+}

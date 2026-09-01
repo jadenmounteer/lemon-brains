@@ -3,6 +3,7 @@ import type { AppSettings } from '@knowledge-quest/learning';
 import { DEFAULT_APP_SETTINGS } from '@knowledge-quest/learning';
 import {
   LocalStorageAdapter,
+  readLaunchSettingsFromUrl,
   SettingsRepository,
   SETTINGS_STORAGE_KEY,
 } from '@knowledge-quest/storage';
@@ -32,6 +33,13 @@ export function useKnowledgeQuestSettings() {
   const [ready, setReady] = useState(false);
 
   const reload = useCallback(async () => {
+    const fromLaunch = readLaunchSettingsFromUrl();
+    if (fromLaunch) {
+      await repository.save(fromLaunch);
+      setSettings(fromLaunch);
+      setReady(true);
+      return fromLaunch;
+    }
     const loaded = await repository.load();
     setSettings(loaded);
     setReady(true);
@@ -52,10 +60,15 @@ export function useKnowledgeQuestSettings() {
         void reload();
       }
     };
+    const onFocus = () => {
+      void reload();
+    };
     window.addEventListener('storage', onStorage);
+    window.addEventListener('focus', onFocus);
     return () => {
       cancelled = true;
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('focus', onFocus);
     };
   }, [reload]);
 

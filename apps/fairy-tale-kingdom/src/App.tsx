@@ -199,7 +199,12 @@ export default function App() {
   );
 
   const handleTrainAtBuilding = useCallback(
-    async (buildingId: string, role: UnitRole, building: BuildingSnapshot) => {
+    async (
+      buildingId: string,
+      role: UnitRole,
+      building: BuildingSnapshot,
+      castleJob?: import('./game/jobs/capacities').CivilianJob
+    ) => {
       const workersAtBuilding =
         building.workers?.filter((w) => w.role === role).length ?? 0;
       const royalUsedAtKeep =
@@ -225,6 +230,7 @@ export default function App() {
         seq: nextCommandSeq(),
         buildingId,
         role,
+        castleJob,
       });
     },
     [flash, sandboxSettings.units.kinds, sendCommand, spend, stats]
@@ -872,11 +878,12 @@ export default function App() {
                   infiniteGold={infiniteGold}
                   stats={stats}
                   enabledRoles={sandboxSettings.units.kinds}
-                  onTrain={(buildingId, role) => {
+                  onTrain={(buildingId, role, castleJob) => {
                     void handleTrainAtBuilding(
                       buildingId,
                       role,
-                      selectedBuilding
+                      selectedBuilding,
+                      castleJob
                     );
                   }}
                   onClose={() => {

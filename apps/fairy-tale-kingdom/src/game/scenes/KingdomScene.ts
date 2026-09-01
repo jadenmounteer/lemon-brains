@@ -45,6 +45,7 @@ import {
   type TransformPeasantPayload,
 } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
+import { jobLabel } from '../jobs/capacities';
 import { roleLabel } from '../subjects/schedules';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 import { TaskSystem } from '../subjects/TaskSystem';
@@ -1054,12 +1055,17 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private onTrainAtBuilding = (payload: TrainAtBuildingPayload) => {
-    const ok = this.subjects.hireAtBuilding(payload.buildingId, payload.role);
+    const ok = this.subjects.hireAtBuilding(payload.buildingId, payload.role, {
+      castleJob: payload.castleJob,
+    });
     if (ok) {
       this.world.emitStats();
       this.world.schedulePersist();
+      const label = payload.castleJob
+        ? jobLabel(payload.castleJob)
+        : roleLabel(payload.role);
       this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: `Trained a ${roleLabel(payload.role)}`,
+        message: `Trained a ${label}`,
       });
     }
   };

@@ -1,6 +1,6 @@
 /** Relative room map for the enlarged keep (origin = keep sprite center). */
 
-export const KEEP_FOOTPRINT = { w: 800, h: 600 } as const;
+export const KEEP_FOOTPRINT = { w: 320, h: 240 } as const;
 
 export type KeepRoomId =
   | 'gate'
@@ -27,18 +27,18 @@ export const KEEP_ROOM_IDS: KeepRoomId[] = [
   'armory_nook',
 ];
 
-/** Room centers as offsets from keep origin (sprite center) — scaled for 800×600 keep. */
+/** Room centers as offsets from keep origin (sprite center) — scaled for 320×240 keep. */
 const ROOM_OFFSETS: Record<KeepRoomId, { x: number; y: number; r: number }> = {
-  gate: { x: 0, y: 240, r: 70 },
-  courtyard: { x: 0, y: 140, r: 110 },
-  great_hall: { x: -40, y: -40, r: 90 },
-  banquet: { x: 180, y: 20, r: 80 },
-  kitchen: { x: 260, y: -140, r: 70 },
-  servants: { x: -260, y: 100, r: 60 },
-  chambers: { x: -200, y: -180, r: 70 },
-  solar: { x: 40, y: -220, r: 60 },
-  chapel_nook: { x: -280, y: -100, r: 50 },
-  armory_nook: { x: 240, y: 160, r: 60 },
+  gate: { x: 0, y: 94, r: 24 },
+  courtyard: { x: 0, y: 56, r: 44 },
+  great_hall: { x: -16, y: -16, r: 36 },
+  banquet: { x: 72, y: 8, r: 32 },
+  kitchen: { x: 104, y: -56, r: 28 },
+  servants: { x: -104, y: 40, r: 24 },
+  chambers: { x: -80, y: -72, r: 28 },
+  solar: { x: 16, y: -88, r: 24 },
+  chapel_nook: { x: -112, y: -40, r: 20 },
+  armory_nook: { x: 96, y: 64, r: 24 },
 };
 
 const ROOM_LABELS: Record<KeepRoomId, string> = {
@@ -142,4 +142,20 @@ export function defaultRoomForActivity(
     default:
       return 'great_hall';
   }
+}
+
+/** All room anchor offsets must stay inside the keep footprint (320×240). */
+export function keepAnchorBounds(): {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} {
+  const pts = Object.values(ROOM_OFFSETS);
+  return {
+    minX: Math.min(...pts.map((p) => p.x - p.r)),
+    maxX: Math.max(...pts.map((p) => p.x + p.r)),
+    minY: Math.min(...pts.map((p) => p.y - p.r)),
+    maxY: Math.max(...pts.map((p) => p.y + p.r)),
+  };
 }

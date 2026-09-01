@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { WallPathGrid } from '../WallPathGrid';
-import { fortCenter } from '../../buildings/buildingShared';
+import { FORT_TILE, fortCenter } from '../../buildings/buildingShared';
 
 describe('WallPathGrid', () => {
   it('paths along an L-shaped wall', () => {
@@ -32,8 +32,8 @@ describe('WallPathGrid', () => {
     const grid = new WallPathGrid();
     const wx = fortCenter(5);
     const wy = fortCenter(5);
-    const sx = fortCenter(6);
-    const sy = fortCenter(5);
+    const sx = wx;
+    const sy = wy + FORT_TILE;
 
     grid.rebuild({
       walls: [{ id: 'wall-a', x: wx, y: wy, kind: 'wall' }],
@@ -59,8 +59,8 @@ describe('WallPathGrid', () => {
     const grid = new WallPathGrid();
     const wx = fortCenter(1);
     const wy = fortCenter(1);
-    const sx = fortCenter(2);
-    const sy = fortCenter(1);
+    const sx = wx;
+    const sy = wy + FORT_TILE;
 
     grid.rebuild({
       walls: [{ id: 'w', x: wx, y: wy, kind: 'wall' }],
@@ -69,7 +69,7 @@ describe('WallPathGrid', () => {
       ],
     });
 
-    const portal = grid.stairsPortalNear(sx, sy, 24);
+    const portal = grid.stairsPortalNear(sx, sy, 64);
     expect(portal?.stairsId).toBe('s');
     expect(portal?.wallId).toBe('w');
   });

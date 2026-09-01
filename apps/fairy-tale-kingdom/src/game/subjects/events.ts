@@ -1,4 +1,5 @@
 import type { UnitRole } from '../art/assetManifest';
+import type { CivilianJob } from '../jobs/capacities';
 import type { BuildKind, NavalKind } from '../../marketplace/catalog';
 import type { SandboxSpawnAction } from '../../kingdom/sandboxSettings';
 import type {
@@ -192,6 +193,7 @@ export interface CameraZoomPayload {
 export interface TrainAtBuildingPayload {
   buildingId: string;
   role: UnitRole;
+  castleJob?: CivilianJob;
 }
 
 export interface GrantFamilyPayload {
