@@ -6,8 +6,10 @@ import {
   buildingDoorWorld,
 } from '../buildings/layouts/buildingDoors';
 import { footprintAabb } from '../buildings/buildingShared';
+import { InteriorNavGrid } from './InteriorNavGrid';
 import { roomPoint, type KeepRoomId } from '../keep/KeepLayout';
 import type { Point } from '../subjects/zones';
+import { dedupePoints } from './interiorPathfind';
 
 const INTERIOR_KINDS: (BuildKind | 'keep')[] = [
   'keep',
@@ -19,6 +21,12 @@ const INTERIOR_KINDS: (BuildKind | 'keep')[] = [
   'bakery',
   'market',
   'infirmary',
+  'granary',
+  'barracks',
+  'cemetery',
+  'gallows',
+  'dock',
+  'watchtower',
 ];
 
 export function isInteriorBuilding(kind: BuildKind | 'keep'): boolean {
@@ -125,18 +133,21 @@ export function nearestKeepRoom(
   return best;
 }
 
-function dedupeWaypoints(points: Point[]): Point[] {
-  const out: Point[] = [];
-  for (const p of points) {
-    const last = out[out.length - 1];
-    if (last && Math.hypot(last.x - p.x, last.y - p.y) < 6) continue;
-    out.push(p);
-  }
-  return out;
+function navPathSegment(
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number },
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number
+): Point[] {
+  const grid = InteriorNavGrid.forKind(kind);
+  if (!grid) return [{ x: toX, y: toY }];
+  return grid.findPath(origin, kind, fromX, fromY, toX, toY);
 }
 
 /**
- * Waypoints for moving inside a large building — outdoor callers should path to the door first.
+ * Waypoints for moving inside a building — outdoor callers should path to the door first.
  */
 export function interiorWaypoints(
   kind: BuildKind | 'keep',
@@ -150,10 +161,17 @@ export function interiorWaypoints(
   const threshold = buildingDoorThreshold(kind, origin);
   const insideTarget = { x: toX, y: toY };
   const outside = !pointInsideFootprint(kind, origin, fromX, fromY);
+  const targetOutside = !pointInsideFootprint(kind, origin, toX, toY);
   const waypoints: Point[] = [];
 
   if (outside) {
     waypoints.push(threshold);
+  }
+
+  if (targetOutside && !outside) {
+    waypoints.push(threshold);
+    waypoints.push(buildingDoorApproach(kind, origin));
+    return dedupePoints(waypoints);
   }
 
   if (kind === 'keep') {
@@ -161,31 +179,62 @@ export function interiorWaypoints(
       ? 'gate'
       : nearestKeepRoom(origin, fromX, fromY);
     const toRoom = nearestKeepRoom(origin, toX, toY);
-    const roomPath = keepRoomPath(origin, fromRoom, toRoom, subjectId);
-    if (!outside) {
-      waypoints.push(threshold);
+    const roomCenters = keepRoomPath(origin, fromRoom, toRoom, subjectId);
+    let prevX = outside ? threshold.x : fromX;
+    let prevY = outside ? threshold.y : fromY;
+    for (const room of roomCenters) {
+      const seg = navPathSegment(
+        kind,
+        origin,
+        prevX,
+        prevY,
+        room.x,
+        room.y
+      );
+      waypoints.push(...seg);
+      prevX = room.x;
+      prevY = room.y;
     }
-    waypoints.push(...roomPath);
-    if (
-      waypoints.length === 0 ||
-      Math.hypot(
-        waypoints[waypoints.length - 1]!.x - insideTarget.x,
-        waypoints[waypoints.length - 1]!.y - insideTarget.y
-      ) > 8
-    ) {
-      waypoints.push(insideTarget);
-    }
-    return dedupeWaypoints(waypoints);
+    const finalSeg = navPathSegment(
+      kind,
+      origin,
+      prevX,
+      prevY,
+      insideTarget.x,
+      insideTarget.y
+    );
+    waypoints.push(...finalSeg);
+    return dedupePoints(waypoints);
   }
 
-  if (kind === 'cathedral' || kind === 'dungeon') {
-    if (!outside) {
-      waypoints.push(buildingDoorWorld(kind, origin));
-    }
-    waypoints.push(insideTarget);
-    return dedupeWaypoints(waypoints);
+  const nav = InteriorNavGrid.forKind(kind);
+  if (nav) {
+    const startX = outside ? threshold.x : fromX;
+    const startY = outside ? threshold.y : fromY;
+    const path = nav.findPath(
+      origin,
+      kind,
+      startX,
+      startY,
+      insideTarget.x,
+      insideTarget.y
+    );
+    waypoints.push(...path);
+    return dedupePoints(waypoints);
   }
 
   waypoints.push(insideTarget);
-  return dedupeWaypoints(waypoints);
+  return dedupePoints(waypoints);
+}
+
+/** Snap a world point to the nearest walkable interior cell. */
+export function snapInteriorPoint(
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number },
+  wx: number,
+  wy: number
+): Point {
+  const nav = InteriorNavGrid.forKind(kind);
+  if (!nav) return { x: wx, y: wy };
+  return nav.nearestWalkable(origin, kind, wx, wy);
 }

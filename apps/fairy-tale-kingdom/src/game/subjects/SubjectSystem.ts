@@ -31,8 +31,9 @@ import {
   interiorWaypoints,
   isInteriorBuilding,
   pointInsideFootprint,
+  snapInteriorPoint,
 } from '../path/interiorPathRouter';
-import { isDwelling } from '../combat/stats';
+import { hasInterior, isDwelling } from '../combat/stats';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
 import {
@@ -1673,6 +1674,21 @@ export class SubjectSystem {
     return this.registry.list();
   }
 
+  campMemberNear(
+    campId: string,
+    x: number,
+    y: number,
+    radius: number
+  ): boolean {
+    const houseId = `camp:${campId}`;
+    for (const s of this.registry.all) {
+      if (s.data.houseId !== houseId) continue;
+      const d = Phaser.Math.Distance.Between(s.sprite.x, s.sprite.y, x, y);
+      if (d < radius) return true;
+    }
+    return false;
+  }
+
   residentsOf(houseId: string): BuildingResident[] {
     return this.registry.residentsOf(houseId);
   }
@@ -2107,7 +2123,39 @@ export class SubjectSystem {
     let x = Phaser.Math.Clamp(targetX, pad, this.world.width - pad);
     let y = Phaser.Math.Clamp(targetY, pad, this.world.height - pad);
 
-    const interiorBuilding = this.findInteriorBuildingAt(x, y);
+    const currentInterior = this.findInteriorBuildingAt(
+      managed.sprite.x,
+      managed.sprite.y
+    );
+    const targetInterior = this.findInteriorBuildingAt(x, y);
+    const leavingInterior =
+      currentInterior &&
+      (!targetInterior ||
+        targetInterior.id !== currentInterior.id ||
+        !pointInsideFootprint(
+          currentInterior.kind,
+          currentInterior,
+          x,
+          y
+        ));
+
+    if (leavingInterior) {
+      const exitPath = interiorWaypoints(
+        currentInterior!.kind,
+        currentInterior!,
+        managed.sprite.x,
+        managed.sprite.y,
+        x,
+        y,
+        id
+      );
+      this.followWaypoints(id, exitPath, speed, () => {
+        this.nudgeToward(id, targetX, targetY, speed, onArrive);
+      });
+      return;
+    }
+
+    const interiorBuilding = targetInterior;
     if (
       interiorBuilding &&
       !pointInsideFootprint(
@@ -2467,7 +2515,23 @@ export class SubjectSystem {
     );
     const px = x + off.x;
     const py = y + off.y + (opts?.indoor ? 6 : 0);
-    if (opts?.indoor) return { x: px, y: py };
+    if (opts?.indoor && this.buildings) {
+      for (const b of this.buildings.list()) {
+        if (
+          hasInterior(b.kind) &&
+          pointInsideFootprint(b.kind, b, px, py)
+        ) {
+          return snapInteriorPoint(b.kind, b, px, py);
+        }
+      }
+      if (this.buildings.getKeepHp() > 0) {
+        const keep = this.buildings.getKeepPoint();
+        if (pointInsideFootprint('keep', keep, px, py)) {
+          return snapInteriorPoint('keep', keep, px, py);
+        }
+      }
+      return { x: px, y: py };
+    }
     return this.snapToWalkable(px, py);
   }
 
@@ -2537,10 +2601,11 @@ export class SubjectSystem {
     const innerH = Math.max(8, box.bottom - box.top - padTop - padBottom);
     const x = box.left + padX + ((col + 0.5) / cols) * innerW;
     const y = box.top + padTop + ((row + 0.55) / rows) * innerH;
-    return {
+    const raw = {
       x: Phaser.Math.Clamp(x, box.left + padX, box.right - padX),
       y: Phaser.Math.Clamp(y, box.top + padTop, box.bottom - padBottom),
     };
+    return snapInteriorPoint(kind!, { x: hx, y: hy }, raw.x, raw.y);
   }
 
   /** True when the subject's feet are inside their home footprint. */

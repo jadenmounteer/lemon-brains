@@ -946,6 +946,7 @@ export class KingdomScene extends Phaser.Scene {
       this.security?.clear();
     }
     this.buildings?.updateInteriors(this.subjects.unitBodies());
+    this.encampments?.updateCampInteriors();
     this.undead?.updateCastleInteriors(this.subjects.unitBodies());
     this.applyNightOverlay();
     this.updateFollowCam(delta);

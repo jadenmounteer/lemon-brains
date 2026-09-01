@@ -13,6 +13,7 @@ import { pickCampRaidLine, planSiege } from './GeneralStrategy';
 import { WarBalance, type CampKind } from './WarBalance';
 import { getSandboxRuntime } from '../sandboxRuntime';
 import { getModeProfile } from '../core/modeRuntime';
+import { campObstacleBoxes, isLivingCamp } from './campLayout';
 
 export type { CampSnapshot };
 
@@ -58,6 +59,7 @@ interface CampRecord {
   maxSupply: number;
   reinforceMs: number;
   sprite: Phaser.GameObjects.Image;
+  interiorSprite?: Phaser.GameObjects.Image;
   supplyBg?: Phaser.GameObjects.Rectangle;
   supplyFill?: Phaser.GameObjects.Rectangle;
   generalName?: string;
@@ -211,6 +213,36 @@ export class EncampmentSystem {
 
   setPathGrid(g: PathGrid): void {
     this.pathGrid = g;
+    this.rebuildCampObstacles();
+  }
+
+  /** Block tent/fence cells so wanderers path around camp props. */
+  rebuildCampObstacles(): void {
+    if (!this.pathGrid) return;
+    for (const camp of this.camps) {
+      for (const box of campObstacleBoxes(camp.kind, camp.x, camp.y)) {
+        this.pathGrid.markAabbBlocked(box);
+      }
+      if (isLivingCamp(camp.kind)) {
+        this.pathGrid.clearBlockedAtWorld(camp.x, camp.y - 8);
+      }
+    }
+  }
+
+  /** Show tent interior when a camp member is home. */
+  updateCampInteriors(): void {
+    if (!this.subjects) return;
+    for (const camp of this.camps) {
+      if (!camp.interiorSprite || !isLivingCamp(camp.kind)) continue;
+      const home = this.subjects.campMemberNear(
+        camp.id,
+        camp.x,
+        camp.y - 12,
+        36
+      );
+      camp.sprite.setVisible(!home);
+      camp.interiorSprite.setVisible(home);
+    }
   }
 
   setMapData(mapData: number[][]): void {
@@ -1433,6 +1465,23 @@ export class EncampmentSystem {
     sprite.setDepth(8);
     sprite.setOrigin(0.5, 1);
 
+    let interiorSprite: Phaser.GameObjects.Image | undefined;
+    if (isLivingCamp(kind)) {
+      const intKey =
+        kind === 'bandit'
+          ? PROP_KEYS.banditCampInterior
+          : kind === 'thief'
+            ? PROP_KEYS.thiefDenInterior
+            : PROP_KEYS.gypsyCampInterior;
+      if (this.scene.textures.exists(intKey)) {
+        interiorSprite = this.scene.add
+          .image(x, y - 4, intKey)
+          .setDepth(7)
+          .setOrigin(0.5, 0.85)
+          .setVisible(false);
+      }
+    }
+
     const maxSupply = opts?.maxSupply ?? (kind === 'siege' ? WarBalance.siegeMaxSupply(this.daysPlayed) : 0);
     const supply = opts?.supply ?? maxSupply;
     const garrison = opts?.garrison ?? 1;
@@ -1451,6 +1500,7 @@ export class EncampmentSystem {
       maxSupply,
       reinforceMs: WarBalance.siegeReinforceMs(this.daysPlayed),
       sprite,
+      interiorSprite,
       generalName: opts?.generalName ?? this.generateLeaderName(kind),
       supplyToastShown: supply <= 0,
       roster: opts?.roster ? opts.roster.map((u) => ({ ...u })) : [],
@@ -1461,6 +1511,7 @@ export class EncampmentSystem {
     };
 
     this.camps.push(camp);
+    this.rebuildCampObstacles();
 
     if (!opts?.roster) {
       if (isLivingCampKind(kind) && this.subjects) {

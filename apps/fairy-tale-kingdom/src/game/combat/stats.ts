@@ -171,6 +171,12 @@ export function hasInterior(kind: BuildKind | 'keep'): boolean {
     kind === 'infirmary' ||
     kind === 'dungeon' ||
     kind === 'bakery' ||
-    kind === 'market'
+    kind === 'market' ||
+    kind === 'granary' ||
+    kind === 'barracks' ||
+    kind === 'watchtower' ||
+    kind === 'dock' ||
+    kind === 'cemetery' ||
+    kind === 'gallows'
   );
 }

@@ -57,6 +57,22 @@ export class BuildingCombat {
   rebuildPathGrid(): void {
     if (!this.host.pathGrid) return;
     this.host.pathGrid.clear();
+    if (this.host.keepHp > 0) {
+      this.host.pathGrid.markAabbBlocked(
+        footprintAabb('keep', this.host.keep.x, this.host.keep.y)
+      );
+      const keepOrigin = { x: this.host.keep.x, y: this.host.keep.y };
+      const approach = buildingDoorApproach('keep', keepOrigin);
+      const threshold = buildingDoorThreshold('keep', keepOrigin);
+      const door = buildingDoorWorld('keep', keepOrigin);
+      for (const pt of [approach, door, threshold]) {
+        for (let dy = -16; dy <= 16; dy += 8) {
+          for (let dx = -20; dx <= 20; dx += 8) {
+            this.host.pathGrid.clearBlockedAtWorld(pt.x + dx, pt.y + dy);
+          }
+        }
+      }
+    }
     for (const b of this.host.buildings) {
       if (b.kind === 'bridge') {
         const box = bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0));

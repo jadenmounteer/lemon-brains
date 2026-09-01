@@ -48,6 +48,39 @@ describe('interiorPathRouter', () => {
     );
   });
 
+  it('house interior path has multiple waypoints avoiding walls', () => {
+    const threshold = buildingDoorThreshold('house', origin);
+    const target = { x: origin.x - 12, y: origin.y - 20 };
+    const points = interiorWaypoints(
+      'house',
+      origin,
+      origin.x,
+      origin.y + 40,
+      target.x,
+      target.y,
+      'test'
+    );
+    expect(points.length).toBeGreaterThan(1);
+    expect(points[0]!.y).toBeCloseTo(threshold.y, 0);
+  });
+
+  it('exiting house routes through door', () => {
+    const points = interiorWaypoints(
+      'house',
+      origin,
+      origin.x,
+      origin.y - 10,
+      origin.x,
+      origin.y + 50,
+      'test'
+    );
+    expect(points.length).toBeGreaterThanOrEqual(2);
+    const approach = buildingDoorApproach('house', origin);
+    expect(points.some((p) => Math.hypot(p.x - approach.x, p.y - approach.y) < 12)).toBe(
+      true
+    );
+  });
+
   it('all hasInterior kinds resolve door positions', () => {
     const kinds = [
       'house',

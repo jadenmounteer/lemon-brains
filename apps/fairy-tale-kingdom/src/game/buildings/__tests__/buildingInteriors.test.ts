@@ -7,6 +7,7 @@ import { cathedralAnchorBounds } from '../layouts/CathedralLayout';
 import { dungeonAnchorBounds } from '../layouts/DungeonLayout';
 import { marketAnchorBounds } from '../layouts/MarketLayout';
 import { keepAnchorBounds } from '../../keep/KeepLayout';
+import { getInteriorNavSpec } from '../layouts/InteriorLayoutRegistry';
 
 const INTERIOR_KINDS: BuildKind[] = [
   'house',
@@ -17,28 +18,39 @@ const INTERIOR_KINDS: BuildKind[] = [
   'dungeon',
   'bakery',
   'market',
+  'granary',
+  'barracks',
+  'watchtower',
+  'dock',
+  'cemetery',
+  'gallows',
 ];
 
 const INTERIOR_KEYS: Partial<Record<BuildKind | 'keep', string>> = {
   house: PROP_KEYS.houseInterior,
-  manor: PROP_KEYS.houseInterior,
+  manor: PROP_KEYS.manorInterior,
   tavern: PROP_KEYS.tavernInterior,
   cathedral: PROP_KEYS.cathedralInterior,
   infirmary: PROP_KEYS.infirmaryInterior,
   dungeon: PROP_KEYS.dungeonInterior,
   bakery: PROP_KEYS.bakeryInterior,
   market: PROP_KEYS.marketInterior,
+  granary: PROP_KEYS.granaryInterior,
+  barracks: PROP_KEYS.barracksInterior,
+  watchtower: PROP_KEYS.watchtowerInterior,
+  dock: PROP_KEYS.dockInterior,
+  cemetery: PROP_KEYS.cemeteryInterior,
+  gallows: PROP_KEYS.gallowsInterior,
   keep: PROP_KEYS.keepInterior,
 };
 
-describe('Phase 13 civic interiors', () => {
-  it('hasInterior matches texture keys for civic buildings', () => {
+describe('building interiors', () => {
+  it('hasInterior matches texture keys for all interior buildings', () => {
     for (const kind of INTERIOR_KINDS) {
       expect(hasInterior(kind)).toBe(true);
       expect(INTERIOR_KEYS[kind]).toBeTruthy();
+      expect(getInteriorNavSpec(kind)).not.toBeNull();
     }
-    expect(hasInterior('dungeon')).toBe(true);
-    expect(INTERIOR_KEYS.dungeon).toBe(PROP_KEYS.dungeonInterior);
   });
 
   it('layout anchors stay inside building footprints', () => {

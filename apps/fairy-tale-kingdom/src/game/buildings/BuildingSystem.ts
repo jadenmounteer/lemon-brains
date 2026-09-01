@@ -2034,8 +2034,9 @@ function kindHasHearth(kind: BuildKind | 'keep'): boolean {
 function interiorTextureFor(kind: BuildKind): string | null {
   switch (kind) {
     case 'house':
-    case 'manor':
       return PROP_KEYS.houseInterior;
+    case 'manor':
+      return PROP_KEYS.manorInterior;
     case 'tavern':
       return PROP_KEYS.tavernInterior;
     case 'cathedral':
@@ -2048,6 +2049,18 @@ function interiorTextureFor(kind: BuildKind): string | null {
       return PROP_KEYS.bakeryInterior;
     case 'market':
       return PROP_KEYS.marketInterior;
+    case 'granary':
+      return PROP_KEYS.granaryInterior;
+    case 'barracks':
+      return PROP_KEYS.barracksInterior;
+    case 'watchtower':
+      return PROP_KEYS.watchtowerInterior;
+    case 'dock':
+      return PROP_KEYS.dockInterior;
+    case 'cemetery':
+      return PROP_KEYS.cemeteryInterior;
+    case 'gallows':
+      return PROP_KEYS.gallowsInterior;
     default:
       return null;
   }
