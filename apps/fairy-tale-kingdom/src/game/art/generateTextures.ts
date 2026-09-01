@@ -314,6 +314,19 @@ function drawUnitFrame(
     return;
   }
 
+  if (role === 'peasant') {
+    drawPeasantFrame(
+      ctx,
+      originX,
+      facing,
+      walkStep,
+      'male',
+      'base',
+      clothOverride ?? clothFor('peasant')
+    );
+    return;
+  }
+
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
@@ -941,6 +954,193 @@ function drawRoyalFrame(
   }
 }
 
+type PeasantDrawVariant =
+  | 'base'
+  | 'elder'
+  | 'farmer'
+  | 'baker'
+  | 'merchant'
+  | 'fisher';
+
+/** Gendered peasant silhouettes — dress + kerchief for women, tunic + cap for men. */
+function drawPeasantFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null,
+  gender: 'male' | 'female',
+  variant: PeasantDrawVariant,
+  cloth: number
+) {
+  const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
+  const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
+  const y = bob + (variant === 'elder' ? 1 : 0);
+  const isFemale = gender === 'female';
+  const hair =
+    variant === 'elder'
+      ? isFemale
+        ? 0xc8c0b8
+        : palette.stone
+      : 0x6b4a2a;
+  const kerchief = 0xd4a8a8;
+
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+
+  const leftBootX = originX + 5 - (facing === 'right' ? 0 : leg);
+  const rightBootX = originX + 9 + (facing === 'left' ? 0 : leg);
+  fillRect(ctx, leftBootX, 18 + y, 3, 3, palette.ink);
+  fillRect(ctx, rightBootX, 18 + y, 3, 3, palette.ink);
+
+  if (isFemale) {
+    if (facing !== 'up') {
+      fillRect(ctx, originX + 2, 15 + y, 12, 5, cloth);
+      fillRect(ctx, originX + 1, 17 + y, 14, 3, cloth);
+    }
+    fillRect(ctx, originX + 5, 10 + y, 6, 6, cloth);
+    fillRect(ctx, originX + 4, 10 + y, 1, 6, palette.ink);
+    fillRect(ctx, originX + 11, 10 + y, 1, 6, palette.ink);
+    if (variant === 'baker') {
+      fillRect(ctx, originX + 4, 11 + y, 8, 8, palette.cream);
+      pixel(ctx, originX + 7, 11 + y, palette.ink);
+    }
+    if (variant === 'elder') {
+      fillRect(ctx, originX + 3, 9 + y, 10, 5, 0x9a9088);
+    }
+  } else {
+    fillRect(ctx, originX + 5, 10 + y, 6, 8, cloth);
+    fillRect(ctx, originX + 4, 10 + y, 1, 8, palette.ink);
+    fillRect(ctx, originX + 11, 10 + y, 1, 8, palette.ink);
+    fillRect(ctx, originX + 5, 14 + y, 6, 1, palette.woodDark);
+    if (variant === 'baker') {
+      fillRect(ctx, originX + 4, 11 + y, 8, 6, palette.cream);
+    }
+  }
+
+  fillRect(ctx, originX + 5, 4 + y, 6, 5, palette.skin);
+  fillRect(ctx, originX + 4, 4 + y, 1, 5, palette.ink);
+  fillRect(ctx, originX + 11, 4 + y, 1, 5, palette.ink);
+
+  if (isFemale) {
+    if (facing === 'up') {
+      fillRect(ctx, originX + 4, 2 + y, 8, 6, hair);
+      fillRect(ctx, originX + 3, 4 + y, 2, 8, hair);
+      fillRect(ctx, originX + 11, 4 + y, 2, 8, hair);
+    } else if (facing === 'left') {
+      fillRect(ctx, originX + 10, 4 + y, 2, 10, hair);
+      fillRect(ctx, originX + 4, 2 + y, 7, 3, kerchief);
+    } else if (facing === 'right') {
+      fillRect(ctx, originX + 4, 4 + y, 2, 10, hair);
+      fillRect(ctx, originX + 5, 2 + y, 7, 3, kerchief);
+    } else {
+      fillRect(ctx, originX + 4, 2 + y, 8, 3, kerchief);
+      fillRect(ctx, originX + 3, 5 + y, 2, 6, hair);
+      fillRect(ctx, originX + 11, 5 + y, 2, 6, hair);
+      fillRect(ctx, originX + 5, 3 + y, 6, 2, hair);
+    }
+    if (variant === 'farmer' && facing !== 'up') {
+      fillRect(ctx, originX + 3, 1 + y, 10, 2, palette.wheat);
+    }
+  } else {
+    fillRect(
+      ctx,
+      originX + 4,
+      2 + y,
+      8,
+      2,
+      variant === 'farmer' ? palette.wheat : palette.woodDark
+    );
+    if (variant === 'farmer') {
+      fillRect(ctx, originX + 3, 3 + y, 10, 1, palette.wheatDark);
+    }
+    if (variant === 'elder') {
+      fillRect(ctx, originX + 4, 2 + y, 8, 2, hair);
+      if (facing === 'down') {
+        fillRect(ctx, originX + 5, 8 + y, 6, 3, hair);
+      }
+    }
+  }
+
+  if (variant === 'merchant') {
+    fillRect(ctx, originX + 9, 14 + y, 3, 2, palette.wood);
+    pixel(ctx, originX + 10, 14 + y, palette.gold);
+  }
+  if (variant === 'fisher' && facing !== 'up') {
+    fillRect(ctx, originX + 12, 10 + y, 2, 8, palette.wood);
+    pixel(ctx, originX + 11, 9 + y, palette.ink);
+  }
+  if (variant === 'farmer' && facing === 'right') {
+    fillRect(ctx, originX + 0, 12 + y, 2, 8, palette.woodDark);
+    fillRect(ctx, originX + 0, 11 + y, 3, 2, palette.metal);
+  } else if (variant === 'farmer' && facing === 'left') {
+    fillRect(ctx, originX + 14, 12 + y, 2, 8, palette.woodDark);
+    fillRect(ctx, originX + 13, 11 + y, 3, 2, palette.metal);
+  }
+  if (variant === 'elder' && !isFemale && facing !== 'up') {
+    fillRect(ctx, originX + 12, 12 + y, 1, 8, palette.wood);
+  }
+
+  if (facing === 'up') {
+    if (isFemale) {
+      fillRect(ctx, originX + 5, 4 + y, 6, 3, hair);
+    } else {
+      fillRect(ctx, originX + 5, 4 + y, 6, 2, cloth);
+    }
+  } else if (facing === 'left') {
+    pixel(ctx, originX + 6, 6 + y, palette.ink);
+  } else if (facing === 'right') {
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+  } else {
+    pixel(ctx, originX + 7, 6 + y, palette.ink);
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+    if (isFemale) {
+      pixel(ctx, originX + 8, 7 + y, 0xd06070);
+    }
+  }
+
+  fillRect(ctx, originX + 5, 3 + y, 6, 1, palette.ink);
+}
+
+function drawPeasantUnitSheet(
+  scene: Phaser.Scene,
+  key: string,
+  gender: 'male' | 'female',
+  variant: PeasantDrawVariant,
+  cloth: number
+) {
+  const width = UNIT_WIDTH * UNIT_FRAME_COUNT;
+  const height = UNIT_HEIGHT;
+  const tex = createCanvas(scene, key, width, height);
+  const ctx = tex.getContext();
+  ctx.clearRect(0, 0, width, height);
+
+  const facings: Array<'down' | 'left' | 'right' | 'up'> = [
+    'down',
+    'left',
+    'right',
+    'up',
+  ];
+
+  drawPeasantFrame(ctx, 0, 'down', null, gender, variant, cloth);
+
+  let frame = 1;
+  for (const facing of facings) {
+    for (let step = 0; step < 4; step++) {
+      drawPeasantFrame(ctx, frame * UNIT_WIDTH, facing, step, gender, variant, cloth);
+      frame++;
+    }
+  }
+
+  tex.refresh();
+
+  const sheet = scene.textures.get(key);
+  for (let i = 0; i < UNIT_FRAME_COUNT; i++) {
+    const name = String(i);
+    if (!sheet.has(name)) {
+      sheet.add(name, 0, i * UNIT_WIDTH, 0, UNIT_WIDTH, UNIT_HEIGHT);
+    }
+  }
+}
+
 function drawUnitSheet(
   scene: Phaser.Scene,
   role: AnimRole,
@@ -982,16 +1182,27 @@ function drawUnitSheet(
 }
 
 function drawPeasantVariantSheets(scene: Phaser.Scene): void {
-  const variants: Array<[string, number]> = [
-    ['peasant_elder_m', palette.stoneDark],
-    ['peasant_elder_f', 0xb8a898],
-    ['peasant_farmer', 0x5a7a3a],
-    ['peasant_baker', 0xd4a574],
-    ['peasant_merchant', 0x8b6914],
-    ['peasant_fisher', 0x3a5a7a],
+  const variants: Array<[PeasantDrawVariant, 'male' | 'female', number]> = [
+    ['base', 'male', palette.clothPeasant],
+    ['base', 'female', palette.clothPeasant],
+    ['elder', 'male', palette.stoneDark],
+    ['elder', 'female', 0xb8a898],
+    ['farmer', 'male', 0x5a7a3a],
+    ['farmer', 'female', 0x5a7a3a],
+    ['baker', 'male', 0xd4a574],
+    ['baker', 'female', 0xd4a574],
+    ['merchant', 'male', 0x8b6914],
+    ['merchant', 'female', 0x8b6914],
+    ['fisher', 'male', 0x3a5a7a],
+    ['fisher', 'female', 0x3a5a7a],
   ];
-  for (const [key, cloth] of variants) {
-    drawUnitSheet(scene, 'peasant', { key, cloth });
+  for (const [variant, gender, cloth] of variants) {
+    const suffix = gender === 'male' ? 'm' : 'f';
+    const key =
+      variant === 'base'
+        ? `peasant_${suffix}`
+        : `peasant_${variant}_${suffix}`;
+    drawPeasantUnitSheet(scene, key, gender, variant, cloth);
   }
 }
 
@@ -2287,12 +2498,18 @@ export function generateTextures(scene: Phaser.Scene): void {
   for (const key of [
     TERRAIN_KEY,
     ...uniqueSheetRoles(),
+    'peasant_m',
+    'peasant_f',
     'peasant_elder_m',
     'peasant_elder_f',
-    'peasant_farmer',
-    'peasant_baker',
-    'peasant_merchant',
-    'peasant_fisher',
+    'peasant_farmer_m',
+    'peasant_farmer_f',
+    'peasant_baker_m',
+    'peasant_baker_f',
+    'peasant_merchant_m',
+    'peasant_merchant_f',
+    'peasant_fisher_m',
+    'peasant_fisher_f',
     ...propKeys,
   ]) {
     if (scene.textures.exists(key)) {

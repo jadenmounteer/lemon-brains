@@ -3,21 +3,32 @@ import type { UnitRole } from './assetManifest';
 import { Phase12Balance } from '../economy/phase12Balance';
 
 export type PeasantVisualKey =
-  | 'peasant'
+  | 'peasant_m'
+  | 'peasant_f'
   | 'peasant_elder_m'
   | 'peasant_elder_f'
-  | 'peasant_farmer'
-  | 'peasant_baker'
-  | 'peasant_merchant'
-  | 'peasant_fisher';
+  | 'peasant_farmer_m'
+  | 'peasant_farmer_f'
+  | 'peasant_baker_m'
+  | 'peasant_baker_f'
+  | 'peasant_merchant_m'
+  | 'peasant_merchant_f'
+  | 'peasant_fisher_m'
+  | 'peasant_fisher_f';
 
 export const PEASANT_VISUAL_KEYS: PeasantVisualKey[] = [
+  'peasant_m',
+  'peasant_f',
   'peasant_elder_m',
   'peasant_elder_f',
-  'peasant_farmer',
-  'peasant_baker',
-  'peasant_merchant',
-  'peasant_fisher',
+  'peasant_farmer_m',
+  'peasant_farmer_f',
+  'peasant_baker_m',
+  'peasant_baker_f',
+  'peasant_merchant_m',
+  'peasant_merchant_f',
+  'peasant_fisher_m',
+  'peasant_fisher_f',
 ];
 
 export interface SubjectVisualInput {
@@ -29,6 +40,32 @@ export interface SubjectVisualInput {
   legendId?: string;
 }
 
+function genderSuffix(gender: 'male' | 'female'): 'm' | 'f' {
+  return gender === 'male' ? 'm' : 'f';
+}
+
+/** Stable sprite key for a peasant body + job variant. */
+export function peasantVisualKey(
+  kind: 'base' | 'elder' | CivilianJob,
+  gender: 'male' | 'female'
+): PeasantVisualKey {
+  const g = genderSuffix(gender);
+  if (kind === 'base') return `peasant_${g}`;
+  if (kind === 'elder') return `peasant_elder_${g}`;
+  switch (kind) {
+    case 'farmer':
+      return `peasant_farmer_${g}`;
+    case 'baker':
+      return `peasant_baker_${g}`;
+    case 'merchant':
+      return `peasant_merchant_${g}`;
+    case 'fisherman':
+      return `peasant_fisher_${g}`;
+    default:
+      return `peasant_${g}`;
+  }
+}
+
 /** Pick sprite sheet key for a subject (peasant variants + role fallback). */
 export function resolveSubjectTexture(input: SubjectVisualInput): string {
   if (input.role === 'thief') return 'bandit';
@@ -36,21 +73,14 @@ export function resolveSubjectTexture(input: SubjectVisualInput): string {
 
   const elderAge = Phase12Balance.elderAge ?? 55;
   if ((input.ageYears ?? 0) >= elderAge) {
-    return input.gender === 'male' ? 'peasant_elder_m' : 'peasant_elder_f';
+    return peasantVisualKey('elder', input.gender);
   }
 
-  switch (input.job) {
-    case 'farmer':
-      return 'peasant_farmer';
-    case 'baker':
-      return 'peasant_baker';
-    case 'merchant':
-      return 'peasant_merchant';
-    case 'fisherman':
-      return 'peasant_fisher';
-    default:
-      return 'peasant';
+  if (input.job) {
+    return peasantVisualKey(input.job, input.gender);
   }
+
+  return peasantVisualKey('base', input.gender);
 }
 
 /** Subtle per-villager tints from appearanceVariant (0–5). */
