@@ -260,7 +260,7 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
       return 'Dwelling';
     case 'wall':
       return 'Fortification';
-    case 'stairs':
+    case 'ladder':
       return 'Access';
     case 'drawbridge':
       return 'Gate';

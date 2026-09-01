@@ -89,7 +89,7 @@ export function exportManualArt(scene: Phaser.Scene): void {
   put('prop:wall', wallTextureKey(0));
   put('prop:tavern', PROP_KEYS.tavern);
   put('prop:drawbridge', PROP_KEYS.drawbridge);
-  put('prop:stairs', PROP_KEYS.stairs);
+  put('prop:wallLadder', PROP_KEYS.wallLadder);
   put('prop:field', PROP_KEYS.field);
   put('prop:granary', PROP_KEYS.granary);
   put('prop:barracks', PROP_KEYS.barracks);

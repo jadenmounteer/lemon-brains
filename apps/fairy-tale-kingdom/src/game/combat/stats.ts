@@ -6,7 +6,7 @@ export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   wall: 120,
   tavern: 45,
   drawbridge: 90,
-  stairs: 25,
+  ladder: 25,
   field: 25,
   granary: 40,
   barracks: 45,
@@ -130,7 +130,7 @@ export function isBurnable(kind: BuildKind): boolean {
   return (
     kind === 'house' ||
     kind === 'tavern' ||
-    kind === 'stairs' ||
+    kind === 'ladder' ||
     kind === 'field' ||
     kind === 'granary' ||
     kind === 'barracks' ||

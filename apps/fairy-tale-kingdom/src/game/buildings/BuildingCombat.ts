@@ -173,10 +173,10 @@ export class BuildingCombat {
       this.host.vfx?.collapse(b.x, b.y);
     }
     if (b.kind === 'wall') {
-      const stairs = this.host.buildings.filter(
-        (s) => s.kind === 'stairs' && s.attachedWallId === b.id
+      const ladders = this.host.buildings.filter(
+        (s) => s.kind === 'ladder' && s.attachedWallId === b.id
       );
-      for (const s of stairs) {
+      for (const s of ladders) {
         this.host.onDestroyed?.(s);
         this.host.removeRecord(s);
       }
@@ -198,7 +198,7 @@ export class BuildingCombat {
         house: 'A house burned down!',
         manor: 'A manor burned down!',
         tavern: 'The tavern burned!',
-        stairs: 'Stairs collapsed!',
+        ladder: 'A ladder collapsed!',
         field: 'A field burned!',
         granary: 'The granary burned!',
         barracks: 'The barracks burned!',

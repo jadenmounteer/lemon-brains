@@ -19,6 +19,7 @@ import type { SavedSubject } from '../../kingdom/LayoutRepository';
 import {
   footprintAabb,
   KEEP_ID,
+  ladderGroundApproach,
   type Aabb,
   type BuildingRecord,
 } from '../buildings/buildingShared';
@@ -416,7 +417,7 @@ export class SubjectSystem {
         : 'Holding the perimeter';
 
       if (isArcher && !managed.data.onWall && Math.random() < 0.12) {
-        this.tryClimbNearestStairs(managed.data.id);
+        this.tryClimbNearestLadder(managed.data.id);
       }
 
       if (managed.data.onWall) {
@@ -1875,39 +1876,67 @@ export class SubjectSystem {
         const targetY = dKeep < 120 ? keep.y + 30 : (awayY + keep.y) / 2;
         this.nudgeToward(managed.data.id, targetX, targetY, 70);
       } else if (managed.data.role === 'archer' && !managed.data.onWall) {
-        this.tryClimbNearestStairs(managed.data.id);
+        this.tryClimbNearestLadder(managed.data.id);
       } else if (
         managed.data.role === 'guard' &&
         !managed.data.onWall &&
         Math.random() < 0.02
       ) {
-        this.tryClimbNearestStairs(managed.data.id);
+        this.tryClimbNearestLadder(managed.data.id);
       }
     }
   }
 
-  tryClimbNearestStairs(subjectId: string): boolean {
+  tryClimbNearestLadder(subjectId: string): boolean {
     const managed = this.getById(subjectId);
     if (!managed || !this.buildings) return false;
-    const stairs = this.buildings.stairsNear(
+    const ladder = this.buildings.ladderNear(
       managed.sprite.x,
       managed.sprite.y,
       80
     );
-    if (!stairs) return false;
-    const wall = this.buildings.wallForStairs(stairs);
-    if (!wall) return false;
+    if (ladder) {
+      const wall = this.buildings.wallForLadder(ladder);
+      if (!wall || !ladder.ladderFacing) return false;
+      const ground = ladderGroundApproach(
+        wall.x,
+        wall.y,
+        ladder.ladderFacing
+      );
+      managed.data.activity = 'climb';
+      managed.data.activityLabel = 'Climbing the wall';
+      this.nudgeToward(subjectId, ground.x, ground.y, 50, () => {
+        managed.data.onWall = true;
+        managed.sprite.setPosition(wall.x, wall.y - 10);
+        managed.sprite.setDepth(22 + wall.y * 0.01);
+        managed.data.activityLabel = 'On the wall';
+        managed.data.zone = 'wall';
+      });
+      return true;
+    }
+
+    const corner = this.buildings.cornerClimbNear(
+      managed.sprite.x,
+      managed.sprite.y,
+      80
+    );
+    if (!corner) return false;
 
     managed.data.activity = 'climb';
     managed.data.activityLabel = 'Climbing the wall';
-    this.nudgeToward(subjectId, stairs.x, stairs.y, 50, () => {
+    this.nudgeToward(subjectId, corner.groundX, corner.groundY, 50, () => {
       managed.data.onWall = true;
-      managed.sprite.setPosition(wall.x, wall.y - 10);
-      managed.sprite.setDepth(22 + wall.y * 0.01);
+      managed.sprite.setPosition(corner.wall.x, corner.wall.y - 10);
+      managed.sprite.setDepth(22 + corner.wall.y * 0.01);
       managed.data.activityLabel = 'On the wall';
       managed.data.zone = 'wall';
     });
     return true;
+  }
+
+  /** @deprecated Use tryClimbNearestLadder */
+  tryClimbNearestStairs(subjectId: string): boolean {
+    return this.tryClimbNearestLadder(subjectId);
   }
 
   /** Drop anyone standing on a destroyed wall. */

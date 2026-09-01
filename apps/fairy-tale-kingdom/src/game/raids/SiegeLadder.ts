@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { FORT_TILE, fortSnap } from '../buildings/buildingShared';
 import { SiegeBalance } from '../siege/balance';
-import type { LadderPortal } from '../path/WallPathGrid';
+import type { SiegeLadderPortal } from '../path/WallPathGrid';
 import type { KeepPoint } from './raidTypes';
 
 export interface SiegeLadderRecord {
@@ -116,7 +116,7 @@ export class SiegeLadderSystem {
     return false;
   }
 
-  toPortals(): LadderPortal[] {
+  toPortals(): SiegeLadderPortal[] {
     return this.ladders
       .filter((l) => l.hp > 0)
       .map((l) => ({

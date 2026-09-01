@@ -3,9 +3,9 @@ import {
   PROP_KEYS,
   TILE_SIZE,
   TerrainTile,
-  wallTextureKey,
   isTerrainBlocked,
 } from '../art/assetManifest';
+import { bakeWallTexture } from '../art/wallArt';
 import type { SavedBuilding } from '../../kingdom/LayoutRepository';
 import {
   BUILD_CATALOG,
@@ -47,24 +47,26 @@ import {
   WALL_MAX_DRAG_CELLS,
   fortSnap,
   fortKey,
+  fortIndex,
   fortLineCells,
   footprintAabb,
   bridgeAabb,
   intersects,
-  isAdjacentFortCell,
   pointInAabb,
-  stairsCellBesideWall,
+  ladderGroundApproach,
+  cornerExteriorGroundCells,
+  isWallCornerMask,
   textureFor,
   snapCoord,
   type Aabb,
   type BuildingRecord,
-  type StairsFacing,
+  type WallFace,
 } from './buildingShared';
 
 const KEEP_BLURB =
   'A seat of power. Rival armies must destroy every keep to conquer the kingdom.';
 
-const STAIR_SNAP_DIST = 96;
+const LADDER_SNAP_DIST = 96;
 const GATE_SNAP_DIST = 96;
 
 export {
@@ -183,7 +185,7 @@ export class BuildingSystem {
       keep: this.keep,
       getUnitBodies: () => this.getUnitBodies(),
       canPlaceAt: (...args) => this.canPlaceAt(...args),
-      findWallSnap: (x, y) => this.findWallSnap(x, y),
+      findLadderSnap: (x, y) => this.findLadderSnap(x, y),
       findGateSnap: (x, y) => this.findGateSnap(x, y),
       fortLineCells: (x0, y0, x1, y1) =>
         fortLineCells(x0, y0, x1, y1, WALL_MAX_DRAG_CELLS),
@@ -331,10 +333,20 @@ export class BuildingSystem {
         hp: b.hp,
         maxHp: b.maxHp,
         attachedWallId: b.attachedWallId,
-        stairsFacing: b.stairsFacing,
+        ladderFacing: b.ladderFacing ?? b.stairsFacing,
         rotation: b.rotation,
         loyaltyKeepId: b.loyaltyKeepId,
       });
+    }
+    for (const b of this.buildings) {
+      if (b.kind !== 'ladder' || !b.attachedWallId) continue;
+      const wall = this.getById(b.attachedWallId);
+      if (!wall) continue;
+      if (b.x !== wall.x || b.y !== wall.y) {
+        b.x = wall.x;
+        b.y = wall.y;
+        b.sprite.setPosition(wall.x, wall.y);
+      }
     }
     this.snapOrphanDrawbridges();
     this.recomputeHouseLabels();
@@ -354,7 +366,7 @@ export class BuildingSystem {
       hp: b.hp,
       maxHp: b.maxHp,
       attachedWallId: b.attachedWallId,
-      stairsFacing: b.stairsFacing,
+      ladderFacing: b.ladderFacing,
       rotation: b.rotation,
       loyaltyKeepId: b.loyaltyKeepId ?? null,
     }));
@@ -814,7 +826,7 @@ export class BuildingSystem {
       else if (b.kind === 'drawbridge') score += 3;
       else if (b.kind === 'ballista') score += 4;
       else if (b.kind === 'watchtower') score += 3;
-      else if (b.kind === 'stairs') score += 1;
+      else if (b.kind === 'ladder') score += 1;
     }
     return score;
   }
@@ -962,12 +974,15 @@ export class BuildingSystem {
     return { x: this.keep.x, y: this.keep.y + 60 };
   }
 
-  stairsNear(x: number, y: number, radius: number): BuildingRecord | null {
+  ladderNear(x: number, y: number, radius: number): BuildingRecord | null {
     let best: BuildingRecord | null = null;
     let bestD = radius;
     for (const b of this.buildings) {
-      if (b.kind !== 'stairs') continue;
-      const d = Phaser.Math.Distance.Between(x, y, b.x, b.y);
+      if (b.kind !== 'ladder' || !b.attachedWallId || !b.ladderFacing) continue;
+      const wall = this.getById(b.attachedWallId);
+      if (!wall) continue;
+      const ground = ladderGroundApproach(wall.x, wall.y, b.ladderFacing);
+      const d = Phaser.Math.Distance.Between(x, y, ground.x, ground.y);
       if (d < bestD) {
         bestD = d;
         best = b;
@@ -976,9 +991,53 @@ export class BuildingSystem {
     return best;
   }
 
+  /** @deprecated Use ladderNear */
+  stairsNear(x: number, y: number, radius: number): BuildingRecord | null {
+    return this.ladderNear(x, y, radius);
+  }
+
+  /** Corner wall cells expose implicit climb points on exterior ground cells. */
+  cornerClimbNear(
+    x: number,
+    y: number,
+    radius: number
+  ): { wall: BuildingRecord; groundX: number; groundY: number } | null {
+    let best: { wall: BuildingRecord; groundX: number; groundY: number } | null =
+      null;
+    let bestD = radius;
+    const ladderWallIds = new Set(
+      this.buildings
+        .filter((b) => b.kind === 'ladder' && b.attachedWallId)
+        .map((b) => b.attachedWallId!)
+    );
+    for (const b of this.buildings) {
+      if (b.kind !== 'wall') continue;
+      if (ladderWallIds.has(b.id)) continue;
+      const mask = this.wallMaskAt(b.x, b.y);
+      if (!isWallCornerMask(mask)) continue;
+      for (const cell of cornerExteriorGroundCells(b.x, b.y, mask)) {
+        const d = Phaser.Math.Distance.Between(x, y, cell.x, cell.y);
+        if (d < bestD) {
+          bestD = d;
+          best = { wall: b, groundX: cell.x, groundY: cell.y };
+        }
+      }
+    }
+    return best;
+  }
+
+  neighborMaskAt(x: number, y: number): number {
+    return this.wallMaskAt(x, y);
+  }
+
+  wallForLadder(ladder: BuildingRecord): BuildingRecord | null {
+    if (!ladder.attachedWallId) return null;
+    return this.getById(ladder.attachedWallId) ?? null;
+  }
+
+  /** @deprecated Use wallForLadder */
   wallForStairs(stairs: BuildingRecord): BuildingRecord | null {
-    if (!stairs.attachedWallId) return null;
-    return this.getById(stairs.attachedWallId) ?? null;
+    return this.wallForLadder(stairs);
   }
 
   burnablesNear(x: number, y: number, radius: number): BuildingRecord | null {
@@ -1173,36 +1232,47 @@ export class BuildingSystem {
     return this.wallPathGrid;
   }
 
-  rebuildWallPathGrid(ladderPortals?: import('../path/WallPathGrid').LadderPortal[]): void {
+  rebuildWallPathGrid(
+    siegeLadders?: import('../path/WallPathGrid').SiegeLadderPortal[]
+  ): void {
     const walls = this.buildings.filter(
       (b) => b.kind === 'wall' || (b.kind === 'drawbridge' && !this.raidActive)
     );
-    const stairs = this.buildings.filter((b) => b.kind === 'stairs');
+    const wallLadders = this.buildings
+      .filter((b) => b.kind === 'ladder' && b.attachedWallId && b.ladderFacing)
+      .map((b) => {
+        const wall = this.getById(b.attachedWallId!);
+        if (!wall) return null;
+        const ground = ladderGroundApproach(wall.x, wall.y, b.ladderFacing!);
+        return {
+          id: b.id,
+          attachedWallId: b.attachedWallId,
+          groundX: ground.x,
+          groundY: ground.y,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
     this.wallPathGrid.rebuild({
       walls: walls.map((b) => ({
         id: b.id,
         x: b.x,
         y: b.y,
         kind: b.kind as 'wall' | 'drawbridge',
+        neighborMask: b.kind === 'wall' ? this.wallMaskAt(b.x, b.y) : 0,
       })),
-      stairs: stairs.map((b) => ({
-        id: b.id,
-        x: b.x,
-        y: b.y,
-        attachedWallId: b.attachedWallId,
-      })),
-      ladders: ladderPortals,
+      wallLadders,
+      siegeLadders,
     });
   }
 
-  /** Quietly remove a wall segment (and its stairs) so a drawbridge can take its cell. */
+  /** Quietly remove a wall segment (and its ladder) so a drawbridge can take its cell. */
   replaceWallWithGate(wallId: string): void {
     const wall = this.getById(wallId);
     if (!wall || wall.kind !== 'wall') return;
-    const stairs = this.buildings.filter(
-      (s) => s.kind === 'stairs' && s.attachedWallId === wall.id
+    const ladders = this.buildings.filter(
+      (s) => s.kind === 'ladder' && s.attachedWallId === wall.id
     );
-    for (const s of stairs) {
+    for (const s of ladders) {
       this.onDestroyed?.(s);
       this.removeRecord(s);
     }
@@ -1362,7 +1432,7 @@ export class BuildingSystem {
     if (b.kind === 'drawbridge') {
       snap.statusLabel = b.closed ? 'Closed (raid)' : 'Open';
     }
-    if (b.kind === 'stairs' && b.attachedWallId) {
+    if (b.kind === 'ladder' && b.attachedWallId) {
       snap.statusLabel = 'Attached to a wall';
     }
     if (isDwelling(b.kind)) {
@@ -1426,7 +1496,7 @@ export class BuildingSystem {
       hp?: number;
       maxHp?: number;
       attachedWallId?: string;
-      stairsFacing?: StairsFacing;
+      ladderFacing?: WallFace;
       rotation?: number;
       loyaltyKeepId?: string | null;
     }
@@ -1449,18 +1519,29 @@ export class BuildingSystem {
     const px = isFortKind(kind) ? fortSnap(x) : x;
     const py = isFortKind(kind) ? fortSnap(y) : y;
     const rotation = kind === 'bridge' ? opts?.rotation ?? 0 : undefined;
-    const stairsFacing =
-      kind === 'stairs' ? opts?.stairsFacing ?? 'south' : undefined;
+    const ladderFacing =
+      kind === 'ladder' ? opts?.ladderFacing ?? 'south' : undefined;
     const tex =
       kind === 'bridge' && rotation === 90
         ? PROP_KEYS.bridgeV
-        : kind === 'stairs'
-          ? textureFor(kind, false, 0, stairsFacing)
-          : textureFor(kind, Boolean(closed), 0);
+        : textureFor(kind, Boolean(closed), 0);
     const sprite = this.scene.add
       .image(px, py, tex)
-      .setDepth(kind === 'wall' || kind === 'stairs' || kind === 'watchtower' ? 9 : 8)
-      .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' || kind === 'stairs' ? 0.75 : 0.85);
+      .setDepth(
+        kind === 'wall' || kind === 'watchtower'
+          ? 9
+          : kind === 'ladder'
+            ? 10
+            : 8
+      )
+      .setOrigin(
+        0.5,
+        kind === 'wall' || kind === 'drawbridge'
+          ? 0.75
+          : kind === 'ladder'
+            ? 0.85
+            : 0.85
+      );
     this.makeInteractive(sprite, id);
     let interiorSprite: Phaser.GameObjects.Image | undefined;
     let hearthSprite: Phaser.GameObjects.Sprite | undefined;
@@ -1487,7 +1568,7 @@ export class BuildingSystem {
       hearthSprite,
       labelIndex: 0,
       attachedWallId: opts?.attachedWallId,
-      stairsFacing,
+      ladderFacing,
       closed,
       rotation,
       loyaltyKeepId:
@@ -1603,7 +1684,15 @@ export class BuildingSystem {
   private refreshWallTextures(): void {
     for (const b of this.buildings) {
       if (b.kind !== 'wall') continue;
-      b.sprite.setTexture(wallTextureKey(this.wallMaskAt(b.x, b.y)));
+      const mask = this.wallMaskAt(b.x, b.y);
+      const col = fortIndex(b.x);
+      const row = fortIndex(b.y);
+      const key = bakeWallTexture(this.scene, {
+        mask,
+        col,
+        row,
+      });
+      b.sprite.setTexture(key);
     }
   }
 
@@ -1688,14 +1777,15 @@ export class BuildingSystem {
   }
 
   /**
-   * Stairs snap to the fort cell beside a wall segment (exterior ground side).
+   * Ladders snap onto a wall segment; facing picks which exterior ground side
+   * defenders approach from.
    */
-  findWallSnap(
+  findLadderSnap(
     worldX: number,
     worldY: number
-  ): { x: number; y: number; wallId: string; facing: StairsFacing } | null {
+  ): { x: number; y: number; wallId: string; facing: WallFace } | null {
     let bestWall: BuildingRecord | null = null;
-    let bestD = STAIR_SNAP_DIST;
+    let bestD = LADDER_SNAP_DIST;
     for (const w of this.buildings) {
       if (w.kind !== 'wall') continue;
       const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
@@ -1708,14 +1798,26 @@ export class BuildingSystem {
 
     const dx = worldX - bestWall.x;
     const dy = worldY - bestWall.y;
-    let facing: StairsFacing;
+    let facing: WallFace;
     if (Math.abs(dx) > Math.abs(dy)) {
       facing = dx > 0 ? 'east' : 'west';
     } else {
       facing = dy > 0 ? 'south' : 'north';
     }
-    const cell = stairsCellBesideWall(bestWall.x, bestWall.y, facing);
-    return { x: cell.x, y: cell.y, wallId: bestWall.id, facing };
+    return {
+      x: bestWall.x,
+      y: bestWall.y,
+      wallId: bestWall.id,
+      facing,
+    };
+  }
+
+  /** @deprecated Use findLadderSnap */
+  findWallSnap(
+    worldX: number,
+    worldY: number
+  ): { x: number; y: number; wallId: string; facing: WallFace } | null {
+    return this.findLadderSnap(worldX, worldY);
   }
 
   private tileAt(worldX: number, worldY: number): number | null {
@@ -1800,7 +1902,7 @@ export class BuildingSystem {
     ignoreBuildingId?: string | null
   ): boolean {
     if (kind === 'field' && !this.canPlaceField()) return false;
-    if (kind === 'stairs' && !wallId) return false;
+    if (kind === 'ladder' && !wallId) return false;
     if (kind === 'drawbridge') {
       if (replaceWallId) {
         const wall = this.getById(replaceWallId);
@@ -1809,15 +1911,17 @@ export class BuildingSystem {
         return false;
       }
     }
-    if (kind === 'stairs' && wallId) {
+    if (kind === 'ladder' && wallId) {
       const wall = this.getById(wallId);
       if (!wall || wall.kind !== 'wall') return false;
-      if (!isAdjacentFortCell(x, y, wall.x, wall.y)) return false;
-      if (this.wallAt(x, y)) return false;
-      const hasStairs = this.buildings.some(
-        (s) => s.kind === 'stairs' && s.attachedWallId === wallId
+      if (x !== wall.x || y !== wall.y) return false;
+      const hasLadder = this.buildings.some(
+        (s) =>
+          s.kind === 'ladder' &&
+          s.attachedWallId === wallId &&
+          s.id !== ignoreBuildingId
       );
-      if (hasStairs) return false;
+      if (hasLadder) return false;
     } else if (
       isFortKind(kind) &&
       this.fortOccupied(x, y, replaceWallId ?? wallId ?? undefined)
@@ -1842,9 +1946,9 @@ export class BuildingSystem {
     }
     for (const b of this.buildings) {
       if (ignoreBuildingId && b.id === ignoreBuildingId) continue;
-      // Stairs sit against walls; ignore fort collision so continuous runs work.
-      if (kind === 'stairs' && isFortKind(b.kind)) continue;
-      // Drawbridge replacing this wall segment, or stairs attached to it.
+      // Ladders mount on walls; ignore fort collision with the host wall.
+      if (kind === 'ladder' && isFortKind(b.kind)) continue;
+      // Drawbridge replacing this wall segment, or ladder attached to it.
       if (wallId && b.id === wallId) continue;
       if (replaceWallId && b.id === replaceWallId) continue;
       const bBox =
@@ -1853,8 +1957,8 @@ export class BuildingSystem {
           : footprintAabb(b.kind, b.x, b.y);
       if (intersects(candidate, bBox)) return false;
     }
-    // Fort pieces / stairs shouldn't be blocked by idle subjects near the wall.
-    if (kind !== 'stairs' && kind !== 'drawbridge' && kind !== 'wall') {
+    // Fort pieces / ladders shouldn't be blocked by idle subjects near the wall.
+    if (kind !== 'ladder' && kind !== 'drawbridge' && kind !== 'wall') {
       for (const unit of this.getUnitBodies()) {
         if (intersects(candidate, unit)) return false;
       }

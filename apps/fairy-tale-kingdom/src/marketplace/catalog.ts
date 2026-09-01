@@ -5,7 +5,7 @@ export type BuildKind =
   | 'wall'
   | 'tavern'
   | 'drawbridge'
-  | 'stairs'
+  | 'ladder'
   | 'field'
   | 'granary'
   | 'barracks'
@@ -255,10 +255,10 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     cost: 3,
   },
   {
-    kind: 'stairs',
-    name: 'Stairs',
-    blurb: 'Snap to a wall so your people can climb.',
-    cost: 12,
+    kind: 'ladder',
+    name: 'Ladder',
+    blurb: 'Snap to a wall so defenders can climb to the battlements.',
+    cost: 10,
   },
   {
     kind: 'drawbridge',

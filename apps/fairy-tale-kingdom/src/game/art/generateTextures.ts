@@ -11,6 +11,11 @@ import {
   type AnimRole,
 } from './assetManifest';
 import { FORT_TILE } from '../buildings/buildingShared';
+import {
+  drawWallToTexture,
+  WALL_SPRITE_H,
+  WALL_SPRITE_W,
+} from './wallArt';
 import { palette } from './palette';
 
 type Ctx = CanvasRenderingContext2D;
@@ -1154,39 +1159,14 @@ function drawHouse(scene: Phaser.Scene) {
   int.refresh();
 }
 
-/** Neighbor bits: N=1 E=2 S=4 W=8 — wide battlements (3 NPCs abreast). */
-function drawWallVariant(scene: Phaser.Scene, mask: number, key: string) {
-  const w = FORT_TILE;
-  const h = FORT_TILE * 2;
-  const tex = createCanvas(scene, key, w, h);
-  const ctx = tex.getContext();
-  const pad = 4;
-  const coreW = w - pad * 2;
-  // Thick stone walkway
-  fillRect(ctx, pad, h * 0.35, coreW, h * 0.55, palette.stone);
-  fillRect(ctx, pad, h * 0.35, coreW, 2, palette.ink);
-  if (mask & 1) fillRect(ctx, pad + 4, 0, coreW - 8, h * 0.42, palette.stone);
-  if (mask & 4) fillRect(ctx, pad + 4, h * 0.82, coreW - 8, h * 0.18, palette.stone);
-  if (mask & 2) fillRect(ctx, w - pad - 8, h * 0.38, 10, h * 0.5, palette.stone);
-  if (mask & 8) fillRect(ctx, pad - 2, h * 0.38, 10, h * 0.5, palette.stone);
-  // Crenellations — wide merlons across the top
-  for (let i = 0; i < 3; i++) {
-    const mx = pad + 6 + i * (coreW / 3);
-    fillRect(ctx, mx, h * 0.22, coreW / 4 - 4, h * 0.16, palette.stone);
-    fillRect(ctx, mx, h * 0.22, coreW / 4 - 4, 2, palette.ink);
-  }
-  fillRect(ctx, pad, h * 0.35, 3, h * 0.55, palette.stoneDark);
-  fillRect(ctx, w - pad - 3, h * 0.35, 3, h * 0.55, palette.stoneDark);
-  // Walkway highlight (where NPCs stand)
-  fillRect(ctx, pad + 6, h * 0.52, coreW - 12, 4, 0x9a9f94);
-  tex.refresh();
-}
-
 function drawWall(scene: Phaser.Scene) {
   for (let mask = 0; mask < 16; mask++) {
-    drawWallVariant(scene, mask, wallTextureKey(mask));
+    const key = wallTextureKey(mask);
+    const tex = createCanvas(scene, key, WALL_SPRITE_W, WALL_SPRITE_H);
+    drawWallToTexture(tex, { mask, col: mask, row: 0 });
   }
-  drawWallVariant(scene, 0, PROP_KEYS.wall);
+  const legacy = createCanvas(scene, PROP_KEYS.wall, WALL_SPRITE_W, WALL_SPRITE_H);
+  drawWallToTexture(legacy, { mask: 0, col: 0, row: 0 });
 }
 
 function drawBallista(scene: Phaser.Scene) {
@@ -1397,74 +1377,18 @@ function drawDrawbridge(scene: Phaser.Scene) {
   closed.refresh();
 }
 
-function drawStairsFacing(
-  scene: Phaser.Scene,
-  key: string,
-  facing: 'north' | 'south' | 'east' | 'west'
-) {
-  const w = FORT_TILE;
-  const h = FORT_TILE * 2;
-  const tex = createCanvas(scene, key, w, h);
+function drawWallLadder(scene: Phaser.Scene) {
+  const w = 14;
+  const h = 56;
+  const tex = createCanvas(scene, PROP_KEYS.wallLadder, w, h);
   const ctx = tex.getContext();
-
-  // Grass/dirt footing at bottom (south-facing default)
-  fillRect(ctx, 0, h - 16, w, 16, palette.grassDark);
-  fillRect(ctx, 2, h - 14, w - 4, 4, palette.dirt);
-
-  const wallOnTop = facing === 'south';
-  const wallOnBottom = facing === 'north';
-  const wallOnLeft = facing === 'east';
-
-  if (wallOnTop) {
-    fillStoneBricks(ctx, 0, h * 0.32, w, h * 0.38, 6, 4);
-    for (let i = 0; i < 5; i++) {
-      const stepW = w - 8 - i * 5;
-      const stepX = 4 + i * 2.5;
-      const stepY = h - 20 - i * 12;
-      fillRect(ctx, stepX, stepY, stepW, 8, palette.stone);
-      fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
-    }
-    fillRect(ctx, w / 2 - 10, h * 0.2, 20, 10, palette.stoneDark);
-  } else if (wallOnBottom) {
-    fillStoneBricks(ctx, 0, h * 0.3, w, h * 0.38, 6, 4);
-    for (let i = 0; i < 5; i++) {
-      const stepW = w - 8 - i * 5;
-      const stepX = 4 + i * 2.5;
-      const stepY = 16 + i * 12;
-      fillRect(ctx, stepX, stepY, stepW, 8, palette.stone);
-      fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
-    }
-  } else if (wallOnLeft) {
-    fillStoneBricks(ctx, w * 0.55, 0, w * 0.4, h, 4, 6);
-    for (let i = 0; i < 5; i++) {
-      const stepH = 8;
-      const stepX = w - 20 - i * 10;
-      const stepY = 8 + i * 10;
-      fillRect(ctx, stepX, stepY, 10, stepH, palette.stone);
-      fillRect(ctx, stepX, stepY, 2, stepH, palette.ink);
-    }
-  } else {
-    fillStoneBricks(ctx, 0, 0, w * 0.4, h, 4, 6);
-    for (let i = 0; i < 5; i++) {
-      const stepH = 8;
-      const stepX = 8 + i * 10;
-      const stepY = 8 + i * 10;
-      fillRect(ctx, stepX, stepY, 10, stepH, palette.stone);
-      fillRect(ctx, stepX + 8, stepY, 2, stepH, palette.ink);
-    }
+  fillRect(ctx, 2, 4, 3, h - 8, palette.woodDark);
+  fillRect(ctx, w - 5, 4, 3, h - 8, palette.woodDark);
+  for (let i = 0; i < 5; i++) {
+    fillRect(ctx, 2, 8 + i * 10, w - 4, 3, palette.wood);
+    fillRect(ctx, 2, 8 + i * 10, w - 4, 1, palette.ink);
   }
-
-  strokeRectInk(ctx, 0, Math.floor(h * 0.32), w, Math.floor(h * 0.38));
   tex.refresh();
-}
-
-function drawStairs(scene: Phaser.Scene) {
-  drawStairsFacing(scene, PROP_KEYS.stairsSouth, 'south');
-  drawStairsFacing(scene, PROP_KEYS.stairsNorth, 'north');
-  drawStairsFacing(scene, PROP_KEYS.stairsEast, 'east');
-  drawStairsFacing(scene, PROP_KEYS.stairsWest, 'west');
-  // Legacy key maps to south-facing
-  drawStairsFacing(scene, PROP_KEYS.stairs, 'south');
 }
 
 function drawField(scene: Phaser.Scene) {
@@ -2283,11 +2207,7 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.tavern,
     PROP_KEYS.drawbridge,
     PROP_KEYS.drawbridgeClosed,
-    PROP_KEYS.stairs,
-    PROP_KEYS.stairsNorth,
-    PROP_KEYS.stairsSouth,
-    PROP_KEYS.stairsEast,
-    PROP_KEYS.stairsWest,
+    PROP_KEYS.wallLadder,
     PROP_KEYS.field,
     PROP_KEYS.granary,
     PROP_KEYS.barracks,
@@ -2372,7 +2292,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawWall(scene);
   drawTavern(scene);
   drawDrawbridge(scene);
-  drawStairs(scene);
+  drawWallLadder(scene);
   drawField(scene);
   drawGranary(scene);
   drawBarracks(scene);

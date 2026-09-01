@@ -44,9 +44,11 @@ export interface SavedBuilding {
   y: number;
   hp: number;
   maxHp: number;
-  /** Stairs only — wall they snap to */
+  /** Ladder only — wall they mount on */
   attachedWallId?: string;
-  /** Stairs only — ground side / climb direction */
+  /** Ladder only — ground side defenders approach from */
+  ladderFacing?: 'north' | 'south' | 'east' | 'west';
+  /** @deprecated Migrated to ladderFacing */
   stairsFacing?: 'north' | 'south' | 'east' | 'west';
   /** Degrees — bridges use 0 or 90 */
   rotation?: number;
@@ -154,6 +156,7 @@ export class LayoutRepository {
         ...layout,
         schemaVersion: LAYOUT_SCHEMA_VERSION,
         buildings: (layout.buildings as SavedBuilding[])
+          .map(migrateLegacyBuilding)
           .filter((b) => VALID_BUILD_KINDS.has(b.kind))
           .map(normalizeBuilding),
         subjects: (layout.subjects as SavedSubject[])
@@ -209,6 +212,17 @@ export class LayoutRepository {
   async reset(): Promise<void> {
     await this.storage.removeItem(this.key);
   }
+}
+
+function migrateLegacyBuilding(b: SavedBuilding & { kind: string }): SavedBuilding {
+  if ((b.kind as string) === 'stairs') {
+    return {
+      ...b,
+      kind: 'ladder',
+      ladderFacing: b.ladderFacing ?? b.stairsFacing,
+    };
+  }
+  return b;
 }
 
 function normalizeBuilding(b: SavedBuilding): SavedBuilding {

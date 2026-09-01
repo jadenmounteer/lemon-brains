@@ -14,7 +14,7 @@ describe('buildingManagement', () => {
   it('isMovableKind blocks fort pieces and keep', () => {
     expect(isMovableKind('keep')).toBe(false);
     expect(isMovableKind('wall')).toBe(false);
-    expect(isMovableKind('stairs')).toBe(false);
+    expect(isMovableKind('ladder')).toBe(false);
     expect(isMovableKind('drawbridge')).toBe(false);
   });
 

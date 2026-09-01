@@ -1,4 +1,9 @@
-import { FORT_TILE, fortKey } from '../buildings/buildingShared';
+import {
+  FORT_TILE,
+  fortKey,
+  cornerExteriorGroundCells,
+  isWallCornerMask,
+} from '../buildings/buildingShared';
 import type { Point } from '../subjects/zones';
 
 export interface WallCellNode {
@@ -7,9 +12,9 @@ export interface WallCellNode {
   y: number;
 }
 
-/** Ground cell beside stairs that connects to a wall-top node. */
-export interface StairsPortal {
-  stairsId: string;
+/** Defender ground cell that connects to a wall-top node (ladder or corner). */
+export interface ClimbPortal {
+  climbId: string;
   groundX: number;
   groundY: number;
   wallId: string;
@@ -18,7 +23,7 @@ export interface StairsPortal {
 }
 
 /** Enemy siege ladder: ground foothold → wall battlement. */
-export interface LadderPortal {
+export interface SiegeLadderPortal {
   ladderId: string;
   groundX: number;
   groundY: number;
@@ -27,35 +32,47 @@ export interface LadderPortal {
   wallY: number;
 }
 
+/** @deprecated Use ClimbPortal */
+export type StairsPortal = ClimbPortal & { stairsId: string };
+
 /**
  * Wall-top path graph: nodes at each wall/drawbridge cell, edges along
- * orthogonal neighbors. Stairs and siege ladders act as ground↔wall portals.
+ * orthogonal neighbors. Defender ladders and corners act as ground↔wall portals.
  */
 export class WallPathGrid {
   private nodes = new Map<string, WallCellNode>();
   private edges = new Map<string, string[]>();
-  private stairsPortals: StairsPortal[] = [];
-  private ladderPortals: LadderPortal[] = [];
+  private climbPortals: ClimbPortal[] = [];
+  private siegeLadderPortals: SiegeLadderPortal[] = [];
 
   clear(): void {
     this.nodes.clear();
     this.edges.clear();
-    this.stairsPortals = [];
-    this.ladderPortals = [];
+    this.climbPortals = [];
+    this.siegeLadderPortals = [];
   }
 
   rebuild(input: {
-    walls: { id: string; x: number; y: number; kind: 'wall' | 'drawbridge' }[];
-    stairs: { id: string; x: number; y: number; attachedWallId?: string }[];
-    ladders?: LadderPortal[];
+    walls: {
+      id: string;
+      x: number;
+      y: number;
+      kind: 'wall' | 'drawbridge';
+      neighborMask?: number;
+    }[];
+    wallLadders: {
+      id: string;
+      attachedWallId?: string;
+      groundX: number;
+      groundY: number;
+    }[];
+    siegeLadders?: SiegeLadderPortal[];
   }): void {
     this.clear();
-    const wallByKey = new Map<string, WallCellNode>();
     for (const w of input.walls) {
       const key = fortKey(w.x, w.y);
       const node: WallCellNode = { id: w.id, x: w.x, y: w.y };
       this.nodes.set(key, node);
-      wallByKey.set(key, node);
       this.edges.set(key, []);
     }
 
@@ -74,21 +91,43 @@ export class WallPathGrid {
       }
     }
 
-    for (const s of input.stairs) {
-      if (!s.attachedWallId) continue;
-      const wall = input.walls.find((w) => w.id === s.attachedWallId);
+    for (const ladder of input.wallLadders) {
+      if (!ladder.attachedWallId) continue;
+      const wall = input.walls.find((w) => w.id === ladder.attachedWallId);
       if (!wall) continue;
-      this.stairsPortals.push({
-        stairsId: s.id,
-        groundX: s.x,
-        groundY: s.y,
+      this.climbPortals.push({
+        climbId: ladder.id,
+        groundX: ladder.groundX,
+        groundY: ladder.groundY,
         wallId: wall.id,
         wallX: wall.x,
         wallY: wall.y,
       });
     }
 
-    this.ladderPortals = input.ladders ?? [];
+    const ladderWallIds = new Set(
+      input.wallLadders
+        .map((l) => l.attachedWallId)
+        .filter(Boolean) as string[]
+    );
+    for (const w of input.walls) {
+      if (w.kind !== 'wall') continue;
+      if (ladderWallIds.has(w.id)) continue;
+      const mask = w.neighborMask ?? 0;
+      if (!isWallCornerMask(mask)) continue;
+      for (const cell of cornerExteriorGroundCells(w.x, w.y, mask)) {
+        this.climbPortals.push({
+          climbId: `corner-${w.id}-${cell.x}-${cell.y}`,
+          groundX: cell.x,
+          groundY: cell.y,
+          wallId: w.id,
+          wallX: w.x,
+          wallY: w.y,
+        });
+      }
+    }
+
+    this.siegeLadderPortals = input.siegeLadders ?? [];
   }
 
   wallNodeAt(x: number, y: number): WallCellNode | null {
@@ -108,10 +147,10 @@ export class WallPathGrid {
     return best;
   }
 
-  stairsPortalNear(x: number, y: number, radius = FORT_TILE * 1.5): StairsPortal | null {
-    let best: StairsPortal | null = null;
+  climbPortalNear(x: number, y: number, radius = FORT_TILE * 1.5): ClimbPortal | null {
+    let best: ClimbPortal | null = null;
     let bestD = radius;
-    for (const p of this.stairsPortals) {
+    for (const p of this.climbPortals) {
       const d = Math.hypot(p.groundX - x, p.groundY - y);
       if (d <= bestD) {
         bestD = d;
@@ -121,10 +160,21 @@ export class WallPathGrid {
     return best;
   }
 
-  ladderPortalNear(x: number, y: number, radius = FORT_TILE * 2): LadderPortal | null {
-    let best: LadderPortal | null = null;
+  /** @deprecated Use climbPortalNear */
+  stairsPortalNear(x: number, y: number, radius = FORT_TILE * 1.5): StairsPortal | null {
+    const p = this.climbPortalNear(x, y, radius);
+    if (!p) return null;
+    return { ...p, stairsId: p.climbId };
+  }
+
+  siegeLadderPortalNear(
+    x: number,
+    y: number,
+    radius = FORT_TILE * 2
+  ): SiegeLadderPortal | null {
+    let best: SiegeLadderPortal | null = null;
     let bestD = radius;
-    for (const p of this.ladderPortals) {
+    for (const p of this.siegeLadderPortals) {
       const d = Math.hypot(p.groundX - x, p.groundY - y);
       if (d <= bestD) {
         bestD = d;
@@ -132,6 +182,11 @@ export class WallPathGrid {
       }
     }
     return best;
+  }
+
+  /** @deprecated Use siegeLadderPortalNear */
+  ladderPortalNear(x: number, y: number, radius = FORT_TILE * 2): SiegeLadderPortal | null {
+    return this.siegeLadderPortalNear(x, y, radius);
   }
 
   /** BFS along wall-top nodes between two wall cell centers. */
@@ -172,12 +227,12 @@ export class WallPathGrid {
     });
   }
 
-  /** Round-trip: ground → stairs portal → wall node → back down. */
-  portalRoundTrip(stairsId: string): {
+  /** Round-trip: ground → climb portal → wall node → back down. */
+  portalRoundTrip(climbId: string): {
     up: Point[];
     down: Point[];
   } | null {
-    const portal = this.stairsPortals.find((p) => p.stairsId === stairsId);
+    const portal = this.climbPortals.find((p) => p.climbId === climbId);
     if (!portal) return null;
     return {
       up: [
@@ -191,12 +246,22 @@ export class WallPathGrid {
     };
   }
 
-  get stairsPortalsList(): readonly StairsPortal[] {
-    return this.stairsPortals;
+  get climbPortalsList(): readonly ClimbPortal[] {
+    return this.climbPortals;
   }
 
-  get ladderPortalsList(): readonly LadderPortal[] {
-    return this.ladderPortals;
+  /** @deprecated Use climbPortalsList */
+  get stairsPortalsList(): readonly StairsPortal[] {
+    return this.climbPortals.map((p) => ({ ...p, stairsId: p.climbId }));
+  }
+
+  get siegeLadderPortalsList(): readonly SiegeLadderPortal[] {
+    return this.siegeLadderPortals;
+  }
+
+  /** @deprecated Use siegeLadderPortalsList */
+  get ladderPortalsList(): readonly SiegeLadderPortal[] {
+    return this.siegeLadderPortals;
   }
 
   nodeCount(): number {

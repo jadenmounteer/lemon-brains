@@ -1,14 +1,16 @@
 import type Phaser from 'phaser';
-import { PROP_KEYS, wallTextureKey } from '../art/assetManifest';
+import { PROP_KEYS } from '../art/assetManifest';
+import { bakeWallTexture } from '../art/wallArt';
 import type { BuildKind } from '../../marketplace/catalog';
 import type { Point } from '../subjects/zones';
 import {
   fortSnap,
+  fortIndex,
   snapCoord,
   textureFor,
   WALL_MAX_DRAG_CELLS,
   type BuildingRecord,
-  type StairsFacing,
+  type WallFace,
 } from './buildingShared';
 
 /** Host callbacks for placement commit and validation. */
@@ -25,10 +27,10 @@ export interface BuildingPlacementHost {
     replaceWallId?: string | null,
     ignoreBuildingId?: string | null
   ): boolean;
-  findWallSnap(
+  findLadderSnap(
     worldX: number,
     worldY: number
-  ): { x: number; y: number; wallId: string; facing: StairsFacing } | null;
+  ): { x: number; y: number; wallId: string; facing: WallFace } | null;
   findGateSnap(
     worldX: number,
     worldY: number
@@ -44,7 +46,7 @@ export interface BuildingPlacementHost {
       hp?: number;
       maxHp?: number;
       attachedWallId?: string;
-      stairsFacing?: StairsFacing;
+      ladderFacing?: WallFace;
       rotation?: number;
       loyaltyKeepId?: string | null;
     }
@@ -76,7 +78,7 @@ export class BuildingPlacement {
   private wallGhostExtras: Phaser.GameObjects.Image[] = [];
   private ghostValid = false;
   private ghostWallId: string | null = null;
-  private ghostStairsFacing: StairsFacing | null = null;
+  private ghostLadderFacing: WallFace | null = null;
   private ghostReplaceWallId: string | null = null;
   private wallRunPreview: Point[] = [];
   private wallDragStart: Point | null = null;
@@ -86,6 +88,15 @@ export class BuildingPlacement {
   private relocateRecord: BuildingRecord | null = null;
 
   constructor(private readonly host: BuildingPlacementHost) {}
+
+  private wallPreviewTexture(x: number, y: number): string {
+    const mask = this.host.previewWallMask(x, y);
+    return bakeWallTexture(this.host.scene, {
+      mask,
+      col: fortIndex(x),
+      row: fortIndex(y),
+    });
+  }
 
   isPlacing(): boolean {
     return this.placeKind !== null;
@@ -135,7 +146,14 @@ export class BuildingPlacement {
     this.ghost = this.host.scene.add
       .image(this.host.keep.x, this.host.keep.y + 80, tex)
       .setDepth(50)
-      .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85)
+      .setOrigin(
+        0.5,
+        kind === 'wall' || kind === 'drawbridge'
+          ? 0.75
+          : kind === 'ladder'
+            ? 0.85
+            : 0.85
+      )
       .setAlpha(0.65);
   }
 
@@ -206,15 +224,15 @@ export class BuildingPlacement {
     const kind = this.placeKind;
     const ignoreId = this.relocateRecord?.id ?? null;
 
-    if (kind === 'stairs') {
-      const snap = this.host.findWallSnap(worldX, worldY);
+    if (kind === 'ladder') {
+      const snap = this.host.findLadderSnap(worldX, worldY);
       if (snap) {
         this.ghost.setPosition(snap.x, snap.y);
-        this.ghost.setTexture(textureFor('stairs', false, 0, snap.facing));
+        this.ghost.setTexture(textureFor('ladder', false, 0));
         this.ghostWallId = snap.wallId;
-        this.ghostStairsFacing = snap.facing;
+        this.ghostLadderFacing = snap.facing;
         this.ghostValid = this.host.canPlaceAt(
-          'stairs',
+          'ladder',
           snap.x,
           snap.y,
           snap.wallId,
@@ -225,7 +243,7 @@ export class BuildingPlacement {
       } else {
         this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
         this.ghostWallId = null;
-        this.ghostStairsFacing = null;
+        this.ghostLadderFacing = null;
         this.ghostValid = false;
       }
     } else if (kind === 'drawbridge') {
@@ -262,9 +280,7 @@ export class BuildingPlacement {
       if (valid.length > 0) {
         const first = valid[0]!;
         this.ghost.setPosition(first.x, first.y);
-        this.ghost.setTexture(
-          wallTextureKey(this.host.previewWallMask(first.x, first.y))
-        );
+        this.ghost.setTexture(this.wallPreviewTexture(first.x, first.y));
         this.ghost.setVisible(true);
         for (let i = 1; i < valid.length; i++) {
           const cell = valid[i]!;
@@ -272,7 +288,7 @@ export class BuildingPlacement {
             .image(
               cell.x,
               cell.y,
-              wallTextureKey(this.host.previewWallMask(cell.x, cell.y))
+              this.wallPreviewTexture(cell.x, cell.y)
             )
             .setDepth(50)
             .setOrigin(0.5, 0.75)
@@ -282,7 +298,7 @@ export class BuildingPlacement {
         }
       } else {
         this.ghost.setPosition(endX, endY);
-        this.ghost.setTexture(wallTextureKey(this.host.previewWallMask(endX, endY)));
+        this.ghost.setTexture(this.wallPreviewTexture(endX, endY));
       }
     } else {
       const x = kind === 'road' || kind === 'dock' || kind === 'bridge'
@@ -355,9 +371,9 @@ export class BuildingPlacement {
       }
       this.host.addBuilding(kind, x, y, undefined, {
         attachedWallId: wallId,
-        stairsFacing:
-          kind === 'stairs'
-            ? this.ghostStairsFacing ?? undefined
+        ladderFacing:
+          kind === 'ladder'
+            ? this.ghostLadderFacing ?? undefined
             : undefined,
         rotation,
       });

@@ -95,11 +95,7 @@ export const PROP_KEYS = {
   tavern: 'prop-tavern',
   drawbridge: 'prop-drawbridge',
   drawbridgeClosed: 'prop-drawbridge-closed',
-  stairs: 'prop-stairs',
-  stairsNorth: 'prop-stairs-n',
-  stairsSouth: 'prop-stairs-s',
-  stairsEast: 'prop-stairs-e',
-  stairsWest: 'prop-stairs-w',
+  wallLadder: 'prop-wall-ladder',
   field: 'prop-field',
   granary: 'prop-granary',
   barracks: 'prop-barracks',
@@ -167,19 +163,13 @@ export function wallTextureKey(mask: number): string {
   return `prop-wall-${mask & 15}`;
 }
 
-export function stairsTextureKey(
-  facing: 'north' | 'south' | 'east' | 'west'
-): string {
-  switch (facing) {
-    case 'north':
-      return PROP_KEYS.stairsNorth;
-    case 'south':
-      return PROP_KEYS.stairsSouth;
-    case 'east':
-      return PROP_KEYS.stairsEast;
-    case 'west':
-      return PROP_KEYS.stairsWest;
-  }
+/** Runtime-baked wall texture key (mask + fort grid + optional stair cutout). */
+export function bakedWallTextureKey(spec: {
+  mask: number;
+  col: number;
+  row: number;
+}): string {
+  return `prop-wall-bake-${spec.mask & 15}-${spec.col}-${spec.row}`;
 }
 
 /** Future drop-in paths relative to public/ (assetUrl) */
@@ -193,7 +183,7 @@ export const dropInPaths = {
   wall: 'assets/props/wall.png',
   tavern: 'assets/props/tavern.png',
   drawbridge: 'assets/props/drawbridge.png',
-  stairs: 'assets/props/stairs.png',
+  wallLadder: 'assets/props/wall-ladder.png',
   field: 'assets/props/field.png',
   granary: 'assets/props/granary.png',
   barracks: 'assets/props/barracks.png',

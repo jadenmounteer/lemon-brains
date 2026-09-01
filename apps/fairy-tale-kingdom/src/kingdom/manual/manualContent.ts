@@ -237,7 +237,7 @@ export function buildManualSections(): ManualSection[] {
           'Train at the barracks. Defend their keep’s perimeter when any raid or siege hits. Peacetime they patrol the fief; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
         ]),
         hireEntry('archer', 'unit:archer', [
-          'Train at the barracks. Prefer battlements with line-of-sight toward raiders threatening their fief. Climb stairs in a raid; otherwise patrol with the army of their keep.',
+          'Train at the barracks. Prefer battlements with line-of-sight toward raiders threatening their fief. Climb ladders in a raid; otherwise patrol with the army of their keep.',
         ]),
         hireEntry('elite_guard', 'unit:elite_guard', [
           'Hardened melee for late pressure. Train at the barracks once king and queen reign and posts remain open.',
@@ -411,10 +411,10 @@ export function buildManualSections(): ManualSection[] {
           'Train soldiers, archers, knights, elites, and general. Military sphere. Needs royalty.',
         ]),
         buildEntry('wall', 'prop:wall', [
-          'One purchase places a straight run of three fort cells — the ghost preview follows your cursor and continues an existing wall when possible. Tough stone; raiders spend real time breaching. Connect segments for gates and stairs.',
+          'One purchase places a straight run of three fort cells — the ghost preview follows your cursor and continues an existing wall when possible. Tough stone; raiders spend real time breaching. Connect segments for gates and ladders.',
         ]),
-        buildEntry('stairs', 'prop:stairs', [
-          'Snap to walls so your archers and soldiers reach the battlements. Foes do not climb them — only your defenders use the stairs.',
+        buildEntry('ladder', 'prop:wallLadder', [
+          'Snap to walls so your archers and soldiers reach the battlements. Foes do not climb them — only your defenders use the ladder.',
         ]),
         buildEntry('drawbridge', 'prop:drawbridge', [
           'Gate in the wall line — closes when raiders come. Snap onto an existing wall segment.',
@@ -779,7 +779,7 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Raids & sieges',
           body: [
-            'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus — they batter walls and gates; your stairs serve defenders only. Drawbridges slam; peasants repair.',
+            'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus — they batter walls and gates; your ladders serve defenders only. Drawbridges slam; peasants repair.',
             'Any raid kicks military off balls and festivals: soldiers and archers hold their loyalty keep’s perimeter or walls; guards keep patrolling threatened roads in the fief.',
           ],
         },
@@ -787,7 +787,7 @@ export function buildManualSections(): ManualSection[] {
           title: 'Wall placement',
           body: [
             'Buy a wall from the Marketplace, then move the cursor — a ghost preview of three connected cells follows, continuing any existing wall line when it can. Click to commit the run.',
-            'Higher wall HP (tunable in Sandbox) buys time while archers on stairs answer from the battlements.',
+            'Higher wall HP (tunable in Sandbox) buys time while archers on ladders answer from the battlements.',
           ],
         },
       ],

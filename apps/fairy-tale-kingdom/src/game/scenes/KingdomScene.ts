@@ -728,8 +728,8 @@ export class KingdomScene extends Phaser.Scene {
             this.game.events.emit(KingdomEvents.MARKET_TOAST, {
               message: relocating
                 ? 'Cannot move here'
-                : kind === 'stairs'
-                  ? 'Stairs must snap beside a wall'
+                : kind === 'ladder'
+                  ? 'Ladder must snap to a wall'
                   : kind === 'drawbridge'
                     ? 'Drawbridge must snap to a wall or wall gap'
                     : kind === 'wall'

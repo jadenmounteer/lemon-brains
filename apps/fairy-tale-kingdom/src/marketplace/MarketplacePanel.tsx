@@ -67,7 +67,7 @@ export function MarketplacePanel({
         <div className="place-banner">
           <p>
             Placing <strong>{placeMode.kind}</strong>
-            {placeMode.kind === 'stairs'
+            {placeMode.kind === 'ladder'
               ? ' — snap to a wall.'
               : placeMode.kind === 'wall'
                 ? ' — drag to draw walls (3g/cell).'

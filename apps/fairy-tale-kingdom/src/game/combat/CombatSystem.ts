@@ -266,7 +266,7 @@ export class CombatSystem {
 
       if (!target) {
         if (isArcher && !fighter.data.onWall) {
-          this.subjects.tryClimbNearestStairs(fighter.data.id);
+          this.subjects.tryClimbNearestLadder(fighter.data.id);
         }
         continue;
       }
@@ -310,7 +310,7 @@ export class CombatSystem {
         );
         if (dist > range) {
           if (!fighter.data.onWall) {
-            this.subjects.tryClimbNearestStairs(fighter.data.id);
+            this.subjects.tryClimbNearestLadder(fighter.data.id);
           }
           continue;
         }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PROP_KEYS, UNIT_WIDTH, stairsTextureKey, wallTextureKey } from '../art/assetManifest';
+import { PROP_KEYS, UNIT_WIDTH, wallTextureKey } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import { isFortKind } from '../combat/stats';
 import type { Point } from '../subjects/zones';
@@ -75,8 +75,8 @@ export interface BuildingRecord {
   hearthSprite?: Phaser.GameObjects.Sprite;
   labelIndex: number;
   attachedWallId?: string;
-  /** Which way stairs climb onto the attached wall (ground side opposite). */
-  stairsFacing?: StairsFacing;
+  /** Which exterior side defenders approach from (ground opposite wall face). */
+  ladderFacing?: WallFace;
   closed?: boolean;
   rotation?: number;
   loyaltyKeepId?: string | null;
@@ -94,7 +94,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   wall: { w: FORT_TILE, h: FORT_TILE },
   tavern: { w: 48, h: 40 },
   drawbridge: { w: FORT_TILE, h: FORT_TILE },
-  stairs: { w: FORT_TILE, h: FORT_TILE },
+  ladder: { w: FORT_TILE, h: FORT_TILE },
   field: { w: 40, h: 26 },
   granary: { w: 36, h: 42 },
   barracks: { w: 40, h: 30 },
@@ -125,13 +125,13 @@ export function fortKey(x: number, y: number): string {
   return `${fortSnap(x)},${fortSnap(y)}`;
 }
 
-export type StairsFacing = 'north' | 'south' | 'east' | 'west';
+export type WallFace = 'north' | 'south' | 'east' | 'west';
 
-/** Ground cell center one fort tile from the wall on the given side. */
-export function stairsCellBesideWall(
+/** Exterior ground cell beside a wall on the given side. */
+export function groundCellBesideWall(
   wallX: number,
   wallY: number,
-  facing: StairsFacing
+  facing: WallFace
 ): Point {
   switch (facing) {
     case 'south':
@@ -144,6 +144,48 @@ export function stairsCellBesideWall(
       return { x: wallX - FORT_TILE, y: wallY };
   }
 }
+
+/** N=1 E=2 S=4 W=8 — orthogonal corner masks (two adjacent neighbors). */
+export function isWallCornerMask(mask: number): boolean {
+  return mask === 3 || mask === 6 || mask === 9 || mask === 12;
+}
+
+/** Exterior ground cells beside a corner wall where defenders can climb. */
+export function cornerExteriorGroundCells(
+  wallX: number,
+  wallY: number,
+  mask: number
+): Point[] {
+  switch (mask) {
+    case 3:
+      return [
+        { x: wallX, y: wallY + FORT_TILE },
+        { x: wallX - FORT_TILE, y: wallY },
+      ];
+    case 6:
+      return [
+        { x: wallX, y: wallY - FORT_TILE },
+        { x: wallX - FORT_TILE, y: wallY },
+      ];
+    case 12:
+      return [
+        { x: wallX, y: wallY + FORT_TILE },
+        { x: wallX + FORT_TILE, y: wallY },
+      ];
+    case 9:
+      return [
+        { x: wallX, y: wallY + FORT_TILE },
+        { x: wallX + FORT_TILE, y: wallY },
+      ];
+    default:
+      return [];
+  }
+}
+
+/** @deprecated Use groundCellBesideWall */
+export const stairsCellBesideWall = groundCellBesideWall;
+/** @deprecated Use WallFace */
+export type StairsFacing = WallFace;
 
 /** True when two world points sit on orthogonally adjacent fort cells. */
 export function isAdjacentFortCell(
@@ -201,11 +243,19 @@ export function snapCoord(n: number): number {
   return Math.round(n / 8) * 8;
 }
 
+/** Ground approach cell for a ladder mounted on a wall. */
+export function ladderGroundApproach(
+  wallX: number,
+  wallY: number,
+  facing: WallFace
+): Point {
+  return groundCellBesideWall(wallX, wallY, facing);
+}
+
 export function textureFor(
   kind: BuildKind,
   closed: boolean,
-  wallMask: number,
-  stairsFacing: StairsFacing = 'south'
+  wallMask: number
 ): string {
   switch (kind) {
     case 'house':
@@ -216,8 +266,8 @@ export function textureFor(
       return PROP_KEYS.tavern;
     case 'drawbridge':
       return closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge;
-    case 'stairs':
-      return stairsTextureKey(stairsFacing);
+    case 'ladder':
+      return PROP_KEYS.wallLadder;
     case 'field':
       return PROP_KEYS.field;
     case 'granary':
