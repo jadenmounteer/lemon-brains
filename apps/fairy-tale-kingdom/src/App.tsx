@@ -1,6 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { config } from './config';
 import type { UnitRole } from './game/art/assetManifest';
+import { nextCommandSeq, type GameCommand } from './game/GameCommand';
+import { resolveGameModeProfile, type KingdomGameMode } from './game/core/GameModeProfile';
 import { PhaserGame } from './game/PhaserGame';
 import type {
   GameOverPayload,
@@ -27,28 +29,20 @@ import { GameOverModal } from './kingdom/GameOverModal';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
 import { RansomPanel } from './kingdom/RansomPanel';
-import { TodoPanel } from './kingdom/TodoPanel';
 import { useKingdom } from './kingdom/useKingdom';
 import { useSandboxSettings } from './kingdom/useSandboxSettings';
-import type { SandboxSpawnAction } from './kingdom/sandboxSettings';
-import {
-  loadShowCareerTodos,
-  saveShowCareerTodos,
-} from './kingdom/uiPrefs';
-import { QuestionPanel } from './learning/QuestionPanel';
+import { LearningPanel } from './learning/LearningPanel';
 import { useFood } from './learning/useFood';
 import { useGold } from './learning/useGold';
-import { useSettings } from './learning/useSettings';
+import { useKnowledgeQuestSettings } from './learning/useKnowledgeQuestSettings';
 import {
   BUILD_CATALOG,
-  HIRE_CATALOG,
   NAVAL_CATALOG,
   type BuildKind,
   type NavalKind,
 } from './marketplace/catalog';
+import { canTrain, hireCost, affordableWallCells, wallPlacementCost } from './marketplace/rules';
 import { MarketplacePanel } from './marketplace/MarketplacePanel';
-import { Phase12Balance } from './game/economy/phase12Balance';
-import type { CareerTodoItem } from './game/subjects/types';
 import { InspectorPanel } from './subjects/InspectorPanel';
 import { formatClock } from './utils/formatClock';
 
@@ -93,14 +87,17 @@ const DEFAULT_STATS: KingdomStats = {
   queenCount: 0,
   fieldSlots: 0,
   militaryAvailable: 0,
-  careerTodos: [],
 };
 
 export default function App() {
-  const { settings, ready } = useSettings();
+  const {
+    settings,
+    ready,
+    updateSettings,
+    applyReadingQuickStart,
+  } = useKnowledgeQuestSettings();
   const {
     gold,
-    earnCorrectAnswer,
     resetGold,
     stealGold,
     spend,
@@ -113,9 +110,6 @@ export default function App() {
     updateSettings: updateSandboxSettings,
     reset: resetSandboxSettings,
   } = useSandboxSettings();
-  const [showCareerTodos, setShowCareerTodos] = useState(() =>
-    loadShowCareerTodos()
-  );
   const { food, setFoodAmount, resetFood } = useFood();
   const { kingdom, ready: kingdomReady, needsSetup, startNewKingdom, incrementDay } =
     useKingdom();
@@ -130,9 +124,9 @@ export default function App() {
     dayPhase: 'Night',
     hour: 0,
   });
-  const [deselectToken, setDeselectToken] = useState(0);
+  const [kingdomGameMode, setKingdomGameMode] =
+    useState<KingdomGameMode>('normal');
   const [remountKey, setRemountKey] = useState(0);
-  const [gameOver, setGameOver] = useState<GameOverPayload | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [namingAfterLoss, setNamingAfterLoss] = useState(false);
   const [stats, setStats] = useState<KingdomStats>(DEFAULT_STATS);
@@ -143,78 +137,22 @@ export default function App() {
     active: false,
     kind: null,
   });
-  const [hireRequest, setHireRequest] = useState<{
-    seq: number;
-    role: UnitRole;
-  } | null>(null);
-  const [placeRequest, setPlaceRequest] = useState<{
-    seq: number;
-    kind: BuildKind;
-  } | null>(null);
-  const [navalRequest, setNavalRequest] = useState<{
-    seq: number;
-    kind: NavalKind;
-  } | null>(null);
-  const [ransomRequest, setRansomRequest] = useState<{
-    seq: number;
-    id: string;
-  } | null>(null);
-  const [transformRequest, setTransformRequest] = useState<{
-    seq: number;
-    fgmId: string;
-  } | null>(null);
-  const [commandRequest, setCommandRequest] = useState<{
-    seq: number;
-    generalId: string;
-    troopCount: number;
-  } | null>(null);
-  const [careerHireRequest, setCareerHireRequest] = useState<{
-    seq: number;
-    subjectId: string;
-    targetRole: UnitRole;
-  } | null>(null);
-  const [executeRequest, setExecuteRequest] = useState<{
-    seq: number;
-    id: string;
-  } | null>(null);
-  const [destroyCampRequest, setDestroyCampRequest] = useState<{
-    seq: number;
-    campId: string;
-  } | null>(null);
-  const [arrestCampRequest, setArrestCampRequest] = useState<{
-    seq: number;
-    campId: string;
-  } | null>(null);
-  const [focusCampRequest, setFocusCampRequest] = useState<{
-    seq: number;
-    campId: string;
-    unitId?: string;
-  } | null>(null);
-  const [sandboxSpawnRequest, setSandboxSpawnRequest] = useState<{
-    seq: number;
-    action: SandboxSpawnAction;
-  } | null>(null);
-  const [cameraZoomRequest, setCameraZoomRequest] = useState<{
-    seq: number;
-    direction: 1 | -1;
-  } | null>(null);
+  const [gameCommand, setGameCommand] = useState<GameCommand | null>(null);
+  const [gameOver, setGameOver] = useState<GameOverPayload | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuOverlayOpen, setMenuOverlayOpen] = useState(false);
-  /** Subject inspector expanded; collapsed = follow bar only (keeps camera follow). */
   const [inspectorExpanded, setInspectorExpanded] = useState(false);
-  /** Track selection id so snapshot refresh ticks don't reset expand/collapse. */
   const selectedSubjectIdRef = useRef<string | null>(null);
-  /** Ignore scrim taps that are leftovers from the Details expand gesture. */
   const ignoreScrimUntilRef = useRef(0);
-  const [cancelPlaceToken, setCancelPlaceToken] = useState(0);
   const [pendingPlaceCost, setPendingPlaceCost] = useState<number | null>(null);
 
-  const careerTodoCount = stats.careerTodos?.length ?? 0;
-  const todosVisible = showCareerTodos && careerTodoCount > 0;
+  const modeProfile = useMemo(
+    () => resolveGameModeProfile(settings.gameDifficulty, kingdomGameMode),
+    [settings.gameDifficulty, kingdomGameMode]
+  );
 
-  const setCareerTodosVisible = useCallback((on: boolean) => {
-    setShowCareerTodos(on);
-    saveShowCareerTodos(on);
+  const sendCommand = useCallback((command: GameCommand) => {
+    setGameCommand(command);
   }, []);
 
   const showSide =
@@ -223,8 +161,7 @@ export default function App() {
     showRansom ||
     selected !== null ||
     selectedBuilding !== null ||
-    selectedCamp !== null ||
-    todosVisible;
+    selectedCamp !== null;
 
   const flash = useCallback((message: string) => {
     setToast(message);
@@ -236,13 +173,17 @@ export default function App() {
   }, []);
 
   const handleNewKingdom = useCallback(
-    async (name: string) => {
+    async (name: string, mode: KingdomGameMode) => {
       await startNewKingdom(name);
       await resetGold();
       await resetFood();
       await layoutRepo.reset();
       await captivesRepo.reset();
       setCaptives([]);
+      setKingdomGameMode(mode);
+      if (mode === 'learning') {
+        await applyReadingQuickStart();
+      }
       setGameOver(null);
       setNamingAfterLoss(false);
       setSelected(null);
@@ -254,99 +195,51 @@ export default function App() {
       setStats(DEFAULT_STATS);
       setRemountKey((n) => n + 1);
     },
-    [resetFood, resetGold, startNewKingdom]
+    [applyReadingQuickStart, resetFood, resetGold, startNewKingdom]
   );
 
-  const handleHire = useCallback(
-    async (role: UnitRole) => {
-      const item = HIRE_CATALOG.find((h) => h.role === role);
-      if (!item) return;
-      if (!item.livesAtKeep && stats.freeBeds <= 0) {
-        flash('No free beds — build a house first');
-        return;
-      }
-      if (item.requiresRoyalty && !stats.royaltyUnlocked) {
-        flash('Requires King & Queen');
-        return;
-      }
-      if (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) {
-        flash('Build a Cathedral first');
-        return;
-      }
-      if (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) {
-        flash('Build an Infirmary first');
-        return;
-      }
-      if (item.requiresBuilding === 'barracks' && !stats.hasBarracks) {
-        flash('Build a Barracks first');
-        return;
-      }
-      if (item.requiresBuilding === 'dungeon' && !stats.hasDungeon) {
-        flash('Build a Dungeon first');
-        return;
-      }
-      if (item.requiresBuilding === 'tavern' && stats.tavernCount <= 0) {
-        flash('Build a Tavern first');
-        return;
-      }
-      if (item.requiresBuilding === 'gallows' && !stats.hasGallows) {
-        flash('Build Gallows first');
-        return;
-      }
-      if (item.requiresExtraKeep && stats.keepCount < 2) {
-        flash('Need another keep first');
-        return;
-      }
+  const handleTrainAtBuilding = useCallback(
+    async (buildingId: string, role: UnitRole, building: BuildingSnapshot) => {
+      const workersAtBuilding =
+        building.workers?.filter((w) => w.role === role).length ?? 0;
+      const royalUsedAtKeep =
+        building.kind === 'keep' ? (building.royalUsed ?? 0) : undefined;
       if (
-        item.uniqueThrone &&
-        ((role === 'king' && stats.hasKing) ||
-          (role === 'queen' && stats.hasQueen))
+        !canTrain(building.kind, role, stats, {
+          workersAtBuilding,
+          enabledRoles: sandboxSettings.units.kinds,
+          royalUsedAtKeep,
+        })
       ) {
-        flash('The realm already has that monarch');
+        flash('Cannot train that role here');
         return;
       }
-      const ok = await spend(item.cost);
-      if (!ok) {
-        flash('Not enough gold');
-        return;
-      }
-      setHireRequest({ seq: Date.now(), role });
-    },
-    [
-      flash,
-      spend,
-      stats.freeBeds,
-      stats.hasCathedral,
-      stats.hasDungeon,
-      stats.hasGallows,
-      stats.hasInfirmary,
-      stats.hasBarracks,
-      stats.hasKing,
-      stats.hasQueen,
-      stats.keepCount,
-      stats.royaltyUnlocked,
-      stats.tavernCount,
-    ]
-  );
-
-  const handleCareerHire = useCallback(
-    async (todo: CareerTodoItem) => {
-      const cost =
-        todo.cost ||
-        Phase12Balance.careerCosts[todo.targetRole] ||
-        20;
+      const cost = hireCost(role);
       const ok = await spend(cost);
       if (!ok) {
         flash('Not enough gold');
         return;
       }
-      setCareerHireRequest({
-        seq: Date.now(),
-        subjectId: todo.subjectId,
-        targetRole: todo.targetRole,
+      sendCommand({
+        type: 'TRAIN_AT_BUILDING',
+        seq: nextCommandSeq(),
+        buildingId,
+        role,
       });
     },
-    [flash, spend]
+    [flash, sandboxSettings.units.kinds, sendCommand, spend, stats]
+  );
+
+  const handleCareerHire = useCallback(
+    async (subjectId: string, targetRole: UnitRole, cost: number) => {
+      const ok = await spend(cost);
+      if (!ok) {
+        flash('Not enough gold');
+        return;
+      }
+      sendCommand({ type: 'PROMOTE_CAREER', seq: nextCommandSeq(), subjectId, targetRole });
+    },
+    [flash, sendCommand, spend]
   );
 
   const handleBuyBuilding = useCallback(
@@ -375,6 +268,21 @@ export default function App() {
         flash('Build a Dungeon first');
         return;
       }
+      if (kind === 'wall') {
+        const maxCells = affordableWallCells(gold, infiniteGold);
+        if (maxCells < 1) {
+          flash('Not enough gold (3g per wall cell)');
+          return;
+        }
+        sendCommand({
+          type: 'BEGIN_PLACE',
+          seq: nextCommandSeq(),
+          kind: 'wall',
+          maxWallCells: maxCells,
+        });
+        flash('Drag on the map to draw walls (3g per cell)');
+        return;
+      }
       const ok = await spend(item.cost);
       if (!ok) {
         flash('Not enough gold');
@@ -382,13 +290,15 @@ export default function App() {
       }
       // Cheat never deducts — only stash a refund amount when real gold was spent
       setPendingPlaceCost(infiniteGold ? null : item.cost);
-      setPlaceRequest({ seq: Date.now(), kind });
+      sendCommand({ type: 'BEGIN_PLACE', seq: nextCommandSeq(), kind });
       flash(`Place your ${item.name.toLowerCase()} on empty ground`);
     },
     [
       flash,
+      sendCommand,
       infiniteGold,
       spend,
+      gold,
       stats.fieldCount,
       stats.fieldSlots,
       stats.granaryCount,
@@ -419,10 +329,11 @@ export default function App() {
         flash('Not enough gold');
         return;
       }
-      setNavalRequest({ seq: Date.now(), kind });
+      sendCommand({ type: 'BUY_NAVAL', seq: nextCommandSeq(), kind });
     },
     [
       flash,
+      sendCommand,
       spend,
       stats.hasDock,
       stats.fishingBoatCapacity,
@@ -451,11 +362,15 @@ export default function App() {
         flash('Not enough gold');
         return;
       }
-      setRansomRequest({ seq: Date.now(), id });
+      sendCommand({ type: 'PAY_RANSOM', seq: nextCommandSeq(), id });
       window.setTimeout(() => refreshCaptives(), 100);
     },
-    [flash, refreshCaptives, spend]
+    [flash, refreshCaptives, sendCommand, spend]
   );
+
+  const clearSelection = useCallback(() => {
+    sendCommand({ type: 'CLEAR_SELECTION', seq: nextCommandSeq() });
+  }, [sendCommand]);
 
   const showSidePanels = kingdomReady && !needsSetup && !namingAfterLoss;
 
@@ -468,9 +383,8 @@ export default function App() {
     setSelectedBuilding(null);
     setSelectedCamp(null);
     setInspectorExpanded(false);
-    setDeselectToken((n) => n + 1);
-    setCareerTodosVisible(false);
-  }, [setCareerTodosVisible]);
+    clearSelection();
+  }, [clearSelection]);
 
   const openMarket = useCallback(() => {
     setMenuOpen(false);
@@ -481,9 +395,9 @@ export default function App() {
     setSelectedBuilding(null);
     setSelectedCamp(null);
     setInspectorExpanded(false);
-    setDeselectToken((n) => n + 1);
+    clearSelection();
     setShowMarket((v) => !v);
-  }, []);
+  }, [clearSelection]);
 
   const openQuestions = useCallback(() => {
     setMenuOpen(false);
@@ -497,7 +411,6 @@ export default function App() {
     showMarket ||
     showQuestions ||
     showRansom ||
-    todosVisible ||
     !!selectedBuilding ||
     !!selectedCamp ||
     (Boolean(selected) && inspectorExpanded);
@@ -511,7 +424,6 @@ export default function App() {
     (Boolean(selected) && inspectorExpanded) ||
     !!selectedBuilding ||
     !!selectedCamp ||
-    todosVisible ||
     !!gameOver;
 
   return (
@@ -604,18 +516,6 @@ export default function App() {
                   Mkt
                 </span>
               </button>
-              {careerTodoCount > 0 && (
-                <button
-                  type="button"
-                  className="hud-icon-btn touch-btn hud-desktop-only"
-                  aria-pressed={showCareerTodos}
-                  onClick={() => setCareerTodosVisible(!showCareerTodos)}
-                >
-                  {showCareerTodos
-                    ? 'Hide wishes'
-                    : `Wishes (${careerTodoCount})`}
-                </button>
-              )}
               {(captives.length > 0 || showRansom) && (
                 <button
                   type="button"
@@ -647,13 +547,15 @@ export default function App() {
               onStartNewKingdom={handleNewKingdom}
               infiniteGold={infiniteGold}
               onToggleInfiniteGold={setCheatInfiniteGold}
-              showCareerTodos={showCareerTodos}
-              onToggleShowCareerTodos={setCareerTodosVisible}
               sandboxSettings={sandboxSettings}
               onSandboxSettingsChange={updateSandboxSettings}
               onSandboxSettingsReset={resetSandboxSettings}
               onSandboxSpawn={(action) =>
-                setSandboxSpawnRequest({ seq: Date.now(), action })
+                sendCommand({
+                  type: 'SANDBOX_SPAWN',
+                  seq: nextCommandSeq(),
+                  action,
+                })
               }
               open={menuOpen || needsSetup || namingAfterLoss}
               onOpenChange={(next) => {
@@ -684,21 +586,10 @@ export default function App() {
           <PhaserGame
             remountKey={remountKey}
             daysPlayed={kingdom.daysPlayed}
+            kingdomGameMode={kingdomGameMode}
+            gameDifficulty={settings.gameDifficulty}
             sandboxSettings={sandboxSettings}
-            sandboxSpawnRequest={sandboxSpawnRequest}
-            cameraZoomRequest={cameraZoomRequest}
-            hireRequest={hireRequest}
-            placeRequest={placeRequest}
-            cancelPlaceToken={cancelPlaceToken}
-            ransomRequest={ransomRequest}
-            transformRequest={transformRequest}
-            commandRequest={commandRequest}
-            careerHireRequest={careerHireRequest}
-            executeRequest={executeRequest}
-            destroyCampRequest={destroyCampRequest}
-            arrestCampRequest={arrestCampRequest}
-            focusCampRequest={focusCampRequest}
-            navalRequest={navalRequest}
+            command={gameCommand}
             onSubjectSelected={(s) => {
               const nextId = s?.id ?? null;
               const idChanged = nextId !== selectedSubjectIdRef.current;
@@ -775,6 +666,24 @@ export default function App() {
             }}
             onKingdomStats={setStats}
             onPlaceMode={setPlaceMode}
+            onWallPlaced={(payload) => {
+              const cost = wallPlacementCost(payload.cells);
+              if (!infiniteGold) {
+                void spend(cost).then((ok) => {
+                  if (!ok) {
+                    flash('Not enough gold for wall placement');
+                    return;
+                  }
+                  flash(
+                    `Wall placed — ${payload.cells} cell${payload.cells === 1 ? '' : 's'} (${cost}g)`
+                  );
+                });
+              } else {
+                flash(
+                  `Wall placed — ${payload.cells} cell${payload.cells === 1 ? '' : 's'}`
+                );
+              }
+            }}
             onFoodChanged={setFoodAmount}
             onRoyalCaptured={(_payload: RoyalCapturedPayload) => {
               refreshCaptives();
@@ -783,6 +692,11 @@ export default function App() {
             onCaptivesChanged={() => {
               refreshCaptives();
             }}
+            onAutoGrantWish={(payload) => {
+              void handleCareerHire(payload.subjectId, payload.targetRole, payload.cost);
+            }}
+            gold={gold}
+            infiniteGold={infiniteGold}
             onMarketToast={(message) => {
               if (message === 'Building placed') {
                 setPendingPlaceCost(null);
@@ -795,7 +709,6 @@ export default function App() {
               }
               flash(message);
             }}
-            deselectToken={deselectToken}
           />
         )}
 
@@ -812,7 +725,7 @@ export default function App() {
               className="camera-zoom-btn touch-btn"
               aria-label="Zoom out"
               onClick={() =>
-                setCameraZoomRequest({ seq: Date.now(), direction: -1 })
+                sendCommand({ type: 'CAMERA_ZOOM', seq: nextCommandSeq(), direction: -1 })
               }
             >
               −
@@ -822,7 +735,7 @@ export default function App() {
               className="camera-zoom-btn touch-btn"
               aria-label="Zoom in"
               onClick={() =>
-                setCameraZoomRequest({ seq: Date.now(), direction: 1 })
+                sendCommand({ type: 'CAMERA_ZOOM', seq: nextCommandSeq(), direction: 1 })
               }
             >
               +
@@ -856,20 +769,12 @@ export default function App() {
             <aside
               className={`side-panels sheet-stack${followingPeek ? ' follow-peek' : ''}`}
             >
-              {todosVisible && (
-                <TodoPanel
-                  todos={stats.careerTodos ?? []}
-                  gold={gold}
-                  infiniteGold={infiniteGold}
-                  onHire={(todo) => {
-                    void handleCareerHire(todo);
-                  }}
-                  onHide={() => setCareerTodosVisible(false)}
-                />
-              )}
               {selected && (
                 <InspectorPanel
                   subject={selected}
+                  stats={stats}
+                  gold={gold}
+                  infiniteGold={infiniteGold}
                   militaryAvailable={stats.militaryAvailable}
                   collapsed={!inspectorExpanded}
                   onExpand={() => {
@@ -881,29 +786,45 @@ export default function App() {
                     setSelected(null);
                     selectedSubjectIdRef.current = null;
                     setInspectorExpanded(false);
-                    setDeselectToken((n) => n + 1);
+                    clearSelection();
                   }}
                   onTransformPeasant={() => {
-                    setTransformRequest({
-                      seq: Date.now(),
+                    sendCommand({
+                      type: 'TRANSFORM_PEASANT',
+                      seq: nextCommandSeq(),
                       fgmId: selected.id,
                     });
                   }}
                   onCommandTroops={(troopCount) => {
-                    setCommandRequest({
-                      seq: Date.now(),
+                    sendCommand({
+                      type: 'COMMAND_DETACHMENT',
+                      seq: nextCommandSeq(),
                       generalId: selected.id,
                       troopCount,
                     });
+                  }}
+                  onPromoteCareer={(targetRole, cost) => {
+                    void handleCareerHire(selected.id, targetRole, cost);
                   }}
                 />
               )}
               {selectedBuilding && (
                 <BuildingInspectorPanel
                   building={selectedBuilding}
+                  gold={gold}
+                  infiniteGold={infiniteGold}
+                  stats={stats}
+                  enabledRoles={sandboxSettings.units.kinds}
+                  onTrain={(buildingId, role) => {
+                    void handleTrainAtBuilding(
+                      buildingId,
+                      role,
+                      selectedBuilding
+                    );
+                  }}
                   onClose={() => {
                     setSelectedBuilding(null);
-                    setDeselectToken((n) => n + 1);
+                    clearSelection();
                   }}
                 />
               )}
@@ -911,24 +832,27 @@ export default function App() {
                 <CampInspectorPanel
                   camp={selectedCamp}
                   onArrest={() => {
-                    setArrestCampRequest({
-                      seq: Date.now(),
+                    sendCommand({
+                      type: 'ARREST_CAMP',
+                      seq: nextCommandSeq(),
                       campId: selectedCamp.id,
                     });
                   }}
                   onDestroy={() => {
-                    setDestroyCampRequest({
-                      seq: Date.now(),
+                    sendCommand({
+                      type: 'DESTROY_CAMP',
+                      seq: nextCommandSeq(),
                       campId: selectedCamp.id,
                     });
                   }}
                   onClose={() => {
                     setSelectedCamp(null);
-                    setDeselectToken((n) => n + 1);
+                    clearSelection();
                   }}
                   onSelectUnit={(unit: CampRosterEntry) => {
-                    setFocusCampRequest({
-                      seq: Date.now(),
+                    sendCommand({
+                      type: 'FOCUS_CAMP',
+                      seq: nextCommandSeq(),
                       campId: selectedCamp.id,
                       unitId: unit.id,
                     });
@@ -948,16 +872,28 @@ export default function App() {
                     void handleRansom(id, cost);
                   }}
                   onExecute={(id) => {
-                    setExecuteRequest({ seq: Date.now(), id });
+                    sendCommand({
+                      type: 'EXECUTE_CAPTIVE',
+                      seq: nextCommandSeq(),
+                      id,
+                    });
                   }}
                   onClose={() => setShowRansom(false)}
                 />
               )}
               {showQuestions && (
-                <QuestionPanel
+                <LearningPanel
                   settings={settings}
                   ready={ready}
-                  onGoldEarned={earnCorrectAnswer}
+                  goldPerCorrect={modeProfile.goldPerCorrect}
+                  onGoldEarned={addGold}
+                  onStreakMilestone={(n) => flash(`${n} in a row!`)}
+                  onUpdateSettings={(partial) => {
+                    void updateSettings(partial);
+                  }}
+                  onQuickStart={() => {
+                    void applyReadingQuickStart();
+                  }}
                   onClose={() => setShowQuestions(false)}
                 />
               )}
@@ -967,10 +903,6 @@ export default function App() {
                   infiniteGold={infiniteGold}
                   stats={stats}
                   placeMode={placeMode}
-                  enabledRoles={sandboxSettings.units.kinds}
-                  onHire={(role) => {
-                    void handleHire(role);
-                  }}
                   onBuyBuilding={(kind) => {
                     void handleBuyBuilding(kind);
                   }}
@@ -979,7 +911,7 @@ export default function App() {
                   }}
                   onCancelPlace={() => {
                     refundPendingPlace(true);
-                    setCancelPlaceToken((n) => n + 1);
+                    sendCommand({ type: 'CANCEL_PLACE', seq: nextCommandSeq() });
                   }}
                   onClose={() => setShowMarket(false)}
                 />

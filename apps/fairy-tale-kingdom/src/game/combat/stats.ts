@@ -169,6 +169,8 @@ export function hasInterior(kind: BuildKind | 'keep'): boolean {
     kind === 'keep' ||
     kind === 'cathedral' ||
     kind === 'infirmary' ||
-    kind === 'dungeon'
+    kind === 'dungeon' ||
+    kind === 'bakery' ||
+    kind === 'market'
   );
 }

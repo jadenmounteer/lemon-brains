@@ -38,6 +38,10 @@ export const SiegeBalance = {
   fieldBurnPriorityRadius: 90,
   vfxMaxFlames: 12,
   vfxMaxProjectiles: 20,
+
+  ladderHp: 40,
+  ladderDeployMs: 3500,
+  ladderClimbRange: 32,
 } as const;
 
 export type EngineKind = 'ram' | 'catapult' | 'trebuchet';

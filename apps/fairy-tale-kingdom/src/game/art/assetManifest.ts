@@ -148,6 +148,9 @@ export const PROP_KEYS = {
   tavernInterior: 'prop-tavern-interior',
   cathedralInterior: 'prop-cathedral-interior',
   infirmaryInterior: 'prop-infirmary-interior',
+  dungeonInterior: 'prop-dungeon-interior',
+  bakeryInterior: 'prop-bakery-interior',
+  marketInterior: 'prop-market-interior',
   vampireCastleInterior: 'prop-vampire-castle-interior',
   hearthFire: 'vfx-hearth-fire',
 } as const;

@@ -29,28 +29,28 @@ const hireByRole = Object.fromEntries(
 function hireEntry(
   role: string,
   artKey: string,
-  extra: string[]
+  body: string[]
 ): ManualEntry {
   const h = hireByRole[role];
   return {
     artKey,
     title: h?.name ?? role,
-    subtitle: h ? `${h.cost} gold` : undefined,
-    body: [h?.blurb ?? '', ...extra].filter(Boolean),
+    subtitle: h ? `${h.cost} gold to train` : undefined,
+    body,
   };
 }
 
 function buildEntry(
   kind: string,
   artKey: string,
-  extra: string[]
+  body: string[]
 ): ManualEntry {
   const b = BUILD_CATALOG.find((x) => x.kind === kind);
   return {
     artKey,
     title: b?.name ?? kind,
     subtitle: b ? `${b.cost} gold` : undefined,
-    body: [b?.blurb ?? '', ...extra].filter(Boolean),
+    body,
   };
 }
 
@@ -60,21 +60,21 @@ const festivalExtra: Record<
 > = {
   peasant: {
     benefits:
-      'Raises happiness for nearby commoners, softens the urge to defect, and fills the streets with chatter you can watch.',
+      'Your Majesty, nearby commoners feel lighter of heart — defection softens, and the lanes fill with chatter worth watching.',
     scene:
-      'Clustered cottages host ring dances, porch gossip, and shared loaves. Celebrants bob, pair off to talk, cheer “Huzzah!”, and pass cups — speech bubbles float above their heads.',
+      'Cottages ring with dance, porch gossip, and shared loaves. Celebrants bob, pair off to talk, cheer “Huzzah!”, and pass cups — speech bubbles drift above their heads like incense.',
   },
   market: {
     benefits:
-      'Merchants and peasants trade cheer for coin-flow vibes; happiness climbs around the square and the realm feels prosperous.',
+      'Merchants and peasants trade cheer for the feeling of prosperity; happiness climbs around the square.',
     scene:
-      'Stalls bustle. Jesters (if any) mime music while shoppers awe at the spectacle, sample snacks, and gossip about bargains.',
+      'Stalls bustle. Jesters mime music while shoppers awe at the spectacle, sample snacks, and gossip about bargains.',
   },
   harvest: {
     benefits:
-      'Boosts the festival harvest multiplier so fields work harder while the revel lasts — food pressure eases after a good yield.',
+      'The harvest multiplier rises while the revel lasts — food pressure eases after a good yield.',
     scene:
-      'Farmers dance between furrows, raise cups to the granary, and cheer the crop. Expect feast beats and “That tune lifts the heart.”',
+      'Farmers dance between furrows, raise cups toward the granary, and cheer the crop. Expect feast beats and “That tune lifts the heart.”',
   },
   tavern: {
     benefits:
@@ -111,7 +111,7 @@ export function buildManualSections(): ManualSection[] {
       subtitle: `Requires: ${f.buildings} · ${f.units}`,
       body: [
         f.blurb,
-        extra ? `What goes on: ${extra.scene}` : '',
+        extra ? `What you will see: ${extra.scene}` : '',
         extra ? `Why it matters: ${extra.benefits}` : '',
       ].filter(Boolean),
     } satisfies ManualEntry;
@@ -122,18 +122,44 @@ export function buildManualSections(): ManualSection[] {
       id: 'howto',
       label: 'How to rule',
       intro: [
-        'Fairy Tale Kingdom is a watchable realm. You hire, place, and inspect — subjects live their schedules inside a living castle and across the map, fight when pressed, and celebrate when the gates are met.',
-        'Gold comes from Knowledge Quest answers (Questions in the menu on mobile; Market stays on the HUD) and recovered plunder. Spend it on beds, workplaces, walls, and careers. Food and happiness keep people loyal; empty stomachs and misery birth witches, thieves, and bandits.',
-        'Start with a lone keep and hire your first peasants. Place houses for beds, a granary then fields for food, roads for patrols, and a dungeon or barracks when you need order and steel. Grow outward — the map is vast, and fringe camps watch you from the wilds.',
+        'I am Merlin, Your Majesty — wizard advisor to the crown. Fairy Tale Kingdom is a watchable realm: you inspect, you spend, you place stone and timber, and your subjects live their days inside a castle that breathes.',
+        'Gold flows from Knowledge Quest — open Questions on desktop, or the menu on mobile — and from plunder recovered by your guards. Spend it in the Marketplace on buildings and ships; train folk at the workplaces where they will serve. Food and happiness keep people loyal; empty bellies and misery birth witches, thieves, and bandits.',
+        'You begin with a lone keep upon the road and an empty map. Place houses for beds, a granary then fields for food, roads for patrols, and a dungeon or barracks when order and steel are needed. The wilds are vast, and fringe camps already watch you.',
       ],
       entries: [
         {
-          title: 'Day-to-day loop',
+          title: 'The sovereign loop',
           body: [
-            'Watch castle life unfold: follow a cook through supper prep, or the king at morning court. Tap anyone to follow; open Details for job, room (“At: Banquet hall”), thoughts, and happiness.',
-            'Answer Knowledge Quest questions for gold → hire workers and place buildings from Market.',
-            'Promote careers from career wishes (menu on mobile) when building capacity frees up.',
-            'Watch festivals, staged weddings, mounted jousts, and camp life. When raids loom, soldiers and archers leave the revel to hold their keep’s perimeter; guards keep patrolling the fief’s roads.',
+            'Watch life unfold: follow a cook through supper prep, or the king at morning court. Tap anyone to follow; open Details for job, room (“At: Banquet hall”), thoughts, and happiness.',
+            'Answer reading questions for gold → buy buildings and boats from the Marketplace → click a building and Train the roles it supports.',
+            'When a subject dreams of promotion, select them and read their Aspiration in the inspector. If every requirement is met, press Grant wish to promote them.',
+            'Festivals, weddings, jousts, and camp life play out on their own. When raids loom, soldiers and archers leave the revel to hold their keep’s perimeter; guards keep patrolling the fief’s roads.',
+          ],
+        },
+        {
+          title: 'Reading and gold',
+          body: [
+            'Your treasury grows when you answer Knowledge Quest questions correctly. Learning Mode pays more gold per correct answer than Normal Mode, and automatically applies a gentle reading curriculum when you found a new kingdom.',
+            'Learning Mode also grants a longer grace before the first raid, softer camp pressure, and fewer monsters at the start — time to learn the map before the horns blow.',
+            'Gold funds Marketplace purchases and training costs at buildings. Promotions through Grant wish cost gold as well. Tavern losses from theft hurt less; guards return stolen coin when they arrest raiders.',
+          ],
+        },
+        {
+          title: 'Train at buildings',
+          body: [
+            'The Marketplace sells structures and ships — not people. To recruit, select a building and use its Train list: barracks for soldiers, dungeon for guards, cathedral for bishop and witch hunter, keep for royalty, and so on.',
+            'Each building has role capacity — inspect Who works here and Capacity before you spend. Training checks beds (except royals, who live at keeps), royal gates, and unique slots such as one bishop or one fairy godmother.',
+            'New subjects spawn at the building entrance and bind to that workplace within their fief.',
+          ],
+        },
+        {
+          title: 'Grant wish (aspirations)',
+          body: [
+            'Peasants and soldiers on the guard track sometimes set a career goal. Select them and scroll to Aspiration in the inspector.',
+            'Merlin lists each requirement — dungeon built, barracks open, post capacity, gold on hand — with a ✓ or ✗ beside it. When all are satisfied, press Grant wish to promote them in place.',
+            'In Learning Mode (or Sandbox → Fairy Godmother helps), the Fairy Godmother may auto-grant wishes with a poof when every requirement is met and she walks the realm.',
+            'Peasants with dreams sometimes pray at the cathedral — click them to read their aspiration.',
+            'This is how a peasant becomes a guard, soldier, knight, bishop, jester, or other career without hiring from the Marketplace.',
           ],
         },
         {
@@ -144,9 +170,17 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         {
-          title: 'Keep loyalty',
+          title: 'Keep loyalty & fiefs',
           body: [
-            'Every subject and building answers to the nearest keep (the crown keep or a duke/duchess seat). Inspectors show Loyalty. Select a keep to tint its loyal folk — patrols, work, and defense stay in that fief.',
+            'Every subject and building answers to the nearest keep — the crown keep or a duke’s seat. Inspectors show Loyalty. Select a keep to tint its loyal folk.',
+            'Work, patrol, and defense stay inside that fief’s influence ring. Wander targets clamp to the sphere — subjects rarely drift outside their liege’s territory unless fleeing danger.',
+          ],
+        },
+        {
+          title: 'One celebration at a time',
+          body: [
+            'The realm schedules a single major celebration at a time — a street festival or a royal ball, never both at once. After one ends, a cooldown passes before the next can begin; more eligible venues lengthen the gap slightly.',
+            'If no festival type qualifies when the timer fires, the realm simply waits. Royal balls stay separate from street festivals. When a raid begins, active revels scatter — in Learning Mode this happens readily; in Normal Mode celebrations defer until peacetime returns.',
           ],
         },
         {
@@ -163,9 +197,16 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         {
+          title: 'Learning vs Normal mode',
+          body: [
+            'When you start a new kingdom, choose Learning Mode for a calmer first week: longer raid grace, softer camp pressure, more gold per correct answer, no starter monsters, and undead off by default.',
+            'Normal Mode is standard pressure — sooner raids, default gold per answer, and the wilds begin with a monster abroad. Switch modes only by starting a fresh kingdom save.',
+          ],
+        },
+        {
           title: 'Sandbox settings',
           body: [
-            'Open the hamburger menu → Sandbox settings. Tune raid intensity, which camps and monsters can appear, sickness, undead pressure, and wall HP. These knobs are saved in this browser only — they are not part of a kingdom save.',
+            'Open the hamburger menu → Sandbox settings. Tune raid intensity, which camps and monsters can appear, sickness, undead (beta — all off by default), and wall HP. These knobs live in this browser only — they are not part of a kingdom save.',
           ],
         },
       ],
@@ -174,69 +215,71 @@ export function buildManualSections(): ManualSection[] {
       id: 'subjects',
       label: 'Subjects',
       intro: [
-        'Every subject has a name, gender, schedule, job or role, workplace, house or keep, happiness, hunger, and a life log of thoughts. Click anyone to open the inspector — Job and Works at show where they labor.',
+        'Every soul has a name, gender, schedule, job or role, workplace, house or keep, happiness, hunger, and a life log of thoughts. Click anyone to open the inspector — Job and Works at show where they labor.',
       ],
       entries: [
         hireEntry('peasant', 'unit:peasant', [
-          'The backbone of the realm. Jobs fill food-first: farmer → baker → fisherman → merchant, then castle staff (cook, servant, steward, scribe, cupbearer). They commute to real workplaces, flee when raids scream danger, join capped festival crowds (military stays on duty), marry, and raise children when beds allow.',
+          'The backbone of the realm. Jobs fill food-first: farmer → baker → fisherman → merchant, then castle staff (cook, servant, steward, scribe, cupbearer). Train peasants at fields, bakeries, docks, markets, or the keep.',
+          'They commute to real workplaces, flee when raids scream danger, join capped festival crowds (military stays on duty), marry, and raise children when beds allow.',
         ]),
         {
           artKey: 'unit:child',
           title: 'Child',
           body: [
-            'Born to married couples who share a house. Children play in the streets and by the keep gate, grow up on the clock, and become peasants ready for careers. No marketplace hire — only family.',
+            'Born to married couples who share a house. Children play in the streets and by the keep gate, grow up on the clock, and become peasants ready for careers. No training purchase — only family.',
           ],
         },
         hireEntry('guard', 'unit:guard', [
-          'Patrol the loyalty keep’s roads, houses, and civic posts. Arrest thieves and necromancers when a dungeon exists, recover stolen gold, and keep walking raid roads while soldiers hold the perimeter.',
+          'Train at the dungeon. Patrol the loyalty keep’s roads, houses, and civic posts — pausing at cathedral, market, infirmary, tavern, bakery, granary, cemetery, and gallows on their rounds.',
+          'Arrest thieves and necromancers when a dungeon exists, recover stolen gold, and keep walking raid roads while soldiers hold the perimeter.',
         ]),
         hireEntry('soldier', 'unit:soldier', [
-          'Defend their keep’s perimeter when any raid or siege hits. Peacetime they patrol the fief; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
+          'Train at the barracks. Defend their keep’s perimeter when any raid or siege hits. Peacetime they patrol the fief; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
         ]),
         hireEntry('archer', 'unit:archer', [
-          'Prefer battlements with line-of-sight toward raiders threatening their fief. Climb stairs in a raid; otherwise patrol with the army of their keep.',
+          'Train at the barracks. Prefer battlements with line-of-sight toward raiders threatening their fief. Climb stairs in a raid; otherwise patrol with the army of their keep.',
         ]),
         hireEntry('elite_guard', 'unit:elite_guard', [
-          'Hardened melee for late pressure. Needs king & queen plus barracks capacity.',
+          'Hardened melee for late pressure. Train at the barracks once king and queen reign and posts remain open.',
         ]),
         hireEntry('elite_archer', 'unit:elite_archer', [
-          'Master bowmen for sieges and dragon-adjacent chaos. Royalty + barracks.',
+          'Master bowmen for sieges and dragon-adjacent chaos. Train at the barracks with royalty seated.',
         ]),
         hireEntry('knight', 'unit:knight', [
-          'Hunt schedule pathfinds to living monsters across the map (sleeping dragons first). Two or more unlock royal jousts when the crown and a civilian crowd are present.',
+          'Train at the barracks. Hunt schedule pathfinds to living monsters across the map (sleeping dragons first). Two or more unlock royal jousts when the crown and a civilian crowd are present.',
         ]),
         hireEntry('general', 'unit:general', [
-          'Issue detachment commands against camps, monsters, or vampire castles. Strategy is your hand on the frontier war.',
+          'Train at the barracks — one per realm. Issue detachment commands against camps, monsters, or vampire castles. Strategy is your hand on the frontier war.',
         ]),
         hireEntry('physician', 'unit:physician', [
-          'Heals the sick from the infirmary. Plague-mask and all — keep one when curses and hunger spread disease.',
+          'Train at the infirmary. Plague-mask and all — keep one when curses and hunger spread disease.',
         ]),
         hireEntry('bishop', 'unit:bishop', [
-          'Marries couples at the cathedral (royal and peasant). Helps exorcise haunted houses with witch hunters. Unique.',
+          'Train at the cathedral once it stands. Marries couples (royal and peasant). Helps exorcise haunted houses with witch hunters. Unique.',
         ]),
         hireEntry('jester', 'unit:jester', [
-          'Lifts spirits near keep and tavern. Unlocks tavern revels; mime music at festivals.',
+          'Train at the tavern. Lifts spirits near keep and tavern. Unlocks tavern revels; mime music at festivals.',
         ]),
         hireEntry('dungeon_keeper', 'unit:dungeon_keeper', [
-          'Watches captives. Pair with guards and the gallows for a full justice pipeline.',
+          'Train at the dungeon. Watches captives. Pair with guards and the gallows for a full justice pipeline.',
         ]),
         hireEntry('executioner', 'unit:executioner', [
-          'Carries out sentences at the gallows — grim spectacle, clear dungeon beds.',
+          'Train at the dungeon or gallows. Carries out sentences — grim spectacle, clear dungeon beds.',
         ]),
         hireEntry('witch_hunter', 'unit:witch_hunter', [
-          'Hunts coven witches, aids exorcisms, and joins knights against vampire castles. Cathedral required.',
+          'Train at the cathedral. Hunts coven witches, aids exorcisms, and joins knights against vampire castles.',
         ]),
         hireEntry('king', 'unit:king', [
-          'Sole monarch with the queen — jeweled crown, fur-trimmed robe, and scepter. Unlocks royal buildings, barracks, balls, and succession. Lives at a keep.',
+          'Train at the keep — sole monarch with the queen. Jeweled crown, fur-trimmed robe, and scepter. Unlocks royal buildings, barracks, balls, and succession.',
         ]),
         hireEntry('queen', 'unit:queen', [
-          'Rules beside the king in a full gown, crown, and veil. May bear a prince. Needed with the king for elites, manors, and jousts.',
+          'Train at the keep beside the king. Full gown, crown, and veil. May bear a prince. Needed with the king for elites, manors, and jousts.',
         ]),
         {
           artKey: 'unit:prince',
           title: 'Prince',
           body: [
-            'Born to the royal couple or present at court — coronet and noble cape. Can restore cursed princesses and marry a permanent princess at the cathedral. If both monarchs fall, a married prince & princess may succeed the throne.',
+            'Born to the royal couple or present at court — coronet and noble cape. Can restore cursed princesses and marry a permanent princess at the cathedral. If both monarchs fall, a married prince and princess may succeed the throne.',
           ],
         },
         {
@@ -247,13 +290,13 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         hireEntry('duke', 'unit:duke', [
-          'Regional lord for an extra keep — noble trim and shoulder cape, lesser crown than the king. Spreads influence and softens the all-keeps-must-fall lose condition.',
+          'Train at a keep once you hold a second seat. Regional lord — noble trim and shoulder cape, lesser crown than the king. Spreads influence and softens the all-keeps-must-fall lose condition.',
         ]),
         hireEntry('duchess', 'unit:duchess', [
-          'Regional lady for an extra keep — noble dress without a full queen’s train. Same strategic value as a duke.',
+          'Train at a keep. Regional lady — noble dress without a full queen’s train. Same strategic value as a duke.',
         ]),
         hireEntry('fairy_godmother', 'unit:fairy_godmother', [
-          'Starry hat, flowing gown, and sparkle wand. At a royal ball, blesses a female peasant into a temporary princess. Unique.',
+          'Train at the keep. Starry hat, flowing gown, and sparkle wand. At a royal ball, blesses a female peasant into a temporary princess. Unique.',
         ]),
         {
           artKey: 'unit:necromancer',
@@ -289,7 +332,7 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'prop:venueWedding',
           title: 'Weddings',
           body: [
-            'A bishop at a cathedral can marry eligible pairs (including prince + princess).',
+            'A bishop at a cathedral can marry eligible pairs (including prince and princess).',
             'Ceremony stages: guests gather → aisle procession → bishop rite (“I do!”) → cheers → feast handoff in the keep banquet hall. Nearby guests (capped) gain happiness.',
             'Married pairs share a house when beds allow; a temporary ball-princess who weds a prince stays a princess forever.',
           ],
@@ -305,14 +348,14 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:king',
           title: 'Royal family',
           body: [
-            'One king and queen kingdom-wide. They live at keeps (royal slots per keep). Extra keeps seat dukes/duchesses, not second monarchs. Succession: if both throne holders die, a married prince and princess may become the new king and queen.',
+            'One king and queen kingdom-wide. They live at keeps (royal slots per keep). Extra keeps seat dukes and duchesses, not second monarchs. Succession: if both throne holders die, a married prince and princess may become the new king and queen.',
           ],
         },
         {
           artKey: 'prop:carriage',
           title: 'Parades & balls',
           body: [
-            'Royal parades roll the carriage through influence. Royal balls revel in the keep courtyard (dance, toast, chatter) — Fairy Godmother blessings only work then. Indoor feasts fill the banquet hall on the royal schedule. Jesters juggle in the great hall and courtyard. Balls are separate from street festivals.',
+            'Royal parades roll the carriage through influence. Royal balls revel in the keep courtyard (dance, toast, chatter) — Fairy Godmother blessings only work then. Indoor feasts fill the banquet hall on the royal schedule. Jesters juggle in the great hall and courtyard. Balls are separate from street festivals and obey the one-celebration-at-a-time rule.',
           ],
         },
       ],
@@ -321,59 +364,59 @@ export function buildManualSections(): ManualSection[] {
       id: 'buildings',
       label: 'Buildings',
       intro: [
-        'Place from the marketplace. Selecting a workplace lists Who works here. Burnable buildings can fall in raids and sieges — repair interrupts send peasants with hammers. Step inside a dwelling or the keep and the roof hides so you can see the floor plan.',
+        'Buy structures from the Marketplace, then click the map to place them. Selecting a workplace lists Who works here and offers Train buttons. Burnable buildings can fall in raids and sieges — repair interrupts send peasants with hammers. Step inside a dwelling or the keep and the roof hides so you can see the floor plan.',
       ],
       entries: [
         buildEntry('keep', 'prop:keep', [
-          'Heart of the realm — now a large multi-room castle. Influence circle; royal housing; castle staff workplaces; lose only when all keeps fall. See Castle life for the room guide.',
+          'Heart of the realm — a large multi-room castle. Influence circle; royal housing; castle staff workplaces; lose only when all keeps fall. Train king, queen, duke, duchess, and fairy godmother here. See Castle life for the room guide.',
         ]),
         buildEntry('house', 'prop:house', [
-          'Three beds. Starter homes for hires and families.',
+          'Three beds. Starter homes for families — peasants need beds before you can train more commoners.',
         ]),
         buildEntry('manor', 'prop:manor', [
-          'Twin-wing stone estate with slate roofs, banners, and a grand door — six beds. Needs king & queen.',
+          'Twin-wing stone estate with slate roofs, banners, and a grand door — six beds. Needs king and queen.',
         ]),
         buildEntry('granary', 'prop:granary', [
-          'Tall timber silo on stilts with grain sacks and a loading chute — not a cottage. +50% harvest while standing; unlocks 2 field slots.',
+          'Tall timber silo on stilts with grain sacks and a loading chute. +50% harvest while standing; unlocks 2 field slots.',
         ]),
         buildEntry('field', 'prop:field', [
-          'Farmers harvest here (job capacity). Needs granary slots.',
+          'Farmers harvest here (job capacity). Needs granary slots. Train peasants at the field.',
         ]),
         buildEntry('bakery', 'prop:bakery', [
-          'Shop with bread-window, striped awning, and a brick oven chimney. Bakers soften food pressure.',
+          'Shop with bread-window, striped awning, and a brick oven chimney. Bakers soften food pressure. Step inside while a baker works — the roof hides to show the oven, counter, and kneading animation.',
         ]),
         buildEntry('market', 'prop:market', [
-          'Merchants trade; market festivals gather here.',
+          'Merchants trade; market festivals gather here. Guards pause here on civic patrol. The roof hides to reveal stalls and weighing gestures while merchants work.',
         ]),
         buildEntry('tavern', 'prop:tavern', [
-          'Cuts stolen gold; jesters; tavern revels.',
+          'Cuts stolen gold; jesters train here; tavern revels lift spirits.',
         ]),
         buildEntry('infirmary', 'prop:infirmary', [
-          'Sick-house for physicians and plague days.',
+          'Sick-house for physicians and plague days. Train physicians here.',
         ]),
         buildEntry('cathedral', 'prop:cathedral', [
-          'Weddings, witch hunters, holy feast days, funerals nearby with a cemetery.',
+          'Holy hall — train bishop and witch hunter. Interior weddings gather at the altar with pews for guests; idle prayer fills the nave between ceremonies. Guards pause here on patrol.',
         ]),
         buildEntry('cemetery', 'prop:cemetery', [
-          'Funerals and (alas) necromancer attention at night.',
+          'Requires cathedral first. Funerals and (alas) necromancer attention at night when undead is enabled in Sandbox.',
         ]),
         buildEntry('dungeon', 'prop:dungeon', [
-          'Captives, guard posts (sphere), dungeon keeper. Required to arrest.',
+          'Prison with guard posts and military sphere. The roof hides to show cells and corridors. Guards escort arrested raiders, thieves, and necromancers here — you can watch the march. Four cells; when full, use the gallows.',
         ]),
         buildEntry('gallows', 'prop:gallows', [
-          'Executions with an executioner — clear the dungeon the hard way.',
+          'Requires dungeon first. The executioner leads condemned captives here — hang VFX, no funeral confusion.',
         ]),
         buildEntry('barracks', 'prop:barracks', [
-          'Soldiers, archers, knights, general capacity and military sphere. Needs royalty.',
+          'Train soldiers, archers, knights, elites, and general. Military sphere. Needs royalty.',
         ]),
         buildEntry('wall', 'prop:wall', [
-          'One buy places a straight run of three fort cells (continues an existing wall when possible). Tough stone — expect raiders to spend real time breaching. Connect segments for gates and stairs.',
+          'One purchase places a straight run of three fort cells — the ghost preview follows your cursor and continues an existing wall when possible. Tough stone; raiders spend real time breaching. Connect segments for gates and stairs.',
         ]),
         buildEntry('stairs', 'prop:stairs', [
-          'Snap to walls so defenders reach the battlements.',
+          'Snap to walls so your archers and soldiers reach the battlements. Foes do not climb them — only your defenders use the stairs.',
         ]),
         buildEntry('drawbridge', 'prop:drawbridge', [
-          'Gate in the wall line — closes when raiders come.',
+          'Gate in the wall line — closes when raiders come. Snap onto an existing wall segment.',
         ]),
         buildEntry('ballista', 'prop:ballista', [
           'Auto-bolts at raiders. Royal gate.',
@@ -409,13 +452,13 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Room guide',
           body: [
-            'Gate & courtyard — arrivals, children at play, jester juggling, prince training.',
+            'Gate and courtyard — arrivals, children at play, jester juggling, prince training.',
             'Great hall — morning court, steward inventory, bows to the throne.',
             'Banquet hall — midday and evening feasts, cupbearer service, wedding feast handoff.',
             'Kitchen — cooks knead and cook; hearth glows.',
             'Servants’ quarters — staff tidy and rest between chores.',
             'Royal chambers — sleep and private retirement for the crown and dukes.',
-            'Solar — queen/princess study, scribe ledgers.',
+            'Solar — queen and princess study, scribe ledgers.',
             'Chapel nook — quiet prayers.',
             'Armory nook — prince gear and steel.',
           ],
@@ -437,11 +480,11 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:king',
           title: 'A day at court',
           body: [
-            'King: chambers → great hall court → midday feast → parade/paths → evening banquet → chambers.',
+            'King: chambers → great hall court → midday feast → parade and paths → evening banquet → chambers.',
             'Queen: solar → chapel → feast host → garden walk → banquet → chambers.',
             'Prince: courtyard training → court → roads → armory → feast.',
             'Princess: solar arts → feast → courtyard stroll → chapel → banquet.',
-            'Dukes/duchesses mirror a quieter local court at their keep.',
+            'Dukes and duchesses mirror a quieter local court at their keep.',
           ],
         },
         {
@@ -468,13 +511,14 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Gold',
           body: [
-            'Earn via Knowledge Quest. Raiders steal from the keep; taverns blunt losses; guards recover plunder from arrested thieves. Spend on hires, buildings, careers, ransoms, and ships.',
+            'Earn via Knowledge Quest reading questions — Learning Mode pays more per correct answer. Raiders steal from the keep; taverns blunt losses; guards recover plunder from arrested thieves.',
+            'Spend on Marketplace buildings and ships, training at workplaces, Grant wish promotions, ransoms, and naval craft.',
           ],
         },
         {
           title: 'Beds & population',
           body: [
-            'Houses hold 3, manors 6. No bed, no hire. Children need space too. Burned or haunted homes force moves.',
+            'Houses hold 3, manors 6. No free bed, no training peasants or guards. Children need space too. Burned or haunted homes force moves.',
           ],
         },
         {
@@ -489,27 +533,36 @@ export function buildManualSections(): ManualSection[] {
       id: 'careers',
       label: 'Careers & jobs',
       intro: [
-        'Peasants dream in the To-Do panel. Promote them when the building has free capacity and you can pay the career cost.',
+        'Peasants dream of advancement. Inspect them to read their Aspiration, satisfy the listed requirements, and press Grant wish. Train fresh roles at the building that employs them.',
       ],
       entries: [
         {
           title: 'Civilian jobs',
           body: [
-            'Hire order is food-first: Farmer → fields, then Baker → bakery, Fisherman → dock, Merchant → market, then Castle staff → keep (cook, servant, steward, scribe, cupbearer). Surplus staff rebalance onto new fields when you place them.',
+            'Food-first hiring order: Farmer → fields, then Baker → bakery, Fisherman → dock, Merchant → market, then Castle staff → keep (cook, servant, steward, scribe, cupbearer). Surplus staff rebalance onto new fields when you place them.',
             'Jobs bind a workplace in the subject’s loyalty territory when possible. Inspectors show Works at, At (keep room), and Loyalty.',
           ],
         },
         {
-          title: 'Career promotions',
+          title: 'Grant wish promotions',
           body: [
-            'Guards need dungeon slots; soldiers/archers/knights/elites/general need barracks; physicians need infirmary; bishop & witch hunter need cathedral; jester needs tavern; executioner needs gallows. Capacity is per building — build more posts to promote more souls.',
-            'On mobile, open the hamburger menu for career wishes; Market stays on the compact HUD.',
+            'Select a subject with a career goal. Aspiration lists every gate — eligible role, required buildings, open post capacity, and gold.',
+            'Guards need dungeon slots; soldiers, archers, knights, and elites need barracks; bishop and witch hunter need cathedral; jester needs tavern; executioner needs gallows and dungeon; physician needs infirmary.',
+            'When every line shows ✓, Grant wish spends gold and promotes them through the GameCommand channel into their new role.',
           ],
         },
         {
-          title: 'Workplace inspectors',
+          title: 'Training vs promoting',
           body: [
-            'Subject inspector: Job + Works at + At (keep room). Building inspector: Who works here (name + job). Empty workplaces wait for your next hire or promotion.',
+            'Training at a building spawns a new subject into an open post. Grant wish promotes an existing subject who earned the dream.',
+            'Building inspector: Who works here, Capacity, and Train buttons. Subject inspector: Job, Aspiration, and Grant wish.',
+          ],
+        },
+        {
+          title: 'Civic patrol life',
+          body: [
+            'Guards cycle the fief’s roads and pause at civic buildings — market, cathedral, infirmary, tavern, bakery, granary, cemetery, and gallows — as part of their inspection route.',
+            'The dungeon sphere marks where arrests can begin; the cathedral hosts bishop schedules and weddings; together they anchor order and faith in the fief.',
           ],
         },
       ],
@@ -525,21 +578,21 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:fairy_godmother',
           title: 'Fairy Godmother & balls',
           body: [
-            'When a royal ball fires at the keep, the FGM may transform a female peasant into a temporary princess. Unwed by morning, she returns to peasantry. Wed a prince at the cathedral to keep the tiara forever.',
+            'Train her at the keep. When a royal ball fires — one celebration at a time — the Fairy Godmother may transform a female peasant into a temporary princess. Unwed by morning, she returns to peasantry. Wed a prince at the cathedral to keep the tiara forever.',
           ],
         },
         {
           artKey: 'unit:bishop',
           title: 'Court & church',
           body: [
-            'Bishop marries royals and commoners. Cathedral feast days need bishop plus king or queen. Witch hunters answer to the same holy roof.',
+            'Train the bishop at the cathedral. He marries royals and commoners. Cathedral feast days need bishop plus king or queen. Witch hunters answer to the same holy roof.',
           ],
         },
         {
           artKey: 'prop:keep',
           title: 'Influence & dukes',
           body: [
-            'Keeps paint influence. Barracks and dungeons paint military spheres. Extra keeps → dukes/duchesses and a wider safety net against total defeat.',
+            'Keeps paint influence. Barracks and dungeons paint military spheres. Extra keeps → train dukes and duchesses and widen the safety net against total defeat.',
           ],
         },
       ],
@@ -576,14 +629,14 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'enemy:gypsy',
           title: 'Gypsy raider',
           body: [
-            'Camp music and mischief. Can be arrested like thieves/bandits when guards and a dungeon are ready. Raid parties peel off when the leader sings for war.',
+            'Camp music and mischief. Can be arrested like thieves and bandits when guards and a dungeon are ready. Raid parties peel off when the leader sings for war.',
           ],
         },
         {
           artKey: 'enemy:enemy_army',
           title: 'Siege trooper',
           body: [
-            'Professional pressure from siege camps: supply wagons, pavises, drill. Generals on both sides matter — theirs plan assaults; yours detach to burn their camp.',
+            'Professional pressure from siege camps: supply wagons, pavises, drill. Generals on both sides matter — theirs plan assaults; yours detach to burn their camp. No siege ladders — they breach walls and gates the hard way.',
           ],
         },
         {
@@ -719,14 +772,21 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:general',
           title: 'Detachments',
           body: [
-            'Select a general, choose troop count, and send them to destroy a camp or hunt a monster/castle. Troops leave their sphere for the order, then return to patrol when done.',
+            'Select a general, choose troop count, and send them to destroy a camp or hunt a monster or castle. Troops leave their sphere for the order, then return to patrol when done.',
           ],
         },
         {
           title: 'Raids & sieges',
           body: [
-            'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus. Drawbridges slam; peasants repair.',
+            'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus — they batter walls and gates; your stairs serve defenders only. Drawbridges slam; peasants repair.',
             'Any raid kicks military off balls and festivals: soldiers and archers hold their loyalty keep’s perimeter or walls; guards keep patrolling threatened roads in the fief.',
+          ],
+        },
+        {
+          title: 'Wall placement',
+          body: [
+            'Buy a wall from the Marketplace, then move the cursor — a ghost preview of three connected cells follows, continuing any existing wall line when it can. Click to commit the run.',
+            'Higher wall HP (tunable in Sandbox) buys time while archers on stairs answer from the battlements.',
           ],
         },
       ],
@@ -757,7 +817,8 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'prop:keep',
           title: 'Keep fiefs',
           body: [
-            'Nearest-keep loyalty: work, roam, and defend stay in that fief. Dukes and duchesses seat satellite keeps. The inspector’s Loyalty line names the liege (Crown or a named keep).',
+            'Nearest-keep loyalty: work, roam, and defend stay in that fief. Dukes and duchesses seat satellite keeps — each with its own influence ring. The inspector Loyalty line names the liege (Crown or a named keep).',
+            'Movement policy clamps wander targets inside the sphere — subjects rarely leave their fief unless fleeing danger or marching on your order.',
           ],
         },
         {
@@ -780,7 +841,8 @@ export function buildManualSections(): ManualSection[] {
       id: 'festivals',
       label: 'Festivals',
       intro: [
-        'No generic street fair filler — if no type qualifies when the timer fires, the realm simply waits. Royal balls stay separate.',
+        'One major celebration at a time — festival or ball, never both. After it ends, a global gap must pass before the next begins.',
+        'If no type qualifies when the timer fires, the realm simply waits. Royal balls stay separate from street festivals.',
         'Festivals invite a small nearest civilian crowd (about ten); balls about a dozen including court. Soldiers, archers, guards, and knights stay on duty. Joust crowds clear when the spectacle ends.',
         'While a festival runs, celebrants dance, talk (paired chat bubbles), mime music, cheer “Ooh! / Ahh! / Huzzah!”, and share feasts. Happiness rises; harvest festivals also nudge field yields.',
       ],
@@ -797,14 +859,15 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:guard',
           title: 'Cordons',
           body: [
-            'Zombie outbreak, raid, or siege: quarantine hot zones, bark orders (“Stay back! Quarantine!”, “Raid incoming — get indoors!”), shove civilians toward safe keeps/houses in clear spheres. Soldiers clear hostiles. When quiet: “Cordon lifted. Resume patrol.”',
+            'Zombie outbreak, raid, or siege: quarantine hot zones, bark orders (“Stay back! Quarantine!”, “Raid incoming — get indoors!”), shove civilians toward safe keeps and houses in clear spheres. Soldiers clear hostiles. When quiet: “Cordon lifted. Resume patrol.”',
           ],
         },
         {
           artKey: 'unit:zombie',
-          title: 'Undead playbook',
+          title: 'Undead playbook (beta)',
           body: [
-            'Necromancers raise at cemeteries → bites spread → arrest the caster, steel the shamblers. Ghosts haunt homes on death luck — tenants flee; bishop & witch hunter schedules gain exorcise beats.',
+            'Undead is experimental and off by default in both Learning and Normal mode — enable vampire, necromancer, or ghost toggles in Sandbox settings when you want the spooky layer.',
+            'When on: necromancers raise at cemeteries → bites spread → arrest the caster, steel the shamblers. Ghosts haunt homes on death luck — tenants flee; bishop and witch hunter schedules gain exorcise beats.',
           ],
         },
       ],
@@ -858,7 +921,7 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'How to read a hard day',
           body: [
-            'More camp toasts naming leaders, thicker siege supply bars, dragons awake more often, and happiness swinging on whether you still throw festivals between crises.',
+            'More camp toasts naming leaders, thicker siege supply bars, dragons awake more often, and happiness swinging on whether you still throw festivals between crises — remembering only one celebration runs at a time.',
           ],
         },
       ],

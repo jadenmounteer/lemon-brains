@@ -12,6 +12,7 @@ import { randomPointInZone, type WorldBounds } from '../subjects/zones';
 import { pickCampRaidLine, planSiege } from './GeneralStrategy';
 import { WarBalance, type CampKind } from './WarBalance';
 import { getSandboxRuntime } from '../sandboxRuntime';
+import { getModeProfile } from '../core/modeRuntime';
 
 export type { CampSnapshot };
 
@@ -245,7 +246,8 @@ export class EncampmentSystem {
       if (tooClose) continue;
       this.createCamp(kind, pos.x, pos.y, {
         garrison: 1 + Math.floor(Math.random() * 2),
-        raidCooldownMs: 90_000 + Math.random() * 120_000,
+        raidCooldownMs:
+          getModeProfile().raidGraceMs + Math.random() * 60_000,
       });
     }
     this.onChanged?.();
@@ -517,27 +519,64 @@ export class EncampmentSystem {
   }
 
   /** Arrest one idle raider from a camp — needs a dungeon + a nearby guard/archer. */
-  requestArrest(campId: string): boolean {
+  requestArrest(campId: string): {
+    guardId: string;
+    captive: import('../../kingdom/CaptivesRepository').CaptiveRecord;
+    fromX: number;
+    fromY: number;
+  } | null {
     const camp = this.camps.find((c) => c.id === campId);
-    if (!camp || !this.canArrest(campId)) return false;
+    if (!camp || !this.canArrest(campId)) return null;
     const guard = this.subjects!.nearestMilitary(
       camp.x,
       camp.y,
       WarBalance.campArrestRange
     );
-    if (!guard) return false;
-    this.shrinkGarrison(camp, 1);
+    if (!guard) return null;
+
+    let captive: import('../../kingdom/CaptivesRepository').CaptiveRecord | null =
+      null;
+    const homeUnit = camp.roster.find((u) => u.status === 'home');
+    if (homeUnit && isLivingCampKind(camp.kind) && this.subjects) {
+      const saved = this.subjects.extractCaptive(homeUnit.id);
+      if (saved) {
+        captive = {
+          id: saved.id,
+          name: saved.name,
+          role: saved.role,
+          houseId: saved.houseId,
+          maxHp: saved.maxHp,
+        };
+        const idx = camp.roster.indexOf(homeUnit);
+        if (idx >= 0) camp.roster.splice(idx, 1);
+        camp.garrison = Math.max(0, camp.garrison - 1);
+      }
+    }
+    if (!captive) {
+      const name = homeUnit?.name ?? `Raider ${camp.garrison}`;
+      captive = {
+        id: `${camp.id}-arrest-${Date.now()}`,
+        name,
+        role: camp.kind === 'goblin' ? 'bandit' : camp.kind === 'giant' ? 'bandit' : 'bandit',
+        houseId: `camp:${camp.id}`,
+        maxHp: 30,
+      };
+      this.shrinkGarrison(camp, 1);
+    }
+
     const bounty = Phase12Balance.arrestBountyGold;
     this.scene.game.events.emit(KingdomEvents.GOLD_RECOVERED, {
       amount: bounty,
       kind: camp.kind,
     });
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${guard.data.name} arrests a raider from the ${CAMP_LABEL[camp.kind]} — recovered ${bounty} gold!`,
-    });
     this.tryRemoveEmpty(camp);
     this.onChanged?.();
-    return true;
+    return {
+      guardId: guard.data.id,
+      captive,
+      fromX: camp.x,
+      fromY: camp.y,
+    };
   }
 
   private toSnapshot(camp: CampRecord): CampSnapshot {

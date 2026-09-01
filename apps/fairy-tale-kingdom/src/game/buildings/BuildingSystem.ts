@@ -4,18 +4,15 @@ import {
   TILE_SIZE,
   TerrainTile,
   wallTextureKey,
-  HEARTH_FIRE_ANIM,
   isTerrainBlocked,
 } from '../art/assetManifest';
 import type { SavedBuilding } from '../../kingdom/LayoutRepository';
 import {
-  BEDS_PER_HOUSE,
   BUILD_CATALOG,
   FIELDS_PER_GRANARY,
   ROYAL_SLOTS_PER_KEEP,
   type BuildKind,
 } from '../../marketplace/catalog';
-import { BEDS_PER_MANOR } from '../economy/economy';
 import {
   BUILDING_MAX_HP,
   hasInterior,
@@ -25,107 +22,63 @@ import {
   isFortKind,
 } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
+import { WallPathGrid } from '../path/WallPathGrid';
 import type { SiegeVfx } from '../siege/SiegeVfx';
 import type {
   BuildingResident,
   BuildingSnapshot,
 } from '../subjects/types';
 import type { Point } from '../subjects/zones';
-import { KingdomEvents } from '../subjects/events';
 import { Phase12Balance } from '../economy/phase12Balance';
 import { BUILDING_ROLE_CAPACITY } from '../jobs/capacities';
 import { getSandboxRuntime } from '../sandboxRuntime';
-
-export const KEEP_ID = 'keep';
-export const FORT_TILE = TILE_SIZE;
-/** One marketplace wall buy places this many fort cells in a straight run. */
-export const WALL_PLACE_CELLS = 3;
+import { BuildingCombat } from './BuildingCombat';
+import { BuildingInteriors } from './BuildingInteriors';
+import { BuildingPlacement } from './BuildingPlacement';
+import { BuildingQueries } from './BuildingQueries';
+import {
+  KEEP_ID,
+  FORT_TILE,
+  WALL_PLACE_CELLS,
+  WALL_MAX_DRAG_CELLS,
+  fortSnap,
+  fortKey,
+  fortLineCells,
+  footprintAabb,
+  bridgeAabb,
+  intersects,
+  pointInAabb,
+  textureFor,
+  type Aabb,
+  type BuildingRecord,
+} from './buildingShared';
 
 const KEEP_BLURB =
   'A seat of power. Rival armies must destroy every keep to conquer the kingdom.';
 
-export interface BuildingRecord {
-  id: string;
-  kind: BuildKind;
-  x: number;
-  y: number;
-  hp: number;
-  maxHp: number;
-  sprite: Phaser.GameObjects.Image;
-  /** Shown under the roof when occupied */
-  interiorSprite?: Phaser.GameObjects.Image;
-  hearthSprite?: Phaser.GameObjects.Sprite;
-  labelIndex: number;
-  attachedWallId?: string;
-  closed?: boolean;
-  /** Degrees — bridges use 0 or 90 */
-  rotation?: number;
-  /** Nearest keep this building answers to. */
-  loyaltyKeepId?: string | null;
-}
-
-export interface Aabb {
-  left: number;
-  right: number;
-  top: number;
-  bottom: number;
-}
-
-const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
-  house: { w: 56, h: 48 },
-  wall: { w: 16, h: 16 },
-  tavern: { w: 48, h: 40 },
-  drawbridge: { w: 16, h: 16 },
-  stairs: { w: 20, h: 26 },
-  field: { w: 40, h: 26 },
-  granary: { w: 36, h: 42 },
-  barracks: { w: 40, h: 30 },
-  manor: { w: 64, h: 52 },
-  ballista: { w: 24, h: 18 },
-  watchtower: { w: 24, h: 36 },
-  cathedral: { w: 64, h: 56 },
-  infirmary: { w: 56, h: 44 },
-  dungeon: { w: 40, h: 32 },
-  bakery: { w: 44, h: 38 },
-  market: { w: 44, h: 30 },
-  cemetery: { w: 48, h: 34 },
-  gallows: { w: 28, h: 38 },
-  road: { w: 16, h: 16 },
-  bridge: { w: 56, h: 20 },
-  dock: { w: 40, h: 28 },
-  keep: { w: 160, h: 120 },
-};
-
 const STAIR_SNAP_DIST = 96;
 const GATE_SNAP_DIST = 96;
 
-/** Snap world coord to fortification cell center. */
-export function fortSnap(n: number): number {
-  return (
-    Math.round((n - FORT_TILE / 2) / FORT_TILE) * FORT_TILE + FORT_TILE / 2
-  );
-}
-
-export function fortKey(x: number, y: number): string {
-  return `${fortSnap(x)},${fortSnap(y)}`;
-}
+export {
+  KEEP_ID,
+  FORT_TILE,
+  WALL_PLACE_CELLS,
+  WALL_MAX_DRAG_CELLS,
+  WALL_GOLD_PER_CELL,
+  fortSnap,
+  fortKey,
+  fortLineCells,
+  footprintAabb,
+  type Aabb,
+  type BuildingRecord,
+} from './buildingShared';
 
 export class BuildingSystem {
   private buildings: BuildingRecord[] = [];
   private nextId = 0;
-  private placeKind: BuildKind | null = null;
-  private placeRotation: 0 | 90 = 0;
-  private ghost: Phaser.GameObjects.Image | null = null;
-  /** Extra ghosts for multi-cell wall runs (cells 2..N). */
-  private wallGhostExtras: Phaser.GameObjects.Image[] = [];
-  private ghostValid = false;
-  private ghostWallId: string | null = null;
-  /** When placing a drawbridge on a wall segment, replace this wall on commit. */
-  private ghostReplaceWallId: string | null = null;
-  /** Cached wall run under the cursor for commit. */
-  private wallRunPreview: Point[] = [];
   private raidActive = false;
   private pathGrid: PathGrid | null = null;
+  private wallPathGrid = new WallPathGrid();
   private mapData: number[][] | null = null;
   private keepHp: number;
   private keepMaxHp: number;
@@ -136,6 +89,9 @@ export class BuildingSystem {
   private selectedId: string | null = null;
   private vfx: SiegeVfx | null = null;
   private burningIds = new Set<string>();
+  private readonly placement: BuildingPlacement;
+  private readonly combat: BuildingCombat;
+  private readonly interiors: BuildingInteriors;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -145,6 +101,107 @@ export class BuildingSystem {
   ) {
     this.keepMaxHp = BUILDING_MAX_HP.keep;
     this.keepHp = this.keepMaxHp;
+    const self = this;
+    this.interiors = new BuildingInteriors({
+      scene: this.scene,
+      get buildings() {
+        return self.buildings;
+      },
+      get keepHp() {
+        return self.keepHp;
+      },
+      get keep() {
+        return self.keep;
+      },
+      get keepSprite() {
+        return self.keepSprite;
+      },
+      get keepInteriorSprite() {
+        return self.keepInteriorSprite;
+      },
+      get keepHearth() {
+        return self.keepHearth;
+      },
+    });
+    this.combat = new BuildingCombat({
+      get buildings() {
+        return self.buildings;
+      },
+      get keepHp() {
+        return self.keepHp;
+      },
+      set keepHp(v: number) {
+        self.keepHp = v;
+      },
+      get keepMaxHp() {
+        return self.keepMaxHp;
+      },
+      get keep() {
+        return self.keep;
+      },
+      get keepSprite() {
+        return self.keepSprite;
+      },
+      get selectedId() {
+        return self.selectedId;
+      },
+      get raidActive() {
+        return self.raidActive;
+      },
+      set raidActive(v: boolean) {
+        self.raidActive = v;
+      },
+      get pathGrid() {
+        return self.pathGrid;
+      },
+      get vfx() {
+        return self.vfx;
+      },
+      get burningIds() {
+        return self.burningIds;
+      },
+      scene: this.scene,
+      onLayoutChanged: this.onLayoutChanged,
+      onDestroyed: (b) => self.onDestroyed?.(b),
+      applyKeepTint: () => self.applyKeepTint(),
+      tintByHp: (b) => self.tintByHp(b),
+      removeRecord: (b) => self.removeRecord(b),
+      refreshWallTextures: () => self.refreshWallTextures(),
+      applyDrawbridgeState: () => self.applyDrawbridgeState(),
+      allKeepsDestroyed: () => self.queries().allKeepsDestroyed(),
+    });
+    this.placement = new BuildingPlacement({
+      scene: this.scene,
+      keep: this.keep,
+      getUnitBodies: () => this.getUnitBodies(),
+      canPlaceAt: (...args) => this.canPlaceAt(...args),
+      findWallSnap: (x, y) => this.findWallSnap(x, y),
+      findGateSnap: (x, y) => this.findGateSnap(x, y),
+      fortLineCells: (x0, y0, x1, y1) =>
+        fortLineCells(x0, y0, x1, y1, WALL_MAX_DRAG_CELLS),
+      previewWallMask: (x, y) => this.previewWallMask(x, y),
+      addBuilding: (...args) => this.addBuilding(...args),
+      replaceWallWithGate: (id) => this.replaceWallWithGate(id),
+      afterPlacementCommit: () => {
+        this.recomputeHouseLabels();
+        this.refreshWallTextures();
+        this.applyDrawbridgeState();
+        this.rebuildPathGrid();
+        this.rebuildWallPathGrid();
+        this.onLayoutChanged?.();
+      },
+    });
+  }
+
+  private queries(): BuildingQueries {
+    return new BuildingQueries({
+      buildings: this.buildings,
+      keepHp: this.keepHp,
+      keepMaxHp: this.keepMaxHp,
+      keep: this.keep,
+      getById: (id) => this.getById(id),
+      displayName: (b) => this.displayName(b),
+    });
   }
 
   setVfx(vfx: SiegeVfx): void {
@@ -158,6 +215,7 @@ export class BuildingSystem {
   setPathGrid(grid: PathGrid): void {
     this.pathGrid = grid;
     this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
   }
 
   /** Terrain tile grid used to validate road/bridge/dock placement. */
@@ -215,6 +273,7 @@ export class BuildingSystem {
     // Sparse founding: keep only (already present). Player builds the rest.
     this.refreshWallTextures();
     this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
   }
 
   restore(
@@ -249,6 +308,7 @@ export class BuildingSystem {
     this.refreshWallTextures();
     this.applyDrawbridgeState();
     this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
     this.reassignBuildingLoyalties();
   }
 
@@ -267,7 +327,11 @@ export class BuildingSystem {
   }
 
   serializeKeep(): { keepHp: number; keepMaxHp: number } {
-    return { keepHp: this.keepHp, keepMaxHp: this.keepMaxHp };
+    return this.queries().serializeKeep();
+  }
+
+  bedCapacity(): number {
+    return this.queries().bedCapacity();
   }
 
   houseCount(): number {
@@ -368,6 +432,28 @@ export class BuildingSystem {
     return null;
   }
 
+  /** Entrance point for spawning units trained at this building. */
+  spawnPoint(buildingId: string): Point | null {
+    if (buildingId === KEEP_ID) {
+      if (this.keepHp <= 0) return null;
+      const box = footprintAabb('keep', this.keep.x, this.keep.y);
+      return { x: this.keep.x, y: box.bottom + 8 };
+    }
+    const b = this.getById(buildingId);
+    if (!b || b.hp <= 0) return null;
+    const box = footprintAabb(b.kind, b.x, b.y);
+    return { x: b.x, y: box.bottom + 8 };
+  }
+
+  /** Keep id owning the fief this building belongs to. */
+  keepForBuilding(buildingId: string): string | null {
+    if (buildingId === KEEP_ID) return KEEP_ID;
+    const b = this.getById(buildingId);
+    if (!b) return null;
+    if (b.kind === 'keep') return b.id;
+    return b.loyaltyKeepId ?? this.nearestKeepId(b.x, b.y);
+  }
+
   listKeepPoints(): { id: string; x: number; y: number }[] {
     return this.listKeepTargets().map((k) => ({
       id: k.id,
@@ -428,19 +514,8 @@ export class BuildingSystem {
     return this.keepCount() === 0;
   }
 
-  bedCapacity(): number {
-    let caps = 0;
-    for (const b of this.buildings) {
-      if (b.kind === 'house') caps += BEDS_PER_HOUSE;
-      if (b.kind === 'manor') caps += BEDS_PER_MANOR;
-    }
-    return caps;
-  }
-
   bedsFor(kind: BuildKind): number {
-    if (kind === 'house') return BEDS_PER_HOUSE;
-    if (kind === 'manor') return BEDS_PER_MANOR;
-    return 0;
+    return this.queries().bedsFor(kind);
   }
 
   hasTavern(): boolean {
@@ -676,27 +751,7 @@ export class BuildingSystem {
 
   /** Damage a specific keep (primary or placed). Returns true if all keeps are gone. */
   damageKeepTarget(id: string, amount: number): boolean {
-    if (id === KEEP_ID) {
-      if (this.keepHp <= 0) return this.allKeepsDestroyed();
-      this.keepHp = Math.max(0, this.keepHp - amount);
-      this.applyKeepTint();
-      this.vfx?.hitFlash(this.keepSprite);
-      if (this.keepHp <= 0) {
-        this.keepSprite?.setVisible(false);
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: this.allKeepsDestroyed()
-            ? 'The keep has fallen!'
-            : 'A keep has fallen — defend the others!',
-        });
-      }
-      this.onLayoutChanged?.();
-      return this.allKeepsDestroyed();
-    }
-    const b = this.getById(id);
-    if (b && b.kind === 'keep') {
-      this.damageBuilding(id, amount);
-    }
-    return this.allKeepsDestroyed();
+    return this.combat.damageKeepTarget(id, amount);
   }
 
   /** Fields that sit beyond the wall line (food outside the fort). */
@@ -955,217 +1010,93 @@ export class BuildingSystem {
   }
 
   setRaidActive(active: boolean): void {
-    if (this.raidActive === active) return;
-    this.raidActive = active;
-    this.applyDrawbridgeState();
-    this.rebuildPathGrid();
+    this.combat.setRaidActive(active);
   }
 
   isRaidActive(): boolean {
-    return this.raidActive;
+    return this.combat.isRaidActive();
   }
 
   rebuildPathGrid(): void {
-    if (!this.pathGrid) return;
-    this.pathGrid.clear();
-    for (const b of this.buildings) {
-      if (b.kind === 'bridge') {
-        // Clear every tile under the span so units can cross water
-        const box = bridgeAabb(b.x, b.y, ((b.rotation as 0 | 90) ?? 0));
-        for (let wy = box.top + 4; wy < box.bottom; wy += TILE_SIZE / 2) {
-          for (let wx = box.left + 4; wx < box.right; wx += TILE_SIZE / 2) {
-            this.pathGrid.clearTerrainAtWorld(wx, wy);
-          }
-        }
-        continue;
-      }
-      if (isBlockingKind(b.kind, Boolean(b.closed))) {
-        this.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
-      }
-    }
+    this.combat.rebuildPathGrid();
   }
 
-  beginPlace(kind: BuildKind): void {
-    this.cancelPlace();
-    this.placeKind = kind;
-    this.placeRotation = 0;
-    const tex = textureFor(kind, false, 0);
-    this.ghost = this.scene.add
-      .image(this.keep.x, this.keep.y + 80, tex)
-      .setDepth(50)
-      .setOrigin(0.5, kind === 'wall' || kind === 'drawbridge' ? 0.75 : 0.85)
-      .setAlpha(0.65);
+  beginPlace(kind: BuildKind, maxWallCells?: number): void {
+    this.placement.beginPlace(kind, maxWallCells);
+  }
+
+  beginWallDrag(worldX: number, worldY: number): void {
+    this.placement.beginWallDrag(worldX, worldY);
+  }
+
+  isWallDragging(): boolean {
+    return this.placement.isWallDragging();
   }
 
   cancelPlace(): void {
-    this.placeKind = null;
-    this.placeRotation = 0;
-    this.ghost?.destroy();
-    this.ghost = null;
-    this.clearWallGhostExtras();
-    this.wallRunPreview = [];
-    this.ghostValid = false;
-    this.ghostWallId = null;
-    this.ghostReplaceWallId = null;
-  }
-
-  private clearWallGhostExtras(): void {
-    for (const g of this.wallGhostExtras) g.destroy();
-    this.wallGhostExtras = [];
+    this.placement.cancelPlace();
   }
 
   isPlacing(): boolean {
-    return this.placeKind !== null;
+    return this.placement.isPlacing();
   }
 
   placingKind(): BuildKind | null {
-    return this.placeKind;
+    return this.placement.placingKind();
   }
 
   getPlaceRotation(): 0 | 90 {
-    return this.placeRotation;
+    return this.placement.getPlaceRotation();
   }
 
-  /** Cycle 0/90 rotation while placing a bridge (only bridges support rotation). */
   rotatePlacement(): void {
-    if (this.placeKind !== 'bridge' || !this.ghost) return;
-    this.placeRotation = this.placeRotation === 0 ? 90 : 0;
-    this.ghost.setTexture(
-      this.placeRotation === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge
-    );
+    this.placement.rotatePlacement();
   }
 
   updateGhost(worldX: number, worldY: number): void {
-    if (!this.ghost || !this.placeKind) return;
-    this.ghostReplaceWallId = null;
-
-    if (this.placeKind === 'stairs') {
-      const snap = this.findWallSnap(worldX, worldY);
-      if (snap) {
-        this.ghost.setPosition(snap.x, snap.y);
-        this.ghostWallId = snap.wallId;
-        this.ghostValid = this.canPlaceAt('stairs', snap.x, snap.y, snap.wallId);
-      } else {
-        this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
-        this.ghostWallId = null;
-        this.ghostValid = false;
-      }
-    } else if (this.placeKind === 'drawbridge') {
-      const snap = this.findGateSnap(worldX, worldY);
-      if (snap) {
-        this.ghost.setPosition(snap.x, snap.y);
-        this.ghostWallId = null;
-        this.ghostReplaceWallId = snap.replaceWallId ?? null;
-        this.ghostValid = this.canPlaceAt(
-          'drawbridge',
-          snap.x,
-          snap.y,
-          null,
-          0,
-          snap.replaceWallId
-        );
-      } else {
-        this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
-        this.ghostValid = false;
-      }
-    } else if (this.placeKind === 'wall') {
-      const x = fortSnap(worldX);
-      const y = fortSnap(worldY);
-      const run = this.wallRunCells(x, y);
-      this.wallRunPreview = run;
-      this.ghostWallId = null;
-      this.ghostValid = run.length > 0;
-      this.clearWallGhostExtras();
-      if (run.length > 0) {
-        const first = run[0]!;
-        this.ghost.setPosition(first.x, first.y);
-        this.ghost.setTexture(wallTextureKey(this.previewWallMask(first.x, first.y)));
-        this.ghost.setVisible(true);
-        for (let i = 1; i < run.length; i++) {
-          const cell = run[i]!;
-          const extra = this.scene.add
-            .image(cell.x, cell.y, wallTextureKey(this.previewWallMask(cell.x, cell.y)))
-            .setDepth(50)
-            .setOrigin(0.5, 0.75)
-            .setAlpha(0.55)
-            .setTint(this.ghostValid ? 0xffffff : 0xff5555);
-          this.wallGhostExtras.push(extra);
-        }
-      } else {
-        this.ghost.setPosition(x, y);
-        this.ghost.setTexture(wallTextureKey(this.previewWallMask(x, y)));
-      }
-    } else if (this.placeKind === 'bridge') {
-      // Align to terrain tiles like roads — bridges must cover a water channel.
-      const x = fortSnap(worldX);
-      const y = fortSnap(worldY);
-      this.ghost.setPosition(x, y);
-      this.ghostWallId = null;
-      // Prefer the player's rotation; flip if only the other axis spans water.
-      let rot = this.placeRotation;
-      let valid = this.canPlaceAt('bridge', x, y, null, rot);
-      if (!valid) {
-        const other: 0 | 90 = rot === 90 ? 0 : 90;
-        if (this.canPlaceAt('bridge', x, y, null, other)) {
-          rot = other;
-          this.placeRotation = other;
-          valid = true;
-        }
-      }
-      this.ghost.setTexture(rot === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge);
-      this.ghostValid = valid;
-    } else if (this.placeKind === 'road' || this.placeKind === 'dock') {
-      // Roads/docks snap to the full terrain-tile grid so they line up with the map.
-      const x = fortSnap(worldX);
-      const y = fortSnap(worldY);
-      this.ghost.setPosition(x, y);
-      this.ghostWallId = null;
-      this.ghostValid = this.canPlaceAt(this.placeKind, x, y);
-    } else {
-      const x = snapCoord(worldX);
-      const y = snapCoord(worldY);
-      this.ghost.setPosition(x, y);
-      this.ghostWallId = null;
-      this.ghostValid = this.canPlaceAt(this.placeKind, x, y);
-    }
-    this.ghost.setTint(this.ghostValid ? 0xffffff : 0xff5555);
+    this.placement.updateGhost(worldX, worldY);
   }
 
   tryCommitPlace(): boolean {
-    if (!this.placeKind || !this.ghost || !this.ghostValid) return false;
-    const kind = this.placeKind;
-    const x = this.ghost.x;
-    const y = this.ghost.y;
-    const wallId = this.ghostWallId ?? undefined;
-    const replaceWallId = this.ghostReplaceWallId;
-    const rotation = kind === 'bridge' ? this.placeRotation : undefined;
-    const wallRun =
-      kind === 'wall' && this.wallRunPreview.length > 0
-        ? [...this.wallRunPreview]
-        : null;
-    this.cancelPlace();
-    if (wallRun) {
-      for (const cell of wallRun) {
-        if (this.canPlaceAt('wall', cell.x, cell.y)) {
-          this.addBuilding('wall', cell.x, cell.y);
-        }
-      }
-    } else {
-      if (replaceWallId) {
-        this.replaceWallWithGate(replaceWallId);
-      }
-      this.addBuilding(kind, x, y, undefined, { attachedWallId: wallId, rotation });
-    }
-    this.recomputeHouseLabels();
-    this.refreshWallTextures();
-    this.applyDrawbridgeState();
-    this.rebuildPathGrid();
-    this.onLayoutChanged?.();
-    return true;
+    return this.placement.tryCommitPlace();
+  }
+
+  tryCommitPlaceDetailed(): import('./BuildingPlacement').WallCommitResult {
+    return this.placement.tryCommitPlaceDetailed();
+  }
+
+  lastWallCellsPlaced(): number {
+    return this.placement.lastWallCellsPlaced();
+  }
+
+  getWallPathGrid(): WallPathGrid {
+    return this.wallPathGrid;
+  }
+
+  rebuildWallPathGrid(ladderPortals?: import('../path/WallPathGrid').LadderPortal[]): void {
+    const walls = this.buildings.filter(
+      (b) => b.kind === 'wall' || (b.kind === 'drawbridge' && !this.raidActive)
+    );
+    const stairs = this.buildings.filter((b) => b.kind === 'stairs');
+    this.wallPathGrid.rebuild({
+      walls: walls.map((b) => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        kind: b.kind as 'wall' | 'drawbridge',
+      })),
+      stairs: stairs.map((b) => ({
+        id: b.id,
+        x: b.x,
+        y: b.y,
+        attachedWallId: b.attachedWallId,
+      })),
+      ladders: ladderPortals,
+    });
   }
 
   /** Quietly remove a wall segment (and its stairs) so a drawbridge can take its cell. */
-  private replaceWallWithGate(wallId: string): void {
+  replaceWallWithGate(wallId: string): void {
     const wall = this.getById(wallId);
     if (!wall || wall.kind !== 'wall') return;
     const stairs = this.buildings.filter(
@@ -1183,7 +1114,7 @@ export class BuildingSystem {
    * Up to WALL_PLACE_CELLS consecutive free fort cells from the snap point.
    * Prefers continuing an existing orthogonal wall; otherwise east–west.
    */
-  private wallRunCells(x: number, y: number): Point[] {
+  wallRunCells(x: number, y: number): Point[] {
     const hasN = Boolean(this.wallAt(x, y - FORT_TILE));
     const hasS = Boolean(this.wallAt(x, y + FORT_TILE));
     const hasE = Boolean(this.wallAt(x + FORT_TILE, y));
@@ -1204,45 +1135,11 @@ export class BuildingSystem {
   }
 
   damageBuilding(id: string, amount: number, opts?: { fire?: boolean }): boolean {
-    const b = this.getById(id);
-    if (!b) return false;
-    b.hp = Math.max(0, b.hp - amount);
-    this.tintByHp(b);
-    if (opts?.fire || isBurnable(b.kind)) {
-      this.burningIds.add(id);
-      this.vfx?.startBurn(id, b.x, b.y - 8);
-    }
-    if (b.hp <= 0) {
-      const wasFort = isFortKind(b.kind);
-      this.destroyBuilding(b);
-      if (wasFort) this.vfx?.breachDust(b.x, b.y);
-      return true;
-    }
-    return false;
+    return this.combat.damageBuilding(id, amount, opts);
   }
 
   damageKeep(amount: number): boolean {
-    if (this.keepHp > 0) {
-      this.keepHp = Math.max(0, this.keepHp - amount);
-      this.applyKeepTint();
-      this.vfx?.hitFlash(this.keepSprite);
-      if (this.keepHp <= 0) {
-        this.keepSprite?.setVisible(false);
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: this.allKeepsDestroyed()
-            ? 'The keep has fallen!'
-            : 'A keep has fallen — defend the others!',
-        });
-      }
-      this.onLayoutChanged?.();
-      return this.allKeepsDestroyed();
-    }
-    const extra = this.buildings.find((b) => b.kind === 'keep' && b.hp > 0);
-    if (extra) {
-      this.damageBuilding(extra.id, amount);
-      return this.allKeepsDestroyed();
-    }
-    return true;
+    return this.combat.damageKeep(amount);
   }
 
   getKeepHp(): number {
@@ -1259,22 +1156,7 @@ export class BuildingSystem {
 
   /** Repair building or keep; returns true if now at full HP. */
   repair(id: string, amount: number): boolean {
-    if (id === KEEP_ID) {
-      this.keepHp = Math.min(this.keepMaxHp, this.keepHp + amount);
-      this.applyKeepTint();
-      this.onLayoutChanged?.();
-      return this.keepHp >= this.keepMaxHp;
-    }
-    const b = this.getById(id);
-    if (!b) return true;
-    b.hp = Math.min(b.maxHp, b.hp + amount);
-    this.tintByHp(b);
-    if (b.hp >= b.maxHp) {
-      this.burningIds.delete(id);
-      this.vfx?.stopBurn(id);
-    }
-    this.onLayoutChanged?.();
-    return b.hp >= b.maxHp;
+    return this.combat.repair(id, amount);
   }
 
   /** Damaged structures needing repair (keep id = `keep`). */
@@ -1307,9 +1189,7 @@ export class BuildingSystem {
   }
 
   shakeBuilding(id: string): void {
-    const b = this.getById(id);
-    if (!b) return;
-    this.vfx?.impactShake(b.sprite);
+    this.combat.shakeBuilding(id);
   }
 
   private displayName(b: BuildingRecord): string {
@@ -1328,59 +1208,6 @@ export class BuildingSystem {
     if (ratio < 0.35) this.keepSprite.setTint(0xff6666);
     else if (ratio < 1) this.keepSprite.setTint(0xffcc88);
     else this.keepSprite.clearTint();
-  }
-
-  private destroyBuilding(b: BuildingRecord): void {
-    const burned = isBurnable(b.kind);
-    this.burningIds.delete(b.id);
-    this.vfx?.stopBurn(b.id);
-    if (burned) {
-      this.vfx?.collapse(b.x, b.y);
-    }
-    if (b.kind === 'wall') {
-      const stairs = this.buildings.filter(
-        (s) => s.kind === 'stairs' && s.attachedWallId === b.id
-      );
-      for (const s of stairs) {
-        this.onDestroyed?.(s);
-        this.removeRecord(s);
-      }
-    }
-    if (isFortKind(b.kind)) {
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message:
-          b.kind === 'drawbridge'
-            ? 'The gate was breached!'
-            : 'A wall was breached!',
-      });
-    }
-    this.onDestroyed?.(b);
-    this.removeRecord(b);
-    this.refreshWallTextures();
-    this.rebuildPathGrid();
-    if (burned) {
-      const messages: Partial<Record<BuildKind, string>> = {
-        house: 'A house burned down!',
-        manor: 'A manor burned down!',
-        tavern: 'The tavern burned!',
-        stairs: 'Stairs collapsed!',
-        field: 'A field burned!',
-        granary: 'The granary burned!',
-        barracks: 'The barracks burned!',
-        cathedral: 'The cathedral burned!',
-        infirmary: 'The infirmary burned!',
-        dungeon: 'The dungeon collapsed!',
-        bakery: 'The bakery burned!',
-        market: 'The market burned!',
-        cemetery: 'The cemetery was ruined!',
-        gallows: 'The gallows collapsed!',
-        keep: 'A keep was destroyed!',
-      };
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: messages[b.kind] ?? 'A building was destroyed!',
-      });
-    }
-    this.onLayoutChanged?.();
   }
 
   private removeRecord(b: BuildingRecord): void {
@@ -1605,31 +1432,7 @@ export class BuildingSystem {
 
   /** Hide roofs when any unit stands inside the building; light hearths. */
   updateInteriors(unitBodies: Aabb[]): void {
-    for (const b of this.buildings) {
-      if (!b.interiorSprite) continue;
-      const box = footprintAabb(b.kind, b.x, b.y);
-      const occupied = unitBodies.some((u) => intersects(box, u));
-      b.sprite.setVisible(!occupied);
-      b.interiorSprite.setVisible(occupied);
-      if (b.hearthSprite) {
-        b.hearthSprite.setVisible(occupied);
-        if (occupied && !b.hearthSprite.anims.isPlaying) {
-          b.hearthSprite.play(HEARTH_FIRE_ANIM);
-        }
-      }
-    }
-    if (this.keepSprite && this.keepHp > 0) {
-      const keepBox = footprintAabb('keep', this.keep.x, this.keep.y);
-      const occupied = unitBodies.some((u) => intersects(keepBox, u));
-      this.keepSprite.setVisible(!occupied);
-      this.keepInteriorSprite?.setVisible(occupied);
-      if (this.keepHearth) {
-        this.keepHearth.setVisible(occupied);
-        if (occupied && !this.keepHearth.anims.isPlaying) {
-          this.keepHearth.play(HEARTH_FIRE_ANIM);
-        }
-      }
-    }
+    this.interiors.updateInteriors(unitBodies);
   }
 
   private spawnHearth(
@@ -1682,7 +1485,7 @@ export class BuildingSystem {
     return mask;
   }
 
-  private previewWallMask(x: number, y: number): number {
+  previewWallMask(x: number, y: number): number {
     let mask = 0;
     if (this.wallAt(x, y - FORT_TILE)) mask |= 1;
     if (this.wallAt(x + FORT_TILE, y)) mask |= 2;
@@ -1707,7 +1510,7 @@ export class BuildingSystem {
     );
   }
 
-  private findGateSnap(
+  findGateSnap(
     worldX: number,
     worldY: number
   ): { x: number; y: number; replaceWallId?: string } | null {
@@ -1775,7 +1578,7 @@ export class BuildingSystem {
    * Stairs sit on the empty fort cell beside a wall (toward the cursor),
    * so they don't stack on the battlements or collide with neighbor segments.
    */
-  private findWallSnap(
+  findWallSnap(
     worldX: number,
     worldY: number
   ): { x: number; y: number; wallId: string } | null {
@@ -1945,55 +1748,6 @@ export class BuildingSystem {
   }
 }
 
-function textureFor(kind: BuildKind, closed: boolean, wallMask: number): string {
-  switch (kind) {
-    case 'house':
-      return PROP_KEYS.house;
-    case 'wall':
-      return wallTextureKey(wallMask);
-    case 'tavern':
-      return PROP_KEYS.tavern;
-    case 'drawbridge':
-      return closed ? PROP_KEYS.drawbridgeClosed : PROP_KEYS.drawbridge;
-    case 'stairs':
-      return PROP_KEYS.stairs;
-    case 'field':
-      return PROP_KEYS.field;
-    case 'granary':
-      return PROP_KEYS.granary;
-    case 'barracks':
-      return PROP_KEYS.barracks;
-    case 'manor':
-      return PROP_KEYS.manor;
-    case 'ballista':
-      return PROP_KEYS.ballista;
-    case 'watchtower':
-      return PROP_KEYS.watchtower;
-    case 'cathedral':
-      return PROP_KEYS.cathedral;
-    case 'infirmary':
-      return PROP_KEYS.infirmary;
-    case 'dungeon':
-      return PROP_KEYS.dungeon;
-    case 'bakery':
-      return PROP_KEYS.bakery;
-    case 'market':
-      return PROP_KEYS.market;
-    case 'cemetery':
-      return PROP_KEYS.cemetery;
-    case 'gallows':
-      return PROP_KEYS.gallows;
-    case 'road':
-      return PROP_KEYS.road;
-    case 'bridge':
-      return PROP_KEYS.bridge;
-    case 'dock':
-      return PROP_KEYS.dock;
-    case 'keep':
-      return PROP_KEYS.keep;
-  }
-}
-
 function capacityLinesFor(kind: BuildKind | 'keep'): string[] | undefined {
   const key = kind === 'keep' ? 'keep' : kind;
   const caps = BUILDING_ROLE_CAPACITY[key];
@@ -2024,53 +1778,13 @@ function interiorTextureFor(kind: BuildKind): string | null {
       return PROP_KEYS.cathedralInterior;
     case 'infirmary':
       return PROP_KEYS.infirmaryInterior;
-    case 'keep':
-      return PROP_KEYS.keepInterior;
+    case 'dungeon':
+      return PROP_KEYS.dungeonInterior;
+    case 'bakery':
+      return PROP_KEYS.bakeryInterior;
+    case 'market':
+      return PROP_KEYS.marketInterior;
     default:
       return null;
   }
-}
-
-function snapCoord(n: number): number {
-  return Math.round(n / 8) * 8;
-}
-
-export function footprintAabb(
-  kind: BuildKind | 'keep',
-  x: number,
-  y: number
-): Aabb {
-  const { w, h } = FOOTPRINT[kind];
-  return {
-    left: x - w / 2,
-    right: x + w / 2,
-    top: y - h,
-    bottom: y,
-  };
-}
-
-/** Bridge footprint swaps width/height when rotated 90° to span the other axis. */
-function bridgeAabb(x: number, y: number, rotation: 0 | 90): Aabb {
-  const { w, h } = FOOTPRINT.bridge;
-  const bw = rotation === 90 ? h : w;
-  const bh = rotation === 90 ? w : h;
-  return {
-    left: x - bw / 2,
-    right: x + bw / 2,
-    top: y - bh,
-    bottom: y,
-  };
-}
-
-function intersects(a: Aabb, b: Aabb): boolean {
-  return !(
-    a.right <= b.left ||
-    a.left >= b.right ||
-    a.bottom <= b.top ||
-    a.top >= b.bottom
-  );
-}
-
-function pointInAabb(box: Aabb, x: number, y: number): boolean {
-  return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
 }

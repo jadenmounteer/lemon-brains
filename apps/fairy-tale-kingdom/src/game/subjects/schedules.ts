@@ -54,6 +54,32 @@ const peasantBase: ScheduleSlot[] = [
   { startHour: 20, endHour: 24, activity: 'sleep', zone: 'home', label: 'Heading home to sleep' },
 ];
 
+const bakerSchedule: ScheduleSlot[] = withMeals(
+  [
+    { startHour: 0, endHour: 4, activity: 'sleep', zone: 'home', label: 'Sleeping' },
+    { startHour: 4, endHour: 12, activity: 'knead', zone: 'path', label: 'Kneading at the bakery' },
+    { startHour: 12, endHour: 14, activity: 'idle_keep', zone: 'keep', label: 'Rest break' },
+    { startHour: 14, endHour: 18, activity: 'knead', zone: 'path', label: 'Afternoon baking' },
+    { startHour: 18, endHour: 22, activity: 'gather', zone: 'path', label: 'Delivering loaves' },
+    { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Resting' },
+  ],
+  'home',
+  'home'
+);
+
+const merchantSchedule: ScheduleSlot[] = withMeals(
+  [
+    { startHour: 0, endHour: 6, activity: 'sleep', zone: 'home', label: 'Sleeping' },
+    { startHour: 6, endHour: 13, activity: 'work', zone: 'path', label: 'Trading at the market' },
+    { startHour: 13, endHour: 14, activity: 'eat', zone: 'home', label: 'Midday meal' },
+    { startHour: 14, endHour: 19, activity: 'work', zone: 'path', label: 'Weighing goods at the stalls' },
+    { startHour: 19, endHour: 22, activity: 'gather', zone: 'path', label: 'Closing up the market' },
+    { startHour: 22, endHour: 24, activity: 'sleep', zone: 'home', label: 'Resting' },
+  ],
+  'home',
+  'home'
+);
+
 const guardBase: ScheduleSlot[] = [
   { startHour: 0, endHour: 5, activity: 'sleep', zone: 'home', label: 'Sleeping at home' },
   { startHour: 5, endHour: 11, activity: 'patrol', zone: 'wall', label: 'Patrolling the wall' },
@@ -362,6 +388,12 @@ export function scheduleFor(
   if (role === 'peasant' && job && isCastleJob(job)) {
     const castle = castleScheduleFor(job);
     if (castle) return castle;
+  }
+  if (role === 'peasant' && job === 'baker') {
+    return bakerSchedule;
+  }
+  if (role === 'peasant' && job === 'merchant') {
+    return merchantSchedule;
   }
   switch (role) {
     case 'peasant':

@@ -7,9 +7,9 @@ import { KingdomEvents } from '../subjects/events';
 import { ParadeSystem } from './ParadeSystem';
 import {
   listEligibleFestivals,
-  toastForFestival,
   type FestivalKind,
 } from '../events/festivalRequirements';
+import { EventCoordinator } from '../events/EventCoordinator';
 
 /** Prince spawn, FGM ball bless, weddings, balls/festivals, prince+princess wave buffs. */
 export class RoyaltySystem {
@@ -18,11 +18,7 @@ export class RoyaltySystem {
   private waveCooldownMs = EconomyBalance.waveIntervalMs;
   private waveRemainingMs = 0;
   private inspired = false;
-  private ballCooldownMs = EconomyBalance.ballMinIntervalMs * 0.4;
-  private ballRemainingMs = 0;
-  private festivalCooldownMs = EconomyBalance.festivalMinIntervalMs * 0.5;
-  private festivalRemainingMs = 0;
-  private activeFestivalKind: FestivalKind | null = null;
+  private readonly events: EventCoordinator;
   private onFestivalStart:
     | ((pick: { kind: FestivalKind; x: number; y: number }) => void)
     | null = null;
@@ -47,14 +43,48 @@ export class RoyaltySystem {
     private readonly buildings: BuildingSystem
   ) {
     this.parade = new ParadeSystem(scene, subjects, buildings);
+    this.events = new EventCoordinator({
+      listEligibleFestivals: () =>
+        listEligibleFestivals({
+          buildings: this.buildings.list().map((b) => ({
+            kind: b.kind,
+            x: b.x,
+            y: b.y,
+            hp: b.hp,
+          })),
+          countRole: (role) => this.subjects.countRole(role),
+          countJob: (job) =>
+            this.subjects
+              .listManaged()
+              .filter((s) => s.data.job === job).length,
+          hasKingOrQueen:
+            this.subjects.hasRole('king') || this.subjects.hasRole('queen'),
+          hasKingAndQueen:
+            this.subjects.hasRole('king') && this.subjects.hasRole('queen'),
+        }),
+      hasRoyalCourt: () =>
+        this.subjects.hasRole('king') &&
+        this.subjects.hasRole('queen') &&
+        this.subjects.hasRole('prince'),
+      markBallGather: () => this.subjects.markBallGather(),
+      markFestivalGather: (venue) => this.subjects.markFestivalGather(venue),
+      clearGatherActivities: (kinds) => this.subjects.clearGatherActivities(kinds),
+      toast: (message) =>
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, { message }),
+    });
+    this.events.setOnBallStart((pt) => this.onBallStart?.(pt));
+    this.events.setOnBallEnd(() => this.onBallEnd?.());
+    this.events.setOnFestivalStart((pick) => this.onFestivalStart?.(pick));
   }
 
   setOnBallStart(cb: (pt: { x: number; y: number }) => void): void {
     this.onBallStart = cb;
+    this.events.setOnBallStart(cb);
   }
 
   setOnBallEnd(cb: () => void): void {
     this.onBallEnd = cb;
+    this.events.setOnBallEnd(cb);
   }
 
   setOnWeddingStart(
@@ -74,11 +104,11 @@ export class RoyaltySystem {
   }
 
   isBallActive(): boolean {
-    return this.ballRemainingMs > 0;
+    return this.events.isBallActive();
   }
 
   isFestivalActive(): boolean {
-    return this.festivalRemainingMs > 0;
+    return this.events.isFestivalActive();
   }
 
   festivalHarvestMult(): number {
@@ -104,13 +134,15 @@ export class RoyaltySystem {
     paradeRemainingMs: number;
   } {
     const parade = this.parade.serialize();
+    const ball = this.events.legacyBallTimers();
+    const festival = this.events.legacyFestivalTimers();
     return {
       princeSpawnMs: this.princeSpawnMs,
       fgmCooldownMs: this.fgmCooldownMs,
-      ballRemainingMs: this.ballRemainingMs,
-      ballCooldownMs: this.ballCooldownMs,
-      festivalRemainingMs: this.festivalRemainingMs,
-      festivalCooldownMs: this.festivalCooldownMs,
+      ballRemainingMs: ball.ballRemainingMs,
+      ballCooldownMs: ball.ballCooldownMs,
+      festivalRemainingMs: festival.festivalRemainingMs,
+      festivalCooldownMs: festival.festivalCooldownMs,
       paradeCooldownMs: parade.paradeCooldownMs,
       paradeRemainingMs: parade.paradeRemainingMs,
     };
@@ -132,18 +164,7 @@ export class RoyaltySystem {
     if (typeof timers.fgmCooldownMs === 'number') {
       this.fgmCooldownMs = timers.fgmCooldownMs;
     }
-    if (typeof timers.ballRemainingMs === 'number') {
-      this.ballRemainingMs = timers.ballRemainingMs;
-    }
-    if (typeof timers.ballCooldownMs === 'number') {
-      this.ballCooldownMs = timers.ballCooldownMs;
-    }
-    if (typeof timers.festivalRemainingMs === 'number') {
-      this.festivalRemainingMs = timers.festivalRemainingMs;
-    }
-    if (typeof timers.festivalCooldownMs === 'number') {
-      this.festivalCooldownMs = timers.festivalCooldownMs;
-    }
+    this.events.restoreLegacyTimers(timers);
     this.parade.restore(timers.paradeCooldownMs, timers.paradeRemainingMs);
   }
 
@@ -176,8 +197,10 @@ export class RoyaltySystem {
       this.princeSpawnMs = 0;
     }
 
-    this.updateBall(deltaMs, hasKing, hasQueen, hasPrince);
-    this.updateFestival(deltaMs);
+    if (!peacetime && this.events.isCelebrationActive()) {
+      this.events.pauseForThreat();
+    }
+    this.events.tick(deltaMs, peacetime);
     this.tryAutoWedding();
     this.parade.update(deltaMs, peacetime);
 
@@ -248,97 +271,15 @@ export class RoyaltySystem {
     return this.subjects.hasRole('king') && this.subjects.hasRole('queen');
   }
 
-  private updateBall(
-    deltaMs: number,
-    hasKing: boolean,
-    hasQueen: boolean,
-    hasPrince: boolean
-  ): void {
-    if (this.ballRemainingMs > 0) {
-      this.ballRemainingMs -= deltaMs;
-      if (this.ballRemainingMs <= 0) {
-        this.ballRemainingMs = 0;
-        this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
-        this.subjects.clearGatherActivities(['ball']);
-        this.onBallEnd?.();
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: 'The royal ball has ended',
-        });
-      }
-      return;
-    }
-    if (!(hasKing && hasQueen && hasPrince)) return;
-    this.ballCooldownMs -= deltaMs;
-    if (this.ballCooldownMs <= 0) {
-      this.ballRemainingMs = EconomyBalance.ballDurationMs;
-      this.ballCooldownMs = EconomyBalance.ballMinIntervalMs;
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'A royal ball begins in the keep courtyard!',
-      });
-      const court = this.subjects.markBallGather();
-      this.onBallStart?.(court);
-    }
-  }
-
-  private updateFestival(deltaMs: number): void {
-    if (this.festivalRemainingMs > 0) {
-      this.festivalRemainingMs -= deltaMs;
-      if (this.festivalRemainingMs <= 0) {
-        this.festivalRemainingMs = 0;
-        this.activeFestivalKind = null;
-        this.festivalCooldownMs = EconomyBalance.festivalMinIntervalMs;
-        this.subjects.clearGatherActivities(['festival']);
-        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: 'The festival winds down',
-        });
-      }
-      return;
-    }
-    this.festivalCooldownMs -= deltaMs;
-    if (this.festivalCooldownMs <= 0) {
-      const eligible = this.buildings
-        ? listEligibleFestivals({
-            buildings: this.buildings.list().map((b) => ({
-              kind: b.kind,
-              x: b.x,
-              y: b.y,
-              hp: b.hp,
-            })),
-            countRole: (role) => this.subjects.countRole(role),
-            countJob: (job) =>
-              this.subjects
-                .listManaged()
-                .filter((s) => s.data.job === job).length,
-            hasKingOrQueen:
-              this.subjects.hasRole('king') || this.subjects.hasRole('queen'),
-            hasKingAndQueen:
-              this.subjects.hasRole('king') && this.subjects.hasRole('queen'),
-          })
-        : [];
-      this.festivalCooldownMs = EconomyBalance.festivalMinIntervalMs;
-      if (eligible.length === 0) {
-        this.activeFestivalKind = null;
-        return;
-      }
-      const pick = eligible[Math.floor(Math.random() * eligible.length)]!;
-      this.activeFestivalKind = pick.kind;
-      this.festivalRemainingMs = EconomyBalance.festivalDurationMs;
-      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: toastForFestival(pick.kind),
-      });
-      this.subjects.markFestivalGather({ x: pick.x, y: pick.y });
-      this.onFestivalStart?.(pick);
-    }
-  }
-
   getActiveFestivalKind(): FestivalKind | null {
-    return this.activeFestivalKind;
+    return this.events.getActiveFestivalKind();
   }
 
   setOnFestivalStart(
     cb: (pick: { kind: FestivalKind; x: number; y: number }) => void
   ): void {
     this.onFestivalStart = cb;
+    this.events.setOnFestivalStart(cb);
   }
 
   private tryAutoWedding(): void {
@@ -384,7 +325,6 @@ export class RoyaltySystem {
       y: cat.y,
     });
     if (!started) {
-      // Fallback short ceremony if spectacle system unavailable
       this.subjects.beginWedding(
         prince.data.id,
         princess.data.id,

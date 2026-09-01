@@ -1,29 +1,109 @@
-import type { SubjectSnapshot } from '../game/subjects/types';
+import { useMemo } from 'react';
+import type { SubjectSnapshot, KingdomStats } from '../game/subjects/types';
+import type { UnitRole } from '../game/art/assetManifest';
+import {
+  evaluateCareerAspiration,
+  type CareerAspirationView,
+} from '../game/career/evaluateAspiration';
 import { useState } from 'react';
 
 interface InspectorPanelProps {
   subject: SubjectSnapshot;
+  stats: KingdomStats;
+  gold: number;
+  infiniteGold?: boolean;
   militaryAvailable?: number;
   onClose: () => void;
   onTransformPeasant?: () => void;
   onCommandTroops?: (troopCount: number) => void;
-  /** When true, show a compact follow bar instead of the full sheet. */
+  onPromoteCareer?: (targetRole: UnitRole, cost: number) => void;
   collapsed?: boolean;
   onExpand?: () => void;
   onCollapse?: () => void;
 }
 
+function buildAspirationInput(stats: KingdomStats): Parameters<
+  typeof evaluateCareerAspiration
+>[1] {
+  return {
+    hasDungeon: stats.hasDungeon,
+    hasBarracks: stats.hasBarracks,
+    hasCathedral: stats.hasCathedral,
+    hasInfirmary: stats.hasInfirmary,
+    hasGallows: stats.hasGallows,
+    tavernCount: stats.tavernCount,
+    roleCounts: {
+      guard: stats.militaryAvailable,
+      bishop: stats.hasBishop ? 1 : 0,
+      executioner: stats.hasExecutioner ? 1 : 0,
+    },
+  };
+}
+
+function AspirationSection({
+  aspiration,
+  onPromote,
+}: {
+  aspiration: CareerAspirationView;
+  onPromote?: () => void;
+}) {
+  return (
+    <div className="inspector-aspiration">
+      <h3 className="inspector-subhead">Aspiration</h3>
+      <p>Wants to become {aspiration.targetLabel}</p>
+      <h4 className="inspector-subhead">Requirements</h4>
+      <ul className="schedule-list">
+        {aspiration.criteria.map((c) => (
+          <li key={c.id}>
+            {c.met ? '✓' : '✗'} {c.label}
+          </li>
+        ))}
+      </ul>
+      {onPromote && (
+        <button
+          type="button"
+          className="market-buy"
+          style={{ marginTop: '0.75rem' }}
+          disabled={!aspiration.canPromote}
+          title={aspiration.blockReason}
+          onClick={onPromote}
+        >
+          Grant wish — {aspiration.cost}g
+        </button>
+      )}
+      {!aspiration.canPromote && aspiration.blockReason && (
+        <p className="muted">{aspiration.blockReason}</p>
+      )}
+    </div>
+  );
+}
+
 export function InspectorPanel({
   subject,
+  stats,
+  gold,
+  infiniteGold = false,
   militaryAvailable = 0,
   onClose,
   onTransformPeasant,
   onCommandTroops,
+  onPromoteCareer,
   collapsed = false,
   onExpand,
   onCollapse,
 }: InspectorPanelProps) {
   const [troopCount, setTroopCount] = useState(3);
+
+  const aspiration = useMemo(() => {
+    if (!subject.goal) return null;
+    return evaluateCareerAspiration(
+      { role: subject.role, goal: subject.goal },
+      buildAspirationInput(stats),
+      { royaltyUnlocked: stats.royaltyUnlocked },
+      gold,
+      infiniteGold
+    );
+  }, [subject.role, subject.goal, stats, gold, infiniteGold]);
 
   const canToggle = Boolean(onExpand || onCollapse);
 
@@ -144,7 +224,16 @@ export function InspectorPanel({
           <span className="muted">Thinking</span> “{subject.thought}”
         </p>
       ) : null}
-      {subject.goalLabel ? (
+      {aspiration ? (
+        <AspirationSection
+          aspiration={aspiration}
+          onPromote={
+            onPromoteCareer
+              ? () => onPromoteCareer(aspiration.targetRole, aspiration.cost)
+              : undefined
+          }
+        />
+      ) : subject.goalLabel ? (
         <p>
           <span className="muted">Goal</span> {subject.goalLabel}
         </p>

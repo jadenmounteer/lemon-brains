@@ -27,6 +27,7 @@ export interface SubjectGoal {
 export interface BuildingResident {
   id: string;
   name: string;
+  role: UnitRole;
   roleLabel: string;
   jobLabel?: string;
 }
@@ -167,7 +168,8 @@ export type InterruptKind =
   | 'crew'
   | 'exorcise'
   | 'defect'
-  | 'abducted';
+  | 'abducted'
+  | 'escort_captive';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -263,6 +265,7 @@ export interface SubjectSnapshot {
   /** e.g. Banquet hall when inside the keep */
   roomLabel?: string;
   thought?: string;
+  goal?: SubjectGoal | null;
   goalLabel?: string;
   backstory?: string;
   lifeLog?: LifeLogEntry[];

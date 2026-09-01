@@ -14,7 +14,8 @@
     "build:lemon-brains": "npm run build --workspace=lemon-brains",
     "build:fairy-tale-kingdom": "npm run build --workspace=fairy-tale-kingdom",
     "build:pages": "node scripts/build-pages.mjs",
-    "test:lemon-brains": "npm run test --workspace=lemon-brains -- --no-watch --browsers=ChromeHeadless"
+    "test:lemon-brains": "npm run test --workspace=lemon-brains -- --no-watch --browsers=ChromeHeadless",
+    "test:fairy-tale-kingdom": "npm run test --workspace=fairy-tale-kingdom"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^17.3.11",

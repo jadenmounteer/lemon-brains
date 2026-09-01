@@ -13,9 +13,15 @@ import type {
   SubjectInterrupt,
   ZoneId,
 } from '../game/subjects/types';
+import type { KingdomGameMode } from '../game/core/GameModeProfile';
 import { BUILD_CATALOG, type BuildKind } from '../marketplace/catalog';
+import {
+  LAYOUT_SCHEMA_VERSION,
+  migrateLayoutToV4,
+} from './layoutMigrations';
 
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
+export { LAYOUT_SCHEMA_VERSION };
 
 const VALID_BUILD_KINDS = new Set<string>(BUILD_CATALOG.map((c) => c.kind));
 const VALID_MONSTER_KINDS = new Set(['troll', 'ogre', 'dragon']);
@@ -96,6 +102,8 @@ export interface LayoutRoyaltyState {
 }
 
 export interface LayoutSave {
+  /** Schema version — v4 adds gameMode. */
+  schemaVersion?: number;
   subjects: SavedSubject[];
   buildings: SavedBuilding[];
   monsters?: SavedMonster[];
@@ -114,6 +122,8 @@ export interface LayoutSave {
   /** Serializable raid stubs for future persist. */
   raids?: Array<Record<string, unknown>>;
   daysPlayedSnapshot?: number;
+  /** Learning vs normal pacing — persisted per kingdom layout. */
+  gameMode?: KingdomGameMode;
 }
 
 export class LayoutRepository {
@@ -132,22 +142,23 @@ export class LayoutRepository {
       const raw = localStorage.getItem(this.key);
       if (!raw) return null;
       const parsed = JSON.parse(raw) as LayoutSave;
-      if (!Array.isArray(parsed.subjects) || !Array.isArray(parsed.buildings)) {
-        return null;
-      }
+      const migrated = migrateLayoutToV4(parsed as unknown as Record<string, unknown>);
+      if (!migrated) return null;
+      const layout = migrated as LayoutSave;
       return {
-        ...parsed,
-        buildings: parsed.buildings
+        ...layout,
+        schemaVersion: LAYOUT_SCHEMA_VERSION,
+        buildings: (layout.buildings as SavedBuilding[])
           .filter((b) => VALID_BUILD_KINDS.has(b.kind))
           .map(normalizeBuilding),
-        subjects: parsed.subjects
+        subjects: (layout.subjects as SavedSubject[])
           .filter((s) => VALID_UNIT_ROLES.has(s.role))
           .map(normalizeSubject),
-        monsters: Array.isArray(parsed.monsters)
-          ? parsed.monsters.filter((m) => VALID_MONSTER_KINDS.has(m.kind))
+        monsters: Array.isArray(layout.monsters)
+          ? layout.monsters.filter((m) => VALID_MONSTER_KINDS.has(m.kind))
           : [],
-        encampments: Array.isArray(parsed.encampments)
-          ? parsed.encampments.filter(
+        encampments: Array.isArray(layout.encampments)
+          ? layout.encampments.filter(
               (c) =>
                 c &&
                 typeof c.id === 'string' &&
@@ -157,22 +168,26 @@ export class LayoutRepository {
             )
           : [],
         mapSeed:
-          typeof parsed.mapSeed === 'number' ? parsed.mapSeed >>> 0 : undefined,
+          typeof layout.mapSeed === 'number' ? layout.mapSeed >>> 0 : undefined,
         mapCols:
-          typeof parsed.mapCols === 'number' ? parsed.mapCols : undefined,
+          typeof layout.mapCols === 'number' ? layout.mapCols : undefined,
         mapRows:
-          typeof parsed.mapRows === 'number' ? parsed.mapRows : undefined,
+          typeof layout.mapRows === 'number' ? layout.mapRows : undefined,
         clockHour:
-          typeof parsed.clockHour === 'number' ? parsed.clockHour : undefined,
+          typeof layout.clockHour === 'number' ? layout.clockHour : undefined,
         royaltyState:
-          parsed.royaltyState && typeof parsed.royaltyState === 'object'
-            ? parsed.royaltyState
+          layout.royaltyState && typeof layout.royaltyState === 'object'
+            ? layout.royaltyState
             : undefined,
-        raids: Array.isArray(parsed.raids) ? parsed.raids : undefined,
+        raids: Array.isArray(layout.raids) ? layout.raids : undefined,
         daysPlayedSnapshot:
-          typeof parsed.daysPlayedSnapshot === 'number'
-            ? Math.max(0, Math.floor(parsed.daysPlayedSnapshot))
+          typeof layout.daysPlayedSnapshot === 'number'
+            ? Math.max(0, Math.floor(layout.daysPlayedSnapshot))
             : undefined,
+        gameMode:
+          layout.gameMode === 'learning' || layout.gameMode === 'normal'
+            ? layout.gameMode
+            : 'normal',
       };
     } catch {
       return null;
@@ -180,7 +195,10 @@ export class LayoutRepository {
   }
 
   async save(data: LayoutSave): Promise<void> {
-    await this.storage.setItem(this.key, JSON.stringify(data));
+    await this.storage.setItem(
+      this.key,
+      JSON.stringify({ ...data, schemaVersion: LAYOUT_SCHEMA_VERSION })
+    );
   }
 
   async reset(): Promise<void> {

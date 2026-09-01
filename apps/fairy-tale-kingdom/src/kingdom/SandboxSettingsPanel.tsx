@@ -453,6 +453,21 @@ export function SandboxSettingsPanel({
           }
         />
 
+        <h3 className="inspector-subhead">Kingdom life</h3>
+        <label className="sandbox-check">
+          <input
+            type="checkbox"
+            checked={settings.life.fgmAutoGrant}
+            onChange={(e) =>
+              set({
+                ...settings,
+                life: { ...settings.life, fgmAutoGrant: e.target.checked },
+              })
+            }
+          />
+          Fairy Godmother helps (auto-grant wishes when ready)
+        </label>
+
         <h3 className="inspector-subhead">Buildings</h3>
         <MultSlider
           label="Wall HP"

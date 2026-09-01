@@ -3,11 +3,10 @@ import {
   idleAnimKey,
   walkAnimKey,
   type Direction,
-  type EnemyRole,
 } from '../art/assetManifest';
 import { isRoyalRole } from '../art/assetManifest';
 import type { BuildingRecord, BuildingSystem } from '../buildings/BuildingSystem';
-import { CombatBalance, RAIDER_MAX_HP } from '../combat/stats';
+import { CombatBalance } from '../combat/stats';
 import type { PathGrid } from '../path/PathGrid';
 import { SiegeBalance } from '../siege/balance';
 import type { SiegeEngineSystem } from '../siege/SiegeEngineSystem';
@@ -20,105 +19,24 @@ import { WarBalance } from '../war/WarBalance';
 import { KEEP_ID } from '../buildings/BuildingSystem';
 import { Phase12Balance } from '../economy/phase12Balance';
 
-export interface KeepPoint {
-  x: number;
-  y: number;
-}
+import { RaidMovement } from './RaidMovement';
+import { RaidSpawner } from './RaidSpawner';
+import { SiegeLadderSystem } from './SiegeLadder';
+import {
+  KEEP_REACH_PX,
+  MOVE_SPEED,
+  RAID_LABELS,
+  type ActiveRaider,
+  type BeginSiegeFromCampOpts,
+  type KeepPoint,
+  type LaunchCampRaidersOpts,
+  type RaidKind,
+  type SiegePhase,
+  type StealKind,
+} from './raidTypes';
 
-type RaidKind = EnemyRole;
-
-type RaiderState =
-  | 'pathing'
-  | 'fighting'
-  | 'breaching'
-  | 'burning'
-  | 'sieging'
-  | 'investing'
-  | 'routing'
-  | 'retreating'
-  | 'carrying'
-  | 'feasting'
-  | 'done';
-
-export type SiegePhase = 'none' | 'muster' | 'reduce' | 'storm' | 'routing';
-
-export type StealKind = 'bandit' | 'giant' | 'goblin' | 'thief' | 'gypsy';
-
-export interface ActiveRaider {
-  kind: RaidKind;
-  sprite: Phaser.GameObjects.Sprite;
-  hp: number;
-  maxHp: number;
-  path: { x: number; y: number }[];
-  pathIndex: number;
-  state: RaiderState;
-  targetSubjectId: string | null;
-  targetBuildingId: string | null;
-  thinkAccumMs: number;
-  camp?: Phaser.GameObjects.Arc;
-  investX?: number;
-  investY?: number;
-  homeCampId: string | null;
-  homeX: number;
-  homeY: number;
-  /** For living-camp raiders — the home SubjectSystem entity to reveal/remove on return/loss. */
-  rosterSubjectId: string | null;
-  /** Override steal bookkeeping for thief dens / goblins */
-  /** Gold this raider is carrying / last stole (recoverable on arrest) */
-  carriedGold: number;
-  stealKind: StealKind | null;
-  looted: boolean;
-  isGeneral: boolean;
-  /** Smart-general detachment: burn outer fields while main host sieges */
-  siegeRole: 'main' | 'field_raid';
-  strategyFieldId: string | null;
-  /** Giant abduction — subject tucked under the arm. */
-  carriedSubjectId: string | null;
-  feastMs: number;
-}
-
-const LABELS: Record<RaidKind, string> = {
-  bandit: 'Bandits',
-  giant: 'Giants',
-  goblin: 'Goblins',
-  enemy_army: 'a rival kingdom’s army',
-  gypsy: 'Gypsies',
-};
-
-const KEEP_REACH_PX = 28;
-const MOVE_SPEED: Record<RaidKind, number> = {
-  bandit: 42,
-  giant: 28,
-  goblin: 52,
-  enemy_army: 36,
-  gypsy: 40,
-};
-
-export interface LaunchCampRaidersOpts {
-  kind: RaidKind;
-  x: number;
-  y: number;
-  count: number;
-  homeCampId: string;
-  homeX: number;
-  homeY: number;
-  stealKind?: StealKind;
-  aggroOnly?: boolean;
-  label?: string;
-  isReinforce?: boolean;
-  /** The camp's leader is riding with this party — tag one raider as the general */
-  hasGeneral?: boolean;
-  /** Home SubjectSystem ids (one per raider, living camps only) to reveal/remove on return/loss */
-  rosterSubjectIds?: string[];
-}
-
-export interface BeginSiegeFromCampOpts {
-  x: number;
-  y: number;
-  count: number;
-  homeCampId: string;
-  generalName?: string;
-}
+export type { ActiveRaider, BeginSiegeFromCampOpts, LaunchCampRaidersOpts, SiegePhase, StealKind };
+export { KEEP_REACH_PX };
 
 export class RaidSystem {
   private raiders: ActiveRaider[] = [];
@@ -145,12 +63,39 @@ export class RaidSystem {
   /** Keeps already taken during this continuous siege campaign */
   private fallenKeepIds: string[] = [];
   private replanCooldownMs = 0;
+  private readonly movement: RaidMovement;
+  private readonly spawner: RaidSpawner;
+  private readonly ladders: SiegeLadderSystem;
+  private ladderToastShown = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly world: { width: number; height: number },
     private readonly keep: KeepPoint
-  ) {}
+  ) {
+    const self = this;
+    this.movement = new RaidMovement(
+      {
+        get pathGrid() {
+          return self.pathGrid;
+        },
+        unstickRaider: (r) => self.unstickRaider(r),
+        stepToward: (r, tx, ty, d) => self.stepToward(r, tx, ty, d),
+      },
+      () => self.pathGrid
+    );
+    this.spawner = new RaidSpawner({
+      scene: this.scene,
+      get pathGrid() {
+        return self.pathGrid;
+      },
+      get raiders() {
+        return self.raiders;
+      },
+      investPoint: (i, t) => self.investPoint(i, t),
+    });
+    this.ladders = new SiegeLadderSystem(this.scene);
+  }
 
   setBuildings(buildings: BuildingSystem): void {
     this.buildings = buildings;
@@ -196,7 +141,7 @@ export class RaidSystem {
       this.buildings?.setRaidActive(true);
       this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
         kind: opts.stealKind ?? opts.kind,
-        label: opts.label ?? LABELS[opts.kind],
+        label: opts.label ?? RAID_LABELS[opts.kind],
       });
     }
 
@@ -260,10 +205,10 @@ export class RaidSystem {
       homeX: x,
       homeY: y,
       stealKind,
-      label: `Sandbox ${LABELS[kind]}`,
+      label: `Sandbox ${RAID_LABELS[kind]}`,
     });
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `Sandbox: ${LABELS[kind]} raid inbound!`,
+      message: `Sandbox: ${RAID_LABELS[kind]} raid inbound!`,
     });
   }
 
@@ -591,6 +536,26 @@ export class RaidSystem {
     }
 
     if (this.siegePhase === 'reduce') {
+      const breach =
+        this.siegePlan != null
+          ? { x: this.siegePlan.breachX, y: this.siegePlan.breachY }
+          : null;
+      if (
+        this.ladders.tickDeploy(
+          deltaMs,
+          this.siegePhase,
+          breach,
+          this.buildings
+        )
+      ) {
+        this.buildings?.rebuildWallPathGrid(this.ladders.toPortals());
+        if (!this.ladderToastShown) {
+          this.ladderToastShown = true;
+          this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+            message: 'Siege ladders rise against the battlements!',
+          });
+        }
+      }
       const pathOpen = this.pathToKeepOpen();
       if (pathOpen) {
         this.siegePhase = 'storm';
@@ -620,6 +585,23 @@ export class RaidSystem {
     return Boolean(path && path.length > 0);
   }
 
+  private repathTo(raider: ActiveRaider, goalX: number, goalY: number): void {
+    this.movement.repathTo(raider, goalX, goalY);
+  }
+
+  private repath(raider: ActiveRaider): void {
+    this.movement.repath(raider, this.keep.x, this.keep.y);
+  }
+
+  private followPathTo(
+    raider: ActiveRaider,
+    goalX: number,
+    goalY: number,
+    deltaMs: number
+  ): void {
+    this.movement.followPathTo(raider, goalX, goalY, deltaMs);
+  }
+
   private launchRaider(
     kind: RaidKind,
     x: number,
@@ -639,66 +621,16 @@ export class RaidSystem {
       rosterSubjectId?: string | null;
     }
   ): void {
-    const sprite = this.scene.add.sprite(x, y, kind, 0);
-    sprite.setDepth(25);
-    sprite.setOrigin(0.5, 1);
-    if (kind === 'giant') {
-      sprite.setScale(2.35);
-    } else if (kind === 'goblin') {
-      sprite.setScale(0.85);
-    }
-    if (home?.isGeneral) {
-      sprite.setTint(0xffd700);
-    }
-    sprite.play(idleAnimKey(kind));
-
-    const maxHp = home?.isGeneral
-      ? Math.floor(RAIDER_MAX_HP[kind] * WarBalance.leaderHpMult)
-      : RAIDER_MAX_HP[kind];
-    const invest = this.investPoint(index, total);
-    const fieldRaid = home?.siegeRole === 'field_raid';
-    const startState: RaiderState =
-      kind === 'enemy_army'
-        ? fieldRaid
-          ? 'burning'
-          : 'investing'
-        : home?.aggroOnly
-          ? 'fighting'
-          : 'pathing';
-    const rawHomeX = home?.homeX ?? x;
-    const rawHomeY = home?.homeY ?? y;
-    const homePt = this.pathGrid
-      ? this.pathGrid.snapWorldToOpen(rawHomeX, rawHomeY)
-      : { x: rawHomeX, y: rawHomeY };
-    const raider: ActiveRaider = {
+    this.spawner.launchRaider(
       kind,
-      sprite,
-      hp: maxHp,
-      maxHp,
-      path: [],
-      pathIndex: 0,
-      state: startState,
-      targetSubjectId: null,
-      targetBuildingId: fieldRaid ? home?.strategyFieldId ?? null : null,
-      thinkAccumMs: 0,
+      x,
+      y,
       camp,
-      investX: invest.x,
-      investY: invest.y,
-      homeCampId: home?.homeCampId ?? null,
-      homeX: homePt.x,
-      homeY: homePt.y,
-      rosterSubjectId: home?.rosterSubjectId ?? null,
-      stealKind: home?.stealKind ?? null,
-      carriedGold: 0,
-      looted: false,
-      isGeneral: Boolean(home?.isGeneral),
-      siegeRole: home?.siegeRole ?? 'main',
-      strategyFieldId: home?.strategyFieldId ?? null,
-      carriedSubjectId: null,
-      feastMs: 0,
-    };
-    this.raiders.push(raider);
-    if (kind !== 'enemy_army' && !home?.aggroOnly) this.repath(raider);
+      index,
+      total,
+      home,
+      (raider) => this.repath(raider)
+    );
   }
 
   private investPoint(index: number, total: number): KeepPoint {
@@ -1008,6 +940,30 @@ export class RaidSystem {
 
     // Hold line; help breach — smart generals pick the weakest fort on their approach
     if (this.siegePhase === 'reduce' && think) {
+      const ladder = this.ladders.nearestLadder(
+        raider.sprite.x,
+        raider.sprite.y,
+        SiegeBalance.ladderClimbRange
+      );
+      if (ladder && !raider.onWall) {
+        const ld = Phaser.Math.Distance.Between(
+          raider.sprite.x,
+          raider.sprite.y,
+          ladder.groundX,
+          ladder.groundY
+        );
+        if (ld > 10) {
+          this.stepToward(raider, ladder.groundX, ladder.groundY, deltaMs);
+          raider.state = 'investing';
+        } else {
+          raider.onWall = true;
+          raider.sprite.setPosition(ladder.wallX, ladder.wallY - 10);
+          raider.sprite.setDepth(22);
+          raider.state = 'fighting';
+        }
+        return;
+      }
+
       const fort =
         this.siegePlan && this.buildings
           ? this.buildings.weakestFortNear(
@@ -1471,40 +1427,6 @@ export class RaidSystem {
     }
   }
 
-  private repath(raider: ActiveRaider): void {
-    this.repathTo(raider, this.keep.x, this.keep.y + 20);
-  }
-
-  /** Pathfind to an arbitrary goal, escaping mountain/water bowls if needed. */
-  private repathTo(raider: ActiveRaider, goalX: number, goalY: number): void {
-    if (!this.pathGrid) {
-      raider.path = [{ x: goalX, y: goalY }];
-      raider.pathIndex = 0;
-      return;
-    }
-    this.unstickRaider(raider);
-    const goal = this.pathGrid.snapWorldToOpen(goalX, goalY);
-    let from = { x: raider.sprite.x, y: raider.sprite.y };
-    let path = this.pathGrid.findPath(from, goal);
-    // Camps in mountain bowls have no land corridor — slip out onto the rim,
-    // then path (still respects walls; does not warp into the fort).
-    if (!path || path.length === 0) {
-      const exit = this.pathGrid.escapeLandPocket(from);
-      if (
-        exit &&
-        Math.hypot(exit.x - from.x, exit.y - from.y) > 4
-      ) {
-        raider.sprite.setPosition(exit.x, exit.y);
-        raider.sprite.setDepth(25 + exit.y * 0.01);
-        from = exit;
-        path = this.pathGrid.findPath(from, goal);
-      }
-    }
-    raider.path = path ?? [];
-    raider.pathIndex = 0;
-  }
-
-  /** Pull a raider off mountains/water onto the nearest walkable cell. */
   private unstickRaider(raider: ActiveRaider): void {
     if (!this.pathGrid) return;
     if (!this.pathGrid.isWorldBlocked(raider.sprite.x, raider.sprite.y)) return;
@@ -1514,90 +1436,6 @@ export class RaidSystem {
     );
     raider.sprite.setPosition(safe.x, safe.y);
     raider.sprite.setDepth(25 + safe.y * 0.01);
-  }
-
-  /**
-   * Follow a land path around mountains/water toward a goal.
-   * Repaths when the path is empty, exhausted, or the next hop is blocked.
-   */
-  private followPathTo(
-    raider: ActiveRaider,
-    goalX: number,
-    goalY: number,
-    deltaMs: number
-  ): void {
-    this.unstickRaider(raider);
-    const goalDist = Phaser.Math.Distance.Between(
-      raider.sprite.x,
-      raider.sprite.y,
-      goalX,
-      goalY
-    );
-    if (goalDist < 16) {
-      this.stepToward(raider, goalX, goalY, deltaMs);
-      return;
-    }
-
-    const needRepath =
-      !raider.path.length ||
-      raider.pathIndex >= raider.path.length ||
-      // Path goal drifted far from intended home (or was for the keep)
-      Phaser.Math.Distance.Between(
-        raider.path[raider.path.length - 1]!.x,
-        raider.path[raider.path.length - 1]!.y,
-        goalX,
-        goalY
-      ) > 48;
-
-    if (needRepath) {
-      this.repathTo(raider, goalX, goalY);
-    }
-
-    if (!raider.path.length) {
-      // Last resort: try pocket escape then a single open-cell slide
-      if (this.pathGrid) {
-        const exit = this.pathGrid.escapeLandPocket({
-          x: raider.sprite.x,
-          y: raider.sprite.y,
-        });
-        if (exit) {
-          this.stepToward(raider, exit.x, exit.y, deltaMs);
-          return;
-        }
-      }
-      this.stepToward(raider, goalX, goalY, deltaMs);
-      return;
-    }
-
-    while (raider.pathIndex < raider.path.length) {
-      const wp = raider.path[raider.pathIndex]!;
-      const wd = Phaser.Math.Distance.Between(
-        raider.sprite.x,
-        raider.sprite.y,
-        wp.x,
-        wp.y
-      );
-      if (wd < 12) {
-        raider.pathIndex += 1;
-        continue;
-      }
-      this.stepToward(raider, wp.x, wp.y, deltaMs);
-      // If still blocked after step, force a fresh path next tick
-      if (
-        this.pathGrid?.isWorldBlocked(
-          raider.sprite.x + (wp.x - raider.sprite.x) * 0.15,
-          raider.sprite.y + (wp.y - raider.sprite.y) * 0.15
-        )
-      ) {
-        raider.path = [];
-        raider.pathIndex = 0;
-      }
-      return;
-    }
-
-    // Exhausted path — repath next frame
-    raider.path = [];
-    raider.pathIndex = 0;
   }
 
   private stepToward(
@@ -1711,6 +1549,9 @@ export class RaidSystem {
 
   private endWave(): void {
     this.buildings?.setRaidActive(false);
+    this.ladders.reset();
+    this.ladderToastShown = false;
+    this.buildings?.rebuildWallPathGrid();
     this.siegePhase = 'none';
     this.activeWaveKind = null;
     this.siegePlan = null;

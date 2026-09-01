@@ -1092,15 +1092,20 @@ function drawWallVariant(scene: Phaser.Scene, mask: number, key: string) {
   const h = 32;
   const tex = createCanvas(scene, key, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 8, 8, 20, palette.stone);
-  fillRect(ctx, 4, 8, 8, 1, palette.ink);
-  if (mask & 1) fillRect(ctx, 5, 0, 6, 10, palette.stone);
-  if (mask & 4) fillRect(ctx, 5, 26, 6, 6, palette.stone);
-  if (mask & 2) fillRect(ctx, 10, 12, 6, 10, palette.stone);
-  if (mask & 8) fillRect(ctx, 0, 12, 6, 10, palette.stone);
-  fillRect(ctx, 4, 4, 3, 5, palette.stone);
-  fillRect(ctx, 9, 4, 3, 5, palette.stone);
-  fillRect(ctx, 4, 8, 1, 20, palette.stoneDark);
+  // Thick stone base (10px wide)
+  fillRect(ctx, 3, 10, 10, 18, palette.stone);
+  fillRect(ctx, 3, 10, 10, 1, palette.ink);
+  if (mask & 1) fillRect(ctx, 4, 0, 8, 12, palette.stone);
+  if (mask & 4) fillRect(ctx, 4, 26, 8, 6, palette.stone);
+  if (mask & 2) fillRect(ctx, 10, 12, 6, 12, palette.stone);
+  if (mask & 8) fillRect(ctx, 0, 12, 6, 12, palette.stone);
+  // Crenellated parapet — alternating merlons
+  fillRect(ctx, 3, 4, 3, 6, palette.stone);
+  fillRect(ctx, 10, 4, 3, 6, palette.stone);
+  fillRect(ctx, 3, 4, 3, 1, palette.ink);
+  fillRect(ctx, 10, 4, 3, 1, palette.ink);
+  fillRect(ctx, 3, 10, 1, 18, palette.stoneDark);
+  fillRect(ctx, 12, 10, 1, 18, palette.stoneDark);
   tex.refresh();
 }
 
@@ -1290,13 +1295,15 @@ function drawDrawbridge(scene: Phaser.Scene) {
   const h = 24;
   const open = createCanvas(scene, PROP_KEYS.drawbridge, w, h);
   const octx = open.getContext();
-  fillRect(octx, 2, 10, 28, 10, palette.wood);
-  fillRect(octx, 2, 10, 28, 1, palette.ink);
-  fillRect(octx, 4, 12, 2, 6, palette.woodDark);
-  fillRect(octx, 14, 12, 2, 6, palette.woodDark);
-  fillRect(octx, 24, 12, 2, 6, palette.woodDark);
-  fillRect(octx, 0, 8, 4, 4, palette.metal);
-  fillRect(octx, 28, 8, 4, 4, palette.metal);
+  fillRect(octx, 2, 12, 28, 10, palette.wood);
+  fillRect(octx, 2, 12, 28, 1, palette.ink);
+  for (let i = 0; i < 5; i++) {
+    fillRect(octx, 4 + i * 5, 14, 2, 6, palette.woodDark);
+  }
+  fillRect(octx, 0, 6, 4, 8, palette.metal);
+  fillRect(octx, 28, 6, 4, 8, palette.metal);
+  fillRect(octx, 1, 6, 2, 6, palette.ink);
+  fillRect(octx, 29, 6, 2, 6, palette.ink);
   open.refresh();
 
   const closed = createCanvas(scene, PROP_KEYS.drawbridgeClosed, w, h);
@@ -1306,8 +1313,11 @@ function drawDrawbridge(scene: Phaser.Scene) {
   fillRect(cctx, 8, 4, 2, 14, palette.woodDark);
   fillRect(cctx, 15, 4, 2, 14, palette.woodDark);
   fillRect(cctx, 22, 4, 2, 14, palette.woodDark);
+  fillRect(cctx, 12, 6, 8, 6, palette.stoneDark);
   fillRect(cctx, 4, 0, 4, 4, palette.metal);
   fillRect(cctx, 24, 0, 4, 4, palette.metal);
+  fillRect(cctx, 5, 0, 2, 3, palette.ink);
+  fillRect(cctx, 25, 0, 2, 3, palette.ink);
   closed.refresh();
 }
 
@@ -1316,11 +1326,13 @@ function drawStairs(scene: Phaser.Scene) {
   const h = 28;
   const tex = createCanvas(scene, PROP_KEYS.stairs, w, h);
   const ctx = tex.getContext();
-  for (let i = 0; i < 5; i++) {
-    fillRect(ctx, 2 + i, 22 - i * 4, 16 - i * 2, 4, palette.stone);
-    fillRect(ctx, 2 + i, 22 - i * 4, 16 - i * 2, 1, palette.ink);
+  for (let i = 0; i < 6; i++) {
+    fillRect(ctx, 1 + i, 24 - i * 4, 18 - i * 2, 4, palette.stone);
+    fillRect(ctx, 1 + i, 24 - i * 4, 18 - i * 2, 1, palette.ink);
   }
-  fillRect(ctx, 8, 0, 4, 4, palette.stoneDark);
+  fillRect(ctx, 7, 0, 6, 5, palette.stoneDark);
+  fillRect(ctx, 7, 0, 6, 1, palette.ink);
+  fillRect(ctx, 0, 8, 3, 16, palette.stone);
   tex.refresh();
 }
 
@@ -1471,6 +1483,23 @@ function drawBakery(scene: Phaser.Scene) {
   pixel(ctx, 11, 5, 0xc09040);
   pixel(ctx, 14, 5, 0xc09040);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.bakeryInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 4, 16, 28, 20, 0xe8dcc8);
+  fillRect(ic, 6, 18, 24, 16, 0xf0e4d0);
+  // oven interior
+  fillRect(ic, 30, 18, 10, 14, palette.stoneDark);
+  fillRect(ic, 32, 20, 6, 8, palette.ink);
+  fillRect(ic, 34, 22, 2, 4, 0xff8844);
+  // counter + loaves
+  fillRect(ic, 8, 22, 16, 6, palette.wood);
+  fillRect(ic, 10, 20, 4, 3, 0xe8c070);
+  fillRect(ic, 16, 19, 4, 4, 0xe0b060);
+  // flour sacks
+  fillRect(ic, 6, 28, 6, 6, palette.cream);
+  fillRect(ic, 14, 28, 6, 6, 0xd4c4a0);
+  int.refresh();
 }
 
 function drawBarracks(scene: Phaser.Scene) {
@@ -1610,6 +1639,24 @@ function drawDungeon(scene: Phaser.Scene) {
   fillRect(ctx, 8, 14, 4, 4, palette.metal);
   fillRect(ctx, 28, 14, 4, 4, palette.metal);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.dungeonInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 4, 10, 32, 24, 0x2a2830);
+  fillRect(ic, 6, 12, 28, 20, 0x1a1820);
+  // corridor
+  fillRect(ic, 16, 12, 8, 20, 0x252530);
+  // cells
+  for (let i = 0; i < 4; i++) {
+    const cx = 8 + i * 7;
+    fillRect(ic, cx, 14, 6, 10, palette.ink);
+    fillRect(ic, cx + 1, 15, 4, 8, 0x0a0810);
+    fillRect(ic, cx + 2, 16, 2, 6, palette.metal);
+  }
+  // keeper desk
+  fillRect(ic, 28, 22, 8, 4, palette.woodDark);
+  fillRect(ic, 30, 20, 4, 2, palette.cream);
+  int.refresh();
 }
 
 function drawMarket(scene: Phaser.Scene) {
@@ -1626,6 +1673,22 @@ function drawMarket(scene: Phaser.Scene) {
   pixel(ctx, 14, 16, palette.gold);
   pixel(ctx, 28, 16, palette.wheat);
   tex.refresh();
+
+  const int = createCanvas(scene, PROP_KEYS.marketInterior, w, h);
+  const ic = int.getContext();
+  fillRect(ic, 4, 16, 36, 14, palette.dirt);
+  fillRect(ic, 6, 14, 32, 12, 0xe8dcc8);
+  // stalls
+  fillRect(ic, 8, 18, 12, 8, palette.wood);
+  fillRect(ic, 10, 16, 3, 3, palette.gold);
+  fillRect(ic, 14, 17, 3, 2, 0xe8c070);
+  fillRect(ic, 24, 18, 12, 8, palette.woodDark);
+  fillRect(ic, 26, 16, 3, 3, palette.wheat);
+  fillRect(ic, 30, 17, 3, 2, palette.cream);
+  // center scale
+  fillRect(ic, 20, 20, 4, 4, palette.metal);
+  fillRect(ic, 21, 18, 2, 2, palette.gold);
+  int.refresh();
 }
 
 function drawCemetery(scene: Phaser.Scene) {
@@ -2081,6 +2144,9 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.tavernInterior,
     PROP_KEYS.cathedralInterior,
     PROP_KEYS.infirmaryInterior,
+    PROP_KEYS.dungeonInterior,
+    PROP_KEYS.bakeryInterior,
+    PROP_KEYS.marketInterior,
     ...Array.from({ length: 16 }, (_, i) => wallTextureKey(i)),
   ];
   for (const key of [

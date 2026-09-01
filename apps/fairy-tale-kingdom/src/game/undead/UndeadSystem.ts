@@ -67,6 +67,15 @@ export class UndeadSystem {
 
   update(deltaMs: number, isNight: boolean): void {
     const sb = getSandboxRuntime().undead;
+    const undeadOff =
+      !sb.kinds.vampire &&
+      !sb.kinds.necromancer &&
+      !sb.kinds.ghost &&
+      sb.vampire <= 0 &&
+      sb.necromancer <= 0 &&
+      sb.ghost <= 0;
+    if (undeadOff) return;
+
     this.necroSpawnMs -= deltaMs * Math.max(0.01, sb.necromancer);
     for (const c of [...this.castles]) {
       c.lifeMs -= deltaMs;

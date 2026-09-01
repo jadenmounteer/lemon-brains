@@ -2,9 +2,15 @@ import Phaser from 'phaser';
 import { PROP_KEYS } from '../art/assetManifest';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { KEEP_ID } from '../buildings/BuildingSystem';
+import {
+  cathedralAislePoint,
+  cathedralAltar,
+  cathedralBishopSpot,
+  cathedralDoor,
+  cathedralPewSpot,
+} from '../buildings/layouts/CathedralLayout';
 import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
-import { ringOffset } from '../subjects/zones';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { roomPoint } from '../keep/KeepLayout';
 
@@ -151,12 +157,24 @@ export class WeddingCeremonySystem {
           : id === this.couple!.a || id === this.couple!.b
             ? 'Arriving for the wedding'
             : 'Gathering for a wedding';
-      const off = ringOffset(i, ids.length, 40);
-      const dest = this.subjects.snapToWalkable(
-        this.cathedral.x + off.x,
-        this.cathedral.y + off.y
-      );
-      this.subjects.nudgeToward(id, dest.x, dest.y, 55);
+      if (id === this.couple!.bishop) {
+        const pt = cathedralBishopSpot(this.cathedral, id);
+        this.subjects.nudgeToward(id, pt.x, pt.y, 55);
+        return;
+      }
+      if (id === this.couple!.a || id === this.couple!.b) {
+        const door = cathedralDoor(this.cathedral);
+        this.subjects.nudgeToward(
+          id,
+          door.x + (id === this.couple!.a ? -6 : 6),
+          door.y,
+          55
+        );
+        return;
+      }
+      const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
+      const pt = cathedralPewSpot(this.cathedral, side, i % 3, id);
+      this.subjects.nudgeToward(id, pt.x, pt.y, 55);
     });
   }
 
@@ -165,45 +183,31 @@ export class WeddingCeremonySystem {
     const a = this.subjects.getById(this.couple.a);
     const b = this.subjects.getById(this.couple.b);
     const bishop = this.subjects.getById(this.couple.bishop);
+    const altar = cathedralAltar(this.cathedral);
     if (a) {
       a.data.activityLabel = 'Walking the aisle';
-      this.subjects.nudgeToward(
-        a.data.id,
-        this.cathedral.x - 10,
-        this.cathedral.y + 8,
-        40
-      );
+      const pt = cathedralAislePoint(this.cathedral, 0, a.data.id);
+      this.subjects.nudgeToward(a.data.id, pt.x - 6, pt.y, 40);
     }
     if (b) {
       b.data.activityLabel = 'Walking the aisle';
-      this.subjects.nudgeToward(
-        b.data.id,
-        this.cathedral.x + 10,
-        this.cathedral.y + 8,
-        40
-      );
+      const pt = cathedralAislePoint(this.cathedral, 0, b.data.id);
+      this.subjects.nudgeToward(b.data.id, pt.x + 6, pt.y, 40);
     }
     if (bishop) {
       bishop.data.activityLabel = 'Waiting at the altar';
-      this.subjects.nudgeToward(
-        bishop.data.id,
-        this.cathedral.x,
-        this.cathedral.y - 12,
-        40
-      );
+      const pt = cathedralBishopSpot(this.cathedral, bishop.data.id);
+      this.subjects.nudgeToward(bishop.data.id, pt.x, pt.y, 40);
     }
     this.guestIds.forEach((id, i) => {
       const m = this.subjects.getById(id);
       if (!m) return;
       m.data.activityLabel = 'Watching the procession';
-      const off = ringOffset(i, this.guestIds.length, 48);
-      this.subjects.nudgeToward(
-        id,
-        this.cathedral.x + off.x,
-        this.cathedral.y + 28 + off.y * 0.3,
-        40
-      );
+      const side: 'left' | 'right' = i % 2 === 0 ? 'left' : 'right';
+      const pt = cathedralPewSpot(this.cathedral, side, i % 3, id);
+      this.subjects.nudgeToward(id, pt.x, pt.y, 40);
     });
+    void altar;
   }
 
   private applyRite(): void {

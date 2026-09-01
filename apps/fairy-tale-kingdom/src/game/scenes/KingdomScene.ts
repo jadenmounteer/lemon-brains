@@ -37,9 +37,11 @@ import {
   type PayRansomPayload,
   type SandboxSpawnPayload,
   type SetDaysPlayedPayload,
+  type TrainAtBuildingPayload,
   type TransformPeasantPayload,
 } from '../subjects/events';
 import { nightAlphaForHour } from '../subjects/nightAlpha';
+import { roleLabel } from '../subjects/schedules';
 import { SubjectSystem } from '../subjects/SubjectSystem';
 import { TaskSystem } from '../subjects/TaskSystem';
 import { setWorldBiomes } from '../subjects/zones';
@@ -53,6 +55,10 @@ import { WeddingCeremonySystem } from '../events/WeddingCeremonySystem';
 import { JoustSpectacleSystem } from '../events/JoustSpectacleSystem';
 import { KeepLifeSystem } from '../keep/KeepLifeSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
+import { DungeonLifeSystem } from '../dungeon/DungeonLifeSystem';
+import { CathedralLifeSystem } from '../cathedral/CathedralLifeSystem';
+import { WorkplaceSpectacle } from '../workplace/WorkplaceSpectacle';
+import { WishAutomationService } from '../career/WishAutomationService';
 import { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { SecuritySystem } from '../security/SecuritySystem';
 import { MilitaryPatrolSystem } from '../security/MilitaryPatrolSystem';
@@ -62,6 +68,7 @@ import {
   freshMapSeed,
   generateKingdomMap,
 } from '../world/generateMap';
+import { GameWorld } from '../core/GameWorld';
 
 const MAP_COLS = 200;
 const MAP_ROWS = 128;
@@ -110,6 +117,10 @@ export class KingdomScene extends Phaser.Scene {
   private weddingCeremony!: WeddingCeremonySystem;
   private joustSpectacle!: JoustSpectacleSystem;
   private keepLife!: KeepLifeSystem;
+  private dungeonLife!: DungeonLifeSystem;
+  private cathedralLife!: CathedralLifeSystem;
+  private workplaceSpectacle!: WorkplaceSpectacle;
+  private wishAutomation!: WishAutomationService;
   private security!: SecuritySystem;
   private militaryPatrol!: MilitaryPatrolSystem;
   private undead!: UndeadSystem;
@@ -121,10 +132,9 @@ export class KingdomScene extends Phaser.Scene {
   private layoutRepo = new LayoutRepository();
   private captivesRepo = new CaptivesRepository();
   private captives: CaptiveRecord[] = [];
-  private saveTimer: Phaser.Time.TimerEvent | null = null;
+  private world!: GameWorld;
   private keepPoint = { x: 0, y: 0 };
   private followSubjectId: string | null = null;
-  private influenceGfx: Phaser.GameObjects.Graphics | null = null;
   private pinching = false;
   private pinchLastDist = 0;
   private juggleProps = new Map<string, Phaser.GameObjects.Image[]>();
@@ -204,7 +214,7 @@ export class KingdomScene extends Phaser.Scene {
       this.subjects.rebalanceCivilianJobs();
       this.subjects.reassignLoyalties();
       this.buildings.reassignBuildingLoyalties();
-      this.schedulePersist();
+      this.world.schedulePersist();
     });
     this.buildings.setKeepSprite(keepSprite);
     this.buildings.setPathGrid(this.pathGrid);
@@ -213,8 +223,8 @@ export class KingdomScene extends Phaser.Scene {
     this.subjects.setBuildings(this.buildings);
     this.subjects.setPathGrid(this.pathGrid);
     this.subjects.setOnChanged(() => {
-      this.emitStats();
-      this.schedulePersist();
+      this.world.emitStats();
+      this.world.schedulePersist();
     });
     this.siegeEngines.setBuildings(this.buildings);
 
@@ -226,7 +236,7 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters.setPathGrid(this.pathGrid);
     this.monsters.setVfx(this.siegeVfx);
     this.monsters.setClock(this.subjects.clock);
-    this.monsters.setOnChanged(() => this.schedulePersist());
+    this.monsters.setOnChanged(() => this.world.schedulePersist());
     this.subjects.setMonsters(this.monsters);
 
     this.buildings.setOnDestroyed((b) => {
@@ -239,7 +249,7 @@ export class KingdomScene extends Phaser.Scene {
       if (this.registry.get('selectedBuildingId') === b.id) {
         this.publishBuildingSelection(null);
       }
-      this.emitStats();
+      this.world.emitStats();
     });
 
     this.raids = new RaidSystem(
@@ -252,7 +262,7 @@ export class KingdomScene extends Phaser.Scene {
     this.raids.setPathGrid(this.pathGrid);
     this.raids.setEngines(this.siegeEngines);
     this.raids.setVfx(this.siegeVfx);
-    this.raids.setOnChanged(() => this.schedulePersist());
+    this.raids.setOnChanged(() => this.world.schedulePersist());
 
     this.encampments = new EncampmentSystem(
       this,
@@ -264,7 +274,7 @@ export class KingdomScene extends Phaser.Scene {
     this.encampments.setSubjects(this.subjects);
     this.encampments.setRaids(this.raids);
     this.encampments.setPathGrid(this.pathGrid);
-    this.encampments.setOnChanged(() => this.schedulePersist());
+    this.encampments.setOnChanged(() => this.world.schedulePersist());
     this.raids.setEncampments(this.encampments);
     this.subjects.setEncampments(this.encampments);
     const initialDays =
@@ -300,19 +310,6 @@ export class KingdomScene extends Phaser.Scene {
       this.subjects,
       this.raids
     );
-    this.justice = new JusticeSystem(
-      this,
-      this.subjects,
-      this.buildings,
-      this.venues,
-      (id) => {
-        this.captives = this.captives.filter((c) => c.id !== id);
-        this.captivesRepo.saveSync(this.captives);
-        this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
-          count: this.captives.length,
-        });
-      }
-    );
     this.bubbles = new SpeechBubbleSystem(this);
     this.subjects.setBubbles(this.bubbles);
     this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
@@ -322,6 +319,50 @@ export class KingdomScene extends Phaser.Scene {
       this.subjects,
       this.buildings,
       this.bubbles
+    );
+    this.dungeonLife = new DungeonLifeSystem(this, this.subjects, this.buildings, {
+      getCaptives: () => this.captives,
+      addCaptive: (c) => {
+        this.captives.push(c);
+        this.captivesRepo.saveSync(this.captives);
+        this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+          count: this.captives.length,
+        });
+      },
+      removeCaptive: (id) => {
+        this.captives = this.captives.filter((c) => c.id !== id);
+        this.captivesRepo.saveSync(this.captives);
+        this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+          count: this.captives.length,
+        });
+      },
+    });
+    this.justice = new JusticeSystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.dungeonLife
+    );
+    this.cathedralLife = new CathedralLifeSystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.bubbles,
+      this.weddingCeremony
+    );
+    this.workplaceSpectacle = new WorkplaceSpectacle(this.subjects, this.buildings);
+    this.wishAutomation = new WishAutomationService(
+      this,
+      this.subjects,
+      this.buildings,
+      {
+        getGold: () => this.game.registry.get('goldBalance') as number ?? 0,
+        infiniteGold: () => Boolean(this.game.registry.get('infiniteGold')),
+        kingdomGameMode: () => {
+          const m = this.game.registry.get('kingdomGameMode');
+          return m === 'learning' ? 'learning' : 'normal';
+        },
+      }
     );
     this.joustSpectacle = new JoustSpectacleSystem(
       this,
@@ -362,6 +403,56 @@ export class KingdomScene extends Phaser.Scene {
       this.subjects,
       this.hunger
     );
+
+    const registryMode = this.game.registry.get('kingdomGameMode');
+    const kingdomGameMode =
+      saved?.gameMode === 'learning' || saved?.gameMode === 'normal'
+        ? saved.gameMode
+        : registryMode === 'learning' || registryMode === 'normal'
+          ? registryMode
+          : 'normal';
+    const gameDifficulty = this.game.registry.get('gameDifficulty') as
+      | 'easy'
+      | 'normal'
+      | 'hard'
+      | undefined;
+    this.world = new GameWorld(
+      this,
+      this.layoutRepo,
+      {
+        subjects: this.subjects,
+        buildings: this.buildings,
+        monsters: this.monsters,
+        encampments: this.encampments,
+        royalty: this.royalty,
+      },
+      {
+        subjects: this.subjects,
+        buildings: this.buildings,
+        naval: this.naval,
+        justice: this.justice,
+        royalty: this.royalty,
+        hunger: this.hunger,
+        captiveCount: () => this.captives.length,
+      },
+      kingdomGameMode,
+      gameDifficulty
+    );
+    this.world.persistence.setMapMeta({
+      mapSeed: this.mapSeed,
+      mapCols: MAP_COLS,
+      mapRows: MAP_ROWS,
+      daysPlayed: initialDays,
+      gameMode: kingdomGameMode,
+    });
+
+    this.world.registry.register(this.dungeonLife, 'post');
+    this.world.registry.register(this.cathedralLife, 'post');
+    this.world.registry.register(this.workplaceSpectacle, 'post');
+    this.world.registry.register(this.wishAutomation, 'simulate');
+    this.world.registry.register(this.keepLife, 'post');
+    this.dungeonLife.syncCaptives();
+
     this.royalty.setOnFestivalStart((pick) => {
       this.festivalFun.start(pick.x, pick.y);
       this.venues.setFestivalAnchor?.(pick);
@@ -426,20 +517,24 @@ export class KingdomScene extends Phaser.Scene {
         this.encampments.reconcileLivingCamps();
       } else {
         this.encampments.seedStarterCamps(
-          getSandboxRuntime().war.starterCampCount
+          kingdomGameMode === 'learning'
+            ? 0
+            : getSandboxRuntime().war.starterCampCount
         );
       }
       if (typeof saved.mapSeed !== 'number') {
-        this.persistLayout();
+        this.world.persistence.persist();
       }
     } else {
       // New kingdom or map-size migrate: keep only, no units, seed camps
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
       this.monsters.seedIfEmpty();
       this.encampments.seedStarterCamps(
-        getSandboxRuntime().war.starterCampCount
+        kingdomGameMode === 'learning'
+          ? 0
+          : getSandboxRuntime().war.starterCampCount
       );
-      this.persistLayout();
+      this.world.persistence.persist();
     }
 
     const cam = this.cameras.main;
@@ -502,6 +597,14 @@ export class KingdomScene extends Phaser.Scene {
         return;
       }
       if (!pointer.leftButtonDown()) return;
+
+      if (this.buildings.isPlacing() && this.buildings.placingKind() === 'wall') {
+        const world = cam.getWorldPoint(pointer.x, pointer.y);
+        this.buildings.beginWallDrag(world.x, world.y);
+        this.pointerMoved = false;
+        return;
+      }
+
       this.pointerMoved = false;
       this.dragStart = new Phaser.Math.Vector2(pointer.x, pointer.y);
       this.cameraStart = new Phaser.Math.Vector2(cam.scrollX, cam.scrollY);
@@ -517,6 +620,9 @@ export class KingdomScene extends Phaser.Scene {
       if (this.buildings.isPlacing()) {
         const world = cam.getWorldPoint(pointer.x, pointer.y);
         this.buildings.updateGhost(world.x, world.y);
+        if (this.buildings.placingKind() === 'wall' && this.buildings.isWallDragging()) {
+          return;
+        }
       }
 
       if (!pointer.isDown || !this.dragStart || !this.cameraStart) return;
@@ -558,23 +664,37 @@ export class KingdomScene extends Phaser.Scene {
       if (wasPan) return;
 
       if (this.buildings.isPlacing()) {
-        if (this.buildings.tryCommitPlace()) {
-          this.emitPlaceMode();
-          this.emitStats();
-          this.schedulePersist();
-          this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-            message: 'Building placed',
-          });
-        } else {
-          const kind = this.buildings.placingKind();
-          this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-            message:
-              kind === 'stairs'
-                ? 'Stairs must snap beside a wall'
-                : kind === 'drawbridge'
-                  ? 'Drawbridge must snap to a wall or wall gap'
-                  : 'Cannot place on another object',
-          });
+        const wallDrag =
+          this.buildings.placingKind() === 'wall' &&
+          this.buildings.isWallDragging();
+        if (wallDrag || !wasPan) {
+          const commit = this.buildings.tryCommitPlaceDetailed();
+          if (commit.committed) {
+            this.emitPlaceMode();
+            this.world.emitStats();
+            this.world.schedulePersist();
+            if (commit.wallCells > 0) {
+              this.game.events.emit(KingdomEvents.WALL_PLACED, {
+                cells: commit.wallCells,
+              });
+            } else {
+              this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+                message: 'Building placed',
+              });
+            }
+          } else {
+            const kind = this.buildings.placingKind();
+            this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+              message:
+                kind === 'stairs'
+                  ? 'Stairs must snap beside a wall'
+                  : kind === 'drawbridge'
+                    ? 'Drawbridge must snap to a wall or wall gap'
+                    : kind === 'wall'
+                      ? 'Cannot place wall on blocked cells'
+                      : 'Cannot place on another object',
+            });
+          }
         }
         return;
       }
@@ -584,7 +704,7 @@ export class KingdomScene extends Phaser.Scene {
         this.monsters.select(null);
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishCampSelection(this.encampments.select(null));
-        this.clearInfluenceCircle();
+        this.world.selection.clearInfluence();
         this.publishSelection(this.subjects.select(hit.id));
         this.beginFollowSubject(hit.id);
       } else if (hit?.type === 'monster') {
@@ -593,15 +713,15 @@ export class KingdomScene extends Phaser.Scene {
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishCampSelection(this.encampments.select(null));
         this.publishSelection(this.monsters.select(hit.id));
-        this.updateMonsterInfluenceCircle(hit.id);
+        this.world.selection.showMonsterInfluence(this.monsters, hit.id);
       } else if (hit?.type === 'camp') {
         this.clearFollowCam();
-        this.clearInfluenceCircle();
+        this.world.selection.clearInfluence();
         this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
         this.publishCampSelection(this.encampments.select(hit.id));
-        this.updateCampInfluenceCircle(hit.id);
+        this.world.selection.showCampInfluence(this.encampments, hit.id);
       } else if (hit?.type === 'building') {
         this.clearFollowCam();
         this.publishSelection(this.subjects.select(null));
@@ -610,10 +730,10 @@ export class KingdomScene extends Phaser.Scene {
         const workers = this.subjects.workersOf(hit.id);
         const snap = this.buildings.select(hit.id, residents, workers);
         this.publishBuildingSelection(snap);
-        this.updateInfluenceCircle(snap);
+        this.world.selection.showBuildingInfluence(this.buildings, snap);
       } else {
         this.clearFollowCam();
-        this.clearInfluenceCircle();
+        this.world.selection.clearInfluence();
         this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
@@ -630,7 +750,7 @@ export class KingdomScene extends Phaser.Scene {
         });
       } else {
         this.clearFollowCam();
-        this.clearInfluenceCircle();
+        this.world.selection.clearInfluence();
         this.monsters.select(null);
         this.publishSelection(this.subjects.select(null));
         this.publishBuildingSelection(this.buildings.select(null));
@@ -649,7 +769,7 @@ export class KingdomScene extends Phaser.Scene {
 
     this.game.events.on(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.on(KingdomEvents.HIRE_SUBJECT, this.onHire);
-    this.game.events.on(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
+    this.game.events.on(KingdomEvents.TRAIN_AT_BUILDING, this.onTrainAtBuilding);
     this.game.events.on(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
     this.game.events.on(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
     this.game.events.on(KingdomEvents.PAY_RANSOM, this.onPayRansom);
@@ -676,7 +796,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
       count: this.captives.length,
     });
-    this.emitStats();
+    this.world.emitStats();
     this.emitPlaceMode();
 
     this.time.addEvent({
@@ -726,16 +846,13 @@ export class KingdomScene extends Phaser.Scene {
     this.combat?.update(delta);
     this.tasks?.update(delta, this.raids?.hasActiveRaiders() ?? false);
     this.hunger?.update();
-    const isNight =
-      this.subjects?.clock.phase === 'Night' ||
-      (this.subjects?.clock.hour ?? 12) >= 21 ||
-      (this.subjects?.clock.hour ?? 12) < 5;
+    const isNight = this.subjects?.clock.isNight() ?? false;
     this.thieves?.update(
       delta,
-      Boolean(isNight),
+      isNight,
       this.raids?.hasActiveRaiders() ?? false
     );
-    this.encampments?.update(delta, Boolean(isNight));
+    this.encampments?.update(delta, isNight);
     this.thoughts?.update(delta);
     this.family?.updatePlay(delta);
     this.witches?.update(delta);
@@ -757,7 +874,7 @@ export class KingdomScene extends Phaser.Scene {
     this.weddingCeremony?.update(delta);
     this.joustSpectacle?.update(delta);
     this.joustSpectacle?.updateMountedPatrol();
-    this.keepLife?.update(delta);
+    this.world.update(delta);
     this.updateJuggleProps();
     this.security?.update(delta);
     this.militaryPatrol?.update(
@@ -765,7 +882,7 @@ export class KingdomScene extends Phaser.Scene {
       this.raids?.hasActiveRaiders() ?? false,
       this.security?.isActive() ?? false
     );
-    this.undead?.update(delta, Boolean(isNight));
+    this.undead?.update(delta, isNight);
     this.naval?.update(delta);
     if (this.raids?.hasActiveRaiders() && !this.security?.isActive()) {
       const keep = this.buildings.getActiveKeepPoint();
@@ -796,6 +913,7 @@ export class KingdomScene extends Phaser.Scene {
     this.scale.off('resize', this.onResize, this);
     this.game.events.off(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.off(KingdomEvents.HIRE_SUBJECT, this.onHire);
+    this.game.events.off(KingdomEvents.TRAIN_AT_BUILDING, this.onTrainAtBuilding);
     this.game.events.off(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
     this.game.events.off(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
     this.game.events.off(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
@@ -861,23 +979,34 @@ export class KingdomScene extends Phaser.Scene {
         break;
       }
     }
-    this.emitStats();
-    this.schedulePersist();
+    this.world.emitStats();
+    this.world.schedulePersist();
   };
 
   private onHire = (payload: HireSubjectPayload) => {
     const ok = this.subjects.hire(payload.role);
     if (ok) {
-      this.emitStats();
-      this.schedulePersist();
+      this.world.emitStats();
+      this.world.schedulePersist();
       this.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `Hired a ${payload.role}`,
       });
     }
   };
 
+  private onTrainAtBuilding = (payload: TrainAtBuildingPayload) => {
+    const ok = this.subjects.hireAtBuilding(payload.buildingId, payload.role);
+    if (ok) {
+      this.world.emitStats();
+      this.world.schedulePersist();
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `Trained a ${roleLabel(payload.role)}`,
+      });
+    }
+  };
+
   private onBeginPlace = (payload: BeginPlacePayload) => {
-    this.buildings.beginPlace(payload.kind);
+    this.buildings.beginPlace(payload.kind, payload.maxWallCells);
     this.emitPlaceMode();
   };
 
@@ -892,7 +1021,7 @@ export class KingdomScene extends Phaser.Scene {
         ? this.naval.buyFishingBoat()
         : this.naval.buyWarship();
     if (ok) {
-      this.emitStats();
+      this.world.emitStats();
       this.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message:
           payload.kind === 'fishingBoat'
@@ -907,13 +1036,11 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private onRoyalCaptured = (payload: CaptiveRecord) => {
-    this.captives.push(payload);
-    this.captivesRepo.saveSync(this.captives);
-    this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
-      count: this.captives.length,
-    });
-    this.emitStats();
-    this.schedulePersist();
+    const ok = this.dungeonLife.requestIntake(payload);
+    if (ok) {
+      this.world.emitStats();
+      this.world.schedulePersist();
+    }
   };
 
   private onPayRansom = (payload: PayRansomPayload) => {
@@ -922,6 +1049,7 @@ export class KingdomScene extends Phaser.Scene {
     const [captive] = this.captives.splice(idx, 1);
     if (!captive) return;
     this.captivesRepo.saveSync(this.captives);
+    this.dungeonLife.syncCaptives();
     this.subjects.restoreCaptive(
       {
         id: captive.id,
@@ -944,14 +1072,14 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${captive.name} has been ransomed home!`,
     });
-    this.emitStats();
-    this.schedulePersist();
+    this.world.emitStats();
+    this.world.schedulePersist();
   };
 
   private onTransform = (payload: TransformPeasantPayload) => {
     this.royalty.tryTransformPeasant(payload.fgmId);
-    this.emitStats();
-    this.schedulePersist();
+    this.world.emitStats();
+    this.world.schedulePersist();
     if (this.subjects.getSelectedId()) {
       const snap = this.subjects.refreshSelectedSnapshot();
       if (snap) this.publishSelection(snap);
@@ -962,101 +1090,6 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.PLACE_MODE_CHANGED, {
       active: this.buildings.isPlacing(),
       kind: this.buildings.placingKind(),
-    });
-  }
-
-  private emitStats() {
-    const population = this.subjects.count();
-    const capacity = this.buildings.bedCapacity();
-    let usedBeds = 0;
-    for (const n of this.subjects.occupantCounts().values()) {
-      usedBeds += n;
-    }
-    const hasKing = this.subjects.hasRole('king');
-    const hasQueen = this.subjects.hasRole('queen');
-    this.game.events.emit(KingdomEvents.KINGDOM_STATS, {
-      population,
-      capacity,
-      freeBeds: Math.max(0, capacity - usedBeds),
-      houseCount: this.buildings.houseCount(),
-      wallCount: this.buildings.wallCount(),
-      tavernCount: this.buildings.tavernCount(),
-      fieldCount: this.buildings.fieldCount(),
-      granaryCount: this.buildings.granaryCount(),
-      keepCount: this.buildings.keepCount(),
-      hasCathedral: this.buildings.hasCathedral(),
-      hasInfirmary: this.buildings.hasInfirmary(),
-      hasDungeon: this.buildings.hasDungeon(),
-      hasBarracks: this.buildings.hasBarracks(),
-      hasGallows: this.buildings.hasGallows(),
-      hasCemetery: this.buildings.hasCemetery(),
-      hasDock: this.buildings.hasDock(),
-      dockCount: this.buildings.dockCount(),
-      fishingBoatCount: this.naval?.fishingBoatCount() ?? 0,
-      fishingBoatCapacity: this.naval?.fishingBoatCapacity() ?? 0,
-      warshipCount: this.naval?.warshipCount() ?? 0,
-      warshipCapacity: this.naval?.warshipCapacity() ?? 0,
-      hasKing,
-      hasQueen,
-      hasPrince: this.subjects.hasRole('prince'),
-      hasPrincess: this.subjects.hasRole('princess'),
-      hasFairyGodmother: this.subjects.hasRole('fairy_godmother'),
-      hasBishop: this.subjects.hasRole('bishop'),
-      hasGeneral: this.subjects.hasRole('general'),
-      hasExecutioner: this.subjects.hasRole('executioner'),
-      canExecuteCaptive: this.justice?.canExecute() ?? false,
-      royaltyUnlocked: hasKing && hasQueen,
-      inspired: this.royalty?.isInspired() ?? false,
-      food: this.hunger?.currentFood() ?? 0,
-      captiveCount: this.captives.length,
-      kingCount: this.subjects.countRole('king'),
-      queenCount: this.subjects.countRole('queen'),
-      fieldSlots: this.buildings.fieldSlots(),
-      militaryAvailable: this.subjects.combatants().filter(
-        (s) =>
-          !s.interrupt &&
-          (s.data.role === 'guard' ||
-            s.data.role === 'archer' ||
-            s.data.role === 'elite_guard' ||
-            s.data.role === 'elite_archer')
-      ).length,
-      careerTodos: this.subjects.listCareerTodos(),
-    });
-  }
-
-  private schedulePersist() {
-    this.saveTimer?.remove(false);
-    this.saveTimer = this.time.delayedCall(400, () => this.persistLayout());
-  }
-
-  private persistLayout() {
-    const keep = this.buildings.serializeKeep();
-    const timers = this.royalty.serializeTimers();
-    void this.layoutRepo.save({
-      subjects: this.subjects.serialize(),
-      buildings: this.buildings.serialize(),
-      monsters: this.monsters.serialize(),
-      encampments: this.encampments.serialize(),
-      mapSeed: this.mapSeed,
-      mapCols: MAP_COLS,
-      mapRows: MAP_ROWS,
-      keepHp: keep.keepHp,
-      keepMaxHp: keep.keepMaxHp,
-      princeSpawnMs: timers.princeSpawnMs,
-      fgmCooldownMs: timers.fgmCooldownMs,
-      clockHour: this.subjects.getClockHour(),
-      royaltyState: {
-        ballRemainingMs: timers.ballRemainingMs,
-        ballCooldownMs: timers.ballCooldownMs,
-        festivalRemainingMs: timers.festivalRemainingMs,
-        festivalCooldownMs: timers.festivalCooldownMs,
-        paradeCooldownMs: timers.paradeCooldownMs,
-        paradeRemainingMs: timers.paradeRemainingMs,
-      },
-      daysPlayedSnapshot:
-        typeof this.registry.get('daysPlayed') === 'number'
-          ? (this.registry.get('daysPlayed') as number)
-          : undefined,
     });
   }
 
@@ -1073,7 +1106,7 @@ export class KingdomScene extends Phaser.Scene {
 
   private onClearSelection = () => {
     this.clearFollowCam();
-    this.clearInfluenceCircle();
+    this.world.selection.clearInfluence();
     this.monsters?.select(null);
     this.publishSelection(this.subjects.select(null));
     this.publishBuildingSelection(this.buildings.select(null));
@@ -1086,8 +1119,8 @@ export class KingdomScene extends Phaser.Scene {
       payload.targetRole
     );
     if (ok) {
-      this.emitStats();
-      this.schedulePersist();
+      this.world.emitStats();
+      this.world.schedulePersist();
       this.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `Career hired: ${payload.targetRole.replace(/_/g, ' ')}`,
       });
@@ -1102,8 +1135,9 @@ export class KingdomScene extends Phaser.Scene {
     const captive = this.captives.find((c) => c.id === payload.id);
     if (!captive) return;
     if (this.justice.execute(captive)) {
-      this.emitStats();
-      this.schedulePersist();
+      this.dungeonLife.syncCaptives();
+      this.world.emitStats();
+      this.world.schedulePersist();
     }
   };
 
@@ -1172,58 +1206,6 @@ export class KingdomScene extends Phaser.Scene {
     }
   }
 
-  private updateInfluenceCircle(
-    snap: ReturnType<BuildingSystem['select']>
-  ): void {
-    this.clearInfluenceCircle();
-    if (!snap || !snap.influenceRadius) return;
-    if (snap.kind !== 'keep' && snap.kind !== 'barracks' && snap.kind !== 'dungeon') {
-      return;
-    }
-    const pt = this.buildings.getInfluenceOriginPoint(snap.id);
-    if (!pt) return;
-    const color = snap.kind === 'keep' ? 0xc4a35a : 0xb5453f;
-    this.influenceGfx = this.add.graphics().setDepth(6);
-    this.influenceGfx.lineStyle(1, color, 0.55);
-    this.influenceGfx.strokeCircle(pt.x, pt.y, snap.influenceRadius);
-    this.influenceGfx.fillStyle(color, 0.06);
-    this.influenceGfx.fillCircle(pt.x, pt.y, snap.influenceRadius);
-  }
-
-  /** Draws a monster's territory sphere (home ± influence radius) when selected. */
-  private updateMonsterInfluenceCircle(id: string | null): void {
-    this.clearInfluenceCircle();
-    if (!id) return;
-    const inf = this.monsters.getInfluence(id);
-    if (!inf) return;
-    const color = 0x7a4fb0;
-    this.influenceGfx = this.add.graphics().setDepth(6);
-    this.influenceGfx.lineStyle(1, color, 0.55);
-    this.influenceGfx.strokeCircle(inf.x, inf.y, inf.radius);
-    this.influenceGfx.fillStyle(color, 0.06);
-    this.influenceGfx.fillCircle(inf.x, inf.y, inf.radius);
-  }
-
-  /** Draws a camp's influence sphere (garrison wander range / aggro radius) when selected. */
-  private updateCampInfluenceCircle(id: string | null): void {
-    this.clearInfluenceCircle();
-    if (!id) return;
-    const camp = this.encampments.listCamps().find((c) => c.id === id);
-    if (!camp) return;
-    const radius = this.encampments.influenceRadius(camp.kind);
-    const color = 0x8a6a3a;
-    this.influenceGfx = this.add.graphics().setDepth(6);
-    this.influenceGfx.lineStyle(1, color, 0.55);
-    this.influenceGfx.strokeCircle(camp.x, camp.y, radius);
-    this.influenceGfx.fillStyle(color, 0.06);
-    this.influenceGfx.fillCircle(camp.x, camp.y, radius);
-  }
-
-  private clearInfluenceCircle(): void {
-    this.influenceGfx?.destroy();
-    this.influenceGfx = null;
-  }
-
   private onDayRolled = () => {
     this.subjects?.applyBodyFromHunger();
     this.subjects?.ageOnDayRolled();
@@ -1233,7 +1215,7 @@ export class KingdomScene extends Phaser.Scene {
       this.venues?.startFuneral();
     }
     this.monsters?.onDayRolled();
-    this.schedulePersist();
+    this.world.schedulePersist();
   };
 
   private onSetDaysPlayed = (payload: SetDaysPlayedPayload) => {
@@ -1258,19 +1240,25 @@ export class KingdomScene extends Phaser.Scene {
         payload.targetId
       );
     }
-    this.emitStats();
+    this.world.emitStats();
   };
 
   private onDestroyCamp = (payload: DestroyCampPayload) => {
     this.encampments?.requestDestroy(payload.campId);
-    this.emitStats();
+    this.world.emitStats();
   };
 
   private onArrestCamp = (payload: ArrestCampPayload) => {
-    if (this.encampments?.requestArrest(payload.campId)) {
+    const result = this.encampments?.requestArrest(payload.campId);
+    if (result) {
+      this.dungeonLife.requestIntake(result.captive, {
+        guardId: result.guardId,
+        fromX: result.fromX,
+        fromY: result.fromY,
+      });
       this.publishCampSelection(this.encampments.refreshSelectedSnapshot());
     }
-    this.emitStats();
+    this.world.emitStats();
   };
 
   private onFocusCamp = (payload: FocusCampPayload) => {

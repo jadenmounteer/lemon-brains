@@ -23,6 +23,7 @@ export const KingdomEvents = {
   BEGIN_PLACE: 'kingdom:begin-place',
   CANCEL_PLACE: 'kingdom:cancel-place',
   PLACE_MODE_CHANGED: 'kingdom:place-mode-changed',
+  WALL_PLACED: 'kingdom:wall-placed',
   KINGDOM_STATS: 'kingdom:stats',
   MARKET_TOAST: 'kingdom:market-toast',
   FOOD_CHANGED: 'kingdom:food-changed',
@@ -35,6 +36,7 @@ export const KingdomEvents = {
   SET_DAYS_PLAYED: 'kingdom:set-days-played',
   CAREER_HIRE: 'kingdom:career-hire',
   EXECUTE_CAPTIVE: 'kingdom:execute-captive',
+  AUTO_GRANT_WISH: 'kingdom:auto-grant-wish',
   CAMP_SELECTED: 'kingdom:camp-selected',
   DESTROY_CAMP: 'kingdom:destroy-camp',
   ARREST_CAMP: 'kingdom:arrest-camp',
@@ -42,6 +44,7 @@ export const KingdomEvents = {
   BUY_NAVAL: 'kingdom:buy-naval',
   SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
   CAMERA_ZOOM: 'kingdom:camera-zoom',
+  TRAIN_AT_BUILDING: 'kingdom:train-at-building',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -75,6 +78,11 @@ export interface HireSubjectPayload {
 
 export interface BeginPlacePayload {
   kind: BuildKind;
+  maxWallCells?: number;
+}
+
+export interface WallPlacedPayload {
+  cells: number;
 }
 
 export interface PlaceModePayload {
@@ -128,6 +136,12 @@ export interface CareerHirePayload {
   targetRole: UnitRole;
 }
 
+export interface AutoGrantWishPayload {
+  subjectId: string;
+  targetRole: UnitRole;
+  cost: number;
+}
+
 export interface DestroyCampPayload {
   campId: string;
 }
@@ -151,4 +165,9 @@ export type SandboxSpawnPayload = SandboxSpawnAction;
 export interface CameraZoomPayload {
   /** +1 zoom in, -1 zoom out */
   direction: 1 | -1;
+}
+
+export interface TrainAtBuildingPayload {
+  buildingId: string;
+  role: UnitRole;
 }

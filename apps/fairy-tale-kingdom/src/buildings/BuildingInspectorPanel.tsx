@@ -1,14 +1,38 @@
+import type { UnitRole } from '../game/art/assetManifest';
+import type { KingdomStats } from '../game/subjects/types';
+import {
+  canTrain,
+  hireCatalogName,
+  hireCost,
+  TRAINABLE_ROLES,
+} from '../marketplace/rules';
 import type { BuildingSnapshot } from '../game/subjects/types';
 
 interface BuildingInspectorPanelProps {
   building: BuildingSnapshot;
+  gold: number;
+  infiniteGold?: boolean;
+  stats: KingdomStats;
+  /** Sandbox: when false for a role, hide that train row. */
+  enabledRoles?: Partial<Record<UnitRole, boolean>>;
+  onTrain: (buildingId: string, role: UnitRole) => void;
   onClose: () => void;
 }
 
 export function BuildingInspectorPanel({
   building,
+  gold,
+  infiniteGold = false,
+  stats,
+  enabledRoles,
+  onTrain,
   onClose,
 }: BuildingInspectorPanelProps) {
+  const canAfford = (cost: number) => infiniteGold || gold >= cost;
+  const trainRoles = TRAINABLE_ROLES[building.kind] ?? [];
+  const royalUsedAtKeep =
+    building.kind === 'keep' ? (building.royalUsed ?? 0) : undefined;
+
   return (
     <section className="panel inspector-panel" aria-live="polite">
       <div className="inspector-header">
@@ -96,6 +120,53 @@ export function BuildingInspectorPanel({
         </ul>
       ) : (
         <p className="muted">No one works here yet.</p>
+      )}
+      {trainRoles.length > 0 && (
+        <>
+          <h3 className="inspector-subhead">Train</h3>
+          <ul className="market-list">
+            {trainRoles.map((role) => {
+              if (enabledRoles?.[role] === false) return null;
+              const workersAtBuilding =
+                building.workers?.filter((w) => w.role === role).length ?? 0;
+              const allowed = canTrain(building.kind, role, stats, {
+                workersAtBuilding,
+                enabledRoles,
+                royalUsedAtKeep,
+              });
+              const cost = hireCost(role);
+              const disabled = !allowed || !canAfford(cost);
+              return (
+                <li key={role} className="market-row">
+                  <div>
+                    <strong>{hireCatalogName(role)}</strong>
+                    <span className="muted"> · {cost}g</span>
+                    {!allowed && stats.freeBeds <= 0 && (
+                      <p className="muted">No free beds — build a house</p>
+                    )}
+                    {allowed &&
+                      workersAtBuilding > 0 &&
+                      canTrain(building.kind, role, stats, {
+                        workersAtBuilding: workersAtBuilding - 1,
+                        enabledRoles,
+                        royalUsedAtKeep,
+                      }) === false && (
+                        <p className="muted">Posts full at this building</p>
+                      )}
+                  </div>
+                  <button
+                    type="button"
+                    className="market-buy"
+                    disabled={disabled}
+                    onClick={() => onTrain(building.id, role)}
+                  >
+                    Train
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
     </section>
   );

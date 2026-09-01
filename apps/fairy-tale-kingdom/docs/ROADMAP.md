@@ -121,6 +121,15 @@ Checklist:
 - [x] Hamburger **Sandbox settings** (local only): war/raid intensity, per-camp and monster toggles, sickness, undead, wall HP
 - [x] Hide career wishes from the menu; walls place in 3-cell runs with higher HP; early raids/sickness softened
 
+## Phase 13 — Watchable civic life (done)
+
+- [x] Dungeon interior fix + bakery/market/dungeon roof-hide interiors
+- [x] `DungeonLifeSystem` — escort sprites, visible captives in cells, corridor patrol, hang VFX
+- [x] `CathedralLifeSystem` — interior wedding staging, idle prayer, wish hints at cathedral
+- [x] `WorkplaceSpectacle` — baker knead / merchant stall animations inside footprints
+- [x] `WishAutomationService` — FGM auto-grant (Sandbox toggle; Learning Mode default on)
+- [x] Justice pipeline — guards escort arrestees to dungeon before cells fill
+
 ## Non-goals (for now)
 
 - Manual combat orders (except generals commanding detachments)

@@ -1,12 +1,11 @@
 import {
   BUILD_CATALOG,
   FIELDS_PER_GRANARY,
-  HIRE_CATALOG,
   NAVAL_CATALOG,
   type BuildKind,
   type NavalKind,
 } from './catalog';
-import type { UnitRole } from '../game/art/assetManifest';
+import { canPlaceBuilding, affordableWallCells, WALL_GOLD_PER_CELL } from './rules';
 import type { KingdomStats } from '../game/subjects/types';
 
 interface MarketplacePanelProps {
@@ -14,9 +13,6 @@ interface MarketplacePanelProps {
   infiniteGold?: boolean;
   stats: KingdomStats;
   placeMode: { active: boolean; kind: BuildKind | null };
-  /** Sandbox: when false for a role, hide that hire row. */
-  enabledRoles?: Partial<Record<UnitRole, boolean>>;
-  onHire: (role: UnitRole) => void;
   onBuyBuilding: (kind: BuildKind) => void;
   onBuyNaval: (kind: NavalKind) => void;
   onCancelPlace: () => void;
@@ -28,17 +24,12 @@ export function MarketplacePanel({
   infiniteGold = false,
   stats,
   placeMode,
-  enabledRoles,
-  onHire,
   onBuyBuilding,
   onBuyNaval,
   onCancelPlace,
   onClose,
 }: MarketplacePanelProps) {
   const canAfford = (cost: number) => infiniteGold || gold >= cost;
-  const hireItems = HIRE_CATALOG.filter(
-    (item) => enabledRoles?.[item.role] !== false
-  );
   return (
     <section className="panel market-panel">
       <div className="sheet-header">
@@ -62,7 +53,8 @@ export function MarketplacePanel({
       </p>
       <p className="muted market-note">
         Houses have 3 beds; royals live at keeps. Fields need granaries (
-        {FIELDS_PER_GRANARY} per granary).
+        {FIELDS_PER_GRANARY} per granary). Train units at the building they work
+        at.
       </p>
       {stats.royaltyUnlocked ? (
         <p className="muted">Royal court active — tier-2 goods unlocked.</p>
@@ -76,7 +68,9 @@ export function MarketplacePanel({
             Placing <strong>{placeMode.kind}</strong>
             {placeMode.kind === 'stairs'
               ? ' — snap to a wall.'
-              : ' — click empty ground (not on other objects).'}
+              : placeMode.kind === 'wall'
+                ? ' — drag to draw walls (3g/cell).'
+                : ' — click empty ground (not on other objects).'}
           </p>
           <button type="button" className="inspector-close" onClick={onCancelPlace}>
             Cancel
@@ -84,133 +78,54 @@ export function MarketplacePanel({
         </div>
       )}
 
-      <h3 className="inspector-subhead">Hire</h3>
-      <ul className="market-list">
-        {hireItems.map((item) => {
-          const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
-          const uniqueTaken =
-            item.unique &&
-            ((item.role === 'fairy_godmother' && stats.hasFairyGodmother) ||
-              (item.role === 'bishop' && stats.hasBishop));
-          const throneTaken =
-            Boolean(item.uniqueThrone) &&
-            ((item.role === 'king' && stats.hasKing) ||
-              (item.role === 'queen' && stats.hasQueen));
-          const needsExtraKeep =
-            Boolean(item.requiresExtraKeep) && stats.keepCount < 2;
-          const buildingMissing =
-            (item.requiresBuilding === 'cathedral' && !stats.hasCathedral) ||
-            (item.requiresBuilding === 'infirmary' && !stats.hasInfirmary) ||
-            (item.requiresBuilding === 'barracks' && !stats.hasBarracks) ||
-            (item.requiresBuilding === 'dungeon' && !stats.hasDungeon) ||
-            (item.requiresBuilding === 'tavern' && stats.tavernCount <= 0) ||
-            (item.requiresBuilding === 'gallows' && !stats.hasGallows);
-          const needsBed = !item.livesAtKeep && stats.freeBeds <= 0;
-          const disabled =
-            placeMode.active ||
-            !canAfford(item.cost) ||
-            needsBed ||
-            locked ||
-            uniqueTaken ||
-            throneTaken ||
-            needsExtraKeep ||
-            buildingMissing;
-          return (
-            <li key={item.role} className="market-row">
-              <div>
-                <strong>{item.name}</strong>
-                <span className="muted"> · {item.cost}g</span>
-                <p className="muted">{item.blurb}</p>
-                {locked && (
-                  <p className="muted">Requires King &amp; Queen</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'cathedral' && (
-                  <p className="muted">Requires a Cathedral</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'infirmary' && (
-                  <p className="muted">Requires an Infirmary</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'barracks' && (
-                  <p className="muted">Requires a Barracks</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'dungeon' && (
-                  <p className="muted">Requires a Dungeon</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'tavern' && (
-                  <p className="muted">Requires a Tavern</p>
-                )}
-                {buildingMissing && item.requiresBuilding === 'gallows' && (
-                  <p className="muted">Requires Gallows</p>
-                )}
-                {uniqueTaken && (
-                  <p className="muted">Already in your kingdom</p>
-                )}
-                {throneTaken && (
-                  <p className="muted">Throne already filled</p>
-                )}
-                {needsExtraKeep && (
-                  <p className="muted">Requires a second keep</p>
-                )}
-              </div>
-              <button
-                type="button"
-                className="market-buy"
-                disabled={disabled}
-                onClick={() => onHire(item.role)}
-              >
-                Hire
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {stats.freeBeds <= 0 && (
-        <p className="muted">Build a house or manor for more beds.</p>
-      )}
-
       <h3 className="inspector-subhead">Build</h3>
       <ul className="market-list">
         {BUILD_CATALOG.map((item) => {
-          const locked = Boolean(item.requiresRoyalty && !stats.royaltyUnlocked);
-          const fieldBlocked =
-            item.kind === 'field' &&
-            (stats.granaryCount <= 0 || stats.fieldCount >= stats.fieldSlots);
-          const cemeteryNeedsCat =
-            item.kind === 'cemetery' && !stats.hasCathedral;
-          const gallowsNeedsDungeon =
-            item.kind === 'gallows' && !stats.hasDungeon;
+          const placeBlocked = !canPlaceBuilding(item.kind, stats);
+          const wallAffordable =
+            item.kind !== 'wall' ||
+            infiniteGold ||
+            affordableWallCells(gold, infiniteGold) >= 1;
           const disabled =
             placeMode.active ||
-            !canAfford(item.cost) ||
-            locked ||
-            fieldBlocked ||
-            cemeteryNeedsCat ||
-            gallowsNeedsDungeon;
+            !wallAffordable ||
+            (item.kind !== 'wall' && !canAfford(item.cost)) ||
+            placeBlocked;
           return (
             <li key={item.kind} className="market-row">
               <div>
                 <strong>{item.name}</strong>
-                <span className="muted"> · {item.cost}g</span>
+                <span className="muted">
+                  {' '}
+                  · {item.kind === 'wall' ? `${WALL_GOLD_PER_CELL}g/cell` : `${item.cost}g`}
+                </span>
                 <p className="muted">{item.blurb}</p>
-                {locked && (
+                {placeBlocked && item.requiresRoyalty && !stats.royaltyUnlocked && (
                   <p className="muted">Requires King &amp; Queen</p>
                 )}
-                {fieldBlocked && stats.granaryCount <= 0 && (
-                  <p className="muted">Build a granary first</p>
-                )}
-                {fieldBlocked &&
+                {placeBlocked &&
+                  item.kind === 'field' &&
+                  stats.granaryCount <= 0 && (
+                    <p className="muted">Build a granary first</p>
+                  )}
+                {placeBlocked &&
+                  item.kind === 'field' &&
                   stats.granaryCount > 0 &&
                   stats.fieldCount >= stats.fieldSlots && (
                     <p className="muted">
                       Field slots full ({stats.fieldCount}/{stats.fieldSlots})
                     </p>
                   )}
-                {cemeteryNeedsCat && (
-                  <p className="muted">Requires a Cathedral</p>
-                )}
-                {gallowsNeedsDungeon && (
-                  <p className="muted">Requires a Dungeon</p>
-                )}
+                {placeBlocked &&
+                  item.kind === 'cemetery' &&
+                  !stats.hasCathedral && (
+                    <p className="muted">Requires a Cathedral</p>
+                  )}
+                {placeBlocked &&
+                  item.kind === 'gallows' &&
+                  !stats.hasDungeon && (
+                    <p className="muted">Requires a Dungeon</p>
+                  )}
               </div>
               <button
                 type="button"

@@ -4,6 +4,8 @@
  */
 
 import { getSandboxRuntime } from '../sandboxRuntime';
+import { getModeProfile } from '../core/modeRuntime';
+import { computeEarlyPressureFactor } from './computeEarlyPressure';
 
 export type CampKind =
   | 'bandit'
@@ -27,10 +29,11 @@ export const WarBalance = {
   campSpawnIntervalMs(days: number): number {
     const d = dayScale(days);
     const sb = getSandboxRuntime().war;
+    const profile = getModeProfile();
     const rate = Math.max(0.01, sb.campSpawnRate * sb.intensity);
     // Calmer base: ~3 min early, floor 75s
     const base = Math.max(75_000, 180_000 - d * 2_000);
-    return base / rate;
+    return (base / rate) * profile.campSpawnMult;
   },
 
   maxCamps(days: number): number {
@@ -52,14 +55,13 @@ export const WarBalance = {
   /** Early-game softener for raid/siege pressure (0–1) */
   earlyPressureFactor(days: number, population: number): number {
     const sb = getSandboxRuntime().war;
-    const mult = sb.raidPressure * sb.intensity;
-    if (mult <= 0) return 0;
-    let base: number;
-    // Full pressure later: day 8+ and pop 12+
-    if (days >= 8 && population >= 12) base = 1;
-    else if (days < 8) base = 0.12 + days * 0.08;
-    else base = 0.4 + Math.min(0.5, population * 0.04);
-    return Math.min(1, base * mult);
+    const profile = getModeProfile();
+    return computeEarlyPressureFactor(
+      days,
+      population,
+      sb.raidPressure * profile.raidPressureMult,
+      sb.intensity
+    );
   },
 
   /** Idle garrison size before a raid launches */

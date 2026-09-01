@@ -24,6 +24,7 @@ import {
   type WorldBounds,
 } from '../subjects/zones';
 import { getSandboxRuntime } from '../sandboxRuntime';
+import { getModeProfile } from '../core/modeRuntime';
 
 export type MonsterKind = MonsterRole;
 
@@ -277,17 +278,23 @@ export class MonsterSystem {
   seedIfEmpty(): void {
     if (this.monsters.length > 0) return;
     const sb = getSandboxRuntime().monsters;
+    const profile = getModeProfile();
+    const maxKinds = Math.max(0, profile.starterMonsterCount);
+    if (maxKinds <= 0) return;
     const lines: string[] = [];
-    if (sb.kinds.troll) {
+    if (sb.kinds.troll && lines.length < maxKinds) {
       const m = this.spawnMonster('troll');
       lines.push(`${m.name} the troll`);
     }
-    if (sb.kinds.ogre) {
+    if (sb.kinds.ogre && lines.length < maxKinds) {
       const m = this.spawnMonster('ogre');
       lines.push(`${m.name} the ogre`);
     }
-    // Nest a dragon early when caves exist — they mostly sleep/roam until hungry.
-    if (sb.kinds.dragon && getCavePoints().length > 0) {
+    if (
+      sb.kinds.dragon &&
+      lines.length < maxKinds &&
+      getCavePoints().length > 0
+    ) {
       const m = this.spawnMonster('dragon');
       lines.push(`${m.name} the dragon`);
     }

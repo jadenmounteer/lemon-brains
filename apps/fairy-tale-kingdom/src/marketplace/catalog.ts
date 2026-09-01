@@ -251,20 +251,20 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
   {
     kind: 'wall',
     name: 'Wall',
-    blurb: 'Snaps to the fort grid and connects to neighbors.',
-    cost: 15,
+    blurb: '3g per fort cell — drag to draw battlements (max 64 cells).',
+    cost: 3,
   },
   {
     kind: 'stairs',
     name: 'Stairs',
     blurb: 'Snap to a wall so your people can climb.',
-    cost: 20,
+    cost: 12,
   },
   {
     kind: 'drawbridge',
     name: 'Drawbridge',
     blurb: 'Snaps into a wall gap, or onto a wall segment to replace it. Closes during raids.',
-    cost: 50,
+    cost: 35,
   },
   {
     kind: 'tavern',

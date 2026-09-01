@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import type Phaser from 'phaser';
-import type { BuildKind, NavalKind } from '../marketplace/catalog';
-import type { UnitRole } from './art/assetManifest';
+import type { GameDifficulty } from '@knowledge-quest/learning';
 import { createGame } from './createGame';
+import type { GameCommand } from './GameCommand';
+import { dispatchGameCommand } from './gameCommandDispatch';
 import {
   KingdomEvents,
+  type AutoGrantWishPayload,
   type CaptivesChangedPayload,
   type FoodChangedPayload,
   type GameOverPayload,
@@ -13,6 +15,7 @@ import {
   type PlaceModePayload,
   type RaidWarningPayload,
   type RoyalCapturedPayload,
+  type WallPlacedPayload,
 } from './subjects/events';
 import type {
   BuildingSnapshot,
@@ -21,39 +24,20 @@ import type {
   KingdomStats,
   SubjectSnapshot,
 } from './subjects/types';
+import type { KingdomGameMode } from './core/GameModeProfile';
 import {
   SANDBOX_REGISTRY_KEY,
   type SandboxSettings,
-  type SandboxSpawnAction,
 } from '../kingdom/sandboxSettings';
 import { setSandboxRuntime } from './sandboxRuntime';
 
 interface PhaserGameProps {
   remountKey: number;
   daysPlayed: number;
+  kingdomGameMode: KingdomGameMode;
+  gameDifficulty: GameDifficulty;
   sandboxSettings: SandboxSettings;
-  sandboxSpawnRequest?: { seq: number; action: SandboxSpawnAction } | null;
-  cameraZoomRequest?: { seq: number; direction: 1 | -1 } | null;
-  hireRequest: { seq: number; role: UnitRole } | null;
-  placeRequest: { seq: number; kind: BuildKind } | null;
-  cancelPlaceToken: number;
-  ransomRequest: { seq: number; id: string } | null;
-  transformRequest: { seq: number; fgmId: string } | null;
-  commandRequest: {
-    seq: number;
-    generalId: string;
-    troopCount: number;
-  } | null;
-  careerHireRequest: {
-    seq: number;
-    subjectId: string;
-    targetRole: UnitRole;
-  } | null;
-  executeRequest?: { seq: number; id: string } | null;
-  destroyCampRequest?: { seq: number; campId: string } | null;
-  arrestCampRequest?: { seq: number; campId: string } | null;
-  focusCampRequest?: { seq: number; campId: string; unitId?: string } | null;
-  navalRequest?: { seq: number; kind: NavalKind } | null;
+  command: GameCommand | null;
   onSubjectSelected: (subject: SubjectSnapshot | null) => void;
   onBuildingSelected: (building: BuildingSnapshot | null) => void;
   onCampSelected: (camp: CampSnapshot | null) => void;
@@ -65,31 +49,23 @@ interface PhaserGameProps {
   onRaidWarning: (payload: RaidWarningPayload) => void;
   onKingdomStats: (stats: KingdomStats) => void;
   onPlaceMode: (mode: PlaceModePayload) => void;
+  onWallPlaced?: (payload: WallPlacedPayload) => void;
   onMarketToast: (message: string) => void;
   onFoodChanged: (food: number) => void;
   onRoyalCaptured: (payload: RoyalCapturedPayload) => void;
   onCaptivesChanged: (count: number) => void;
-  deselectToken: number;
+  onAutoGrantWish?: (payload: AutoGrantWishPayload) => void;
+  gold?: number;
+  infiniteGold?: boolean;
 }
 
 export function PhaserGame({
   remountKey,
   daysPlayed,
+  kingdomGameMode,
+  gameDifficulty,
   sandboxSettings,
-  sandboxSpawnRequest,
-  cameraZoomRequest,
-  hireRequest,
-  placeRequest,
-  cancelPlaceToken,
-  ransomRequest,
-  transformRequest,
-  commandRequest,
-  careerHireRequest,
-  executeRequest,
-  destroyCampRequest,
-  arrestCampRequest,
-  focusCampRequest,
-  navalRequest,
+  command,
   onSubjectSelected,
   onBuildingSelected,
   onCampSelected,
@@ -101,11 +77,14 @@ export function PhaserGame({
   onRaidWarning,
   onKingdomStats,
   onPlaceMode,
+  onWallPlaced,
   onMarketToast,
   onFoodChanged,
   onRoyalCaptured,
   onCaptivesChanged,
-  deselectToken,
+  onAutoGrantWish,
+  gold = 0,
+  infiniteGold = false,
 }: PhaserGameProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -120,10 +99,12 @@ export function PhaserGame({
   const onWarnRef = useRef(onRaidWarning);
   const onStatsRef = useRef(onKingdomStats);
   const onPlaceRef = useRef(onPlaceMode);
+  const onWallPlacedRef = useRef(onWallPlaced);
   const onToastRef = useRef(onMarketToast);
   const onFoodRef = useRef(onFoodChanged);
   const onCaptureRef = useRef(onRoyalCaptured);
   const onCaptivesRef = useRef(onCaptivesChanged);
+  const onAutoGrantRef = useRef(onAutoGrantWish);
 
   onSelectRef.current = onSubjectSelected;
   onBuildingRef.current = onBuildingSelected;
@@ -136,10 +117,12 @@ export function PhaserGame({
   onWarnRef.current = onRaidWarning;
   onStatsRef.current = onKingdomStats;
   onPlaceRef.current = onPlaceMode;
+  onWallPlacedRef.current = onWallPlaced;
   onToastRef.current = onMarketToast;
   onFoodRef.current = onFoodChanged;
   onCaptureRef.current = onRoyalCaptured;
   onCaptivesRef.current = onCaptivesChanged;
+  onAutoGrantRef.current = onAutoGrantWish;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -155,6 +138,8 @@ export function PhaserGame({
     setSandboxRuntime(sandboxSettings);
     game.registry.set(SANDBOX_REGISTRY_KEY, sandboxSettings);
     game.registry.set('daysPlayed', daysPlayed);
+    game.registry.set('kingdomGameMode', kingdomGameMode);
+    game.registry.set('gameDifficulty', gameDifficulty);
 
     const handleSelect = (snap: SubjectSnapshot | null) => {
       onSelectRef.current(snap);
@@ -189,6 +174,9 @@ export function PhaserGame({
     const handlePlace = (mode: PlaceModePayload) => {
       onPlaceRef.current(mode);
     };
+    const handleWallPlaced = (payload: WallPlacedPayload) => {
+      onWallPlacedRef.current?.(payload);
+    };
     const handleToast = (payload: MarketToastPayload) => {
       onToastRef.current(payload.message);
     };
@@ -200,6 +188,9 @@ export function PhaserGame({
     };
     const handleCaptives = (payload: CaptivesChangedPayload) => {
       onCaptivesRef.current(payload.count);
+    };
+    const handleAutoGrant = (payload: AutoGrantWishPayload) => {
+      onAutoGrantRef.current?.(payload);
     };
 
     game.events.on(KingdomEvents.SUBJECT_SELECTED, handleSelect);
@@ -213,10 +204,12 @@ export function PhaserGame({
     game.events.on(KingdomEvents.RAID_WARNING, handleWarn);
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
     game.events.on(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
+    game.events.on(KingdomEvents.WALL_PLACED, handleWallPlaced);
     game.events.on(KingdomEvents.MARKET_TOAST, handleToast);
     game.events.on(KingdomEvents.FOOD_CHANGED, handleFood);
     game.events.on(KingdomEvents.ROYAL_CAPTURED, handleCapture);
     game.events.on(KingdomEvents.CAPTIVES_CHANGED, handleCaptives);
+    game.events.on(KingdomEvents.AUTO_GRANT_WISH, handleAutoGrant);
 
     return () => {
       game.events.off(KingdomEvents.SUBJECT_SELECTED, handleSelect);
@@ -230,52 +223,21 @@ export function PhaserGame({
       game.events.off(KingdomEvents.RAID_WARNING, handleWarn);
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
       game.events.off(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
+      game.events.off(KingdomEvents.WALL_PLACED, handleWallPlaced);
       game.events.off(KingdomEvents.MARKET_TOAST, handleToast);
       game.events.off(KingdomEvents.FOOD_CHANGED, handleFood);
       game.events.off(KingdomEvents.ROYAL_CAPTURED, handleCapture);
       game.events.off(KingdomEvents.CAPTIVES_CHANGED, handleCaptives);
+      game.events.off(KingdomEvents.AUTO_GRANT_WISH, handleAutoGrant);
       game.destroy(true);
       gameRef.current = null;
     };
   }, [remountKey]);
 
   useEffect(() => {
-    if (deselectToken === 0) return;
-    gameRef.current?.events.emit(KingdomEvents.CLEAR_SELECTION);
-  }, [deselectToken]);
-
-  useEffect(() => {
-    if (!hireRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.HIRE_SUBJECT, {
-      role: hireRequest.role,
-    });
-  }, [hireRequest]);
-
-  useEffect(() => {
-    if (!placeRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.BEGIN_PLACE, {
-      kind: placeRequest.kind,
-    });
-  }, [placeRequest]);
-
-  useEffect(() => {
-    if (cancelPlaceToken === 0) return;
-    gameRef.current?.events.emit(KingdomEvents.CANCEL_PLACE);
-  }, [cancelPlaceToken]);
-
-  useEffect(() => {
-    if (!ransomRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.PAY_RANSOM, {
-      id: ransomRequest.id,
-    });
-  }, [ransomRequest]);
-
-  useEffect(() => {
-    if (!transformRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.TRANSFORM_PEASANT, {
-      fgmId: transformRequest.fgmId,
-    });
-  }, [transformRequest]);
+    if (!command || !gameRef.current) return;
+    dispatchGameCommand(gameRef.current, command);
+  }, [command]);
 
   useEffect(() => {
     gameRef.current?.registry.set('daysPlayed', daysPlayed);
@@ -290,71 +252,14 @@ export function PhaserGame({
   }, [sandboxSettings]);
 
   useEffect(() => {
-    if (!sandboxSpawnRequest) return;
-    gameRef.current?.events.emit(
-      KingdomEvents.SANDBOX_SPAWN,
-      sandboxSpawnRequest.action
-    );
-  }, [sandboxSpawnRequest]);
+    gameRef.current?.registry.set('kingdomGameMode', kingdomGameMode);
+    gameRef.current?.registry.set('gameDifficulty', gameDifficulty);
+  }, [kingdomGameMode, gameDifficulty]);
 
   useEffect(() => {
-    if (!cameraZoomRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.CAMERA_ZOOM, {
-      direction: cameraZoomRequest.direction,
-    });
-  }, [cameraZoomRequest]);
-
-  useEffect(() => {
-    if (!commandRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.COMMAND_DETACHMENT, {
-      generalId: commandRequest.generalId,
-      troopCount: commandRequest.troopCount,
-    });
-  }, [commandRequest]);
-
-  useEffect(() => {
-    if (!careerHireRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.CAREER_HIRE, {
-      subjectId: careerHireRequest.subjectId,
-      targetRole: careerHireRequest.targetRole,
-    });
-  }, [careerHireRequest]);
-
-  useEffect(() => {
-    if (!executeRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.EXECUTE_CAPTIVE, {
-      id: executeRequest.id,
-    });
-  }, [executeRequest]);
-
-  useEffect(() => {
-    if (!destroyCampRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.DESTROY_CAMP, {
-      campId: destroyCampRequest.campId,
-    });
-  }, [destroyCampRequest]);
-
-  useEffect(() => {
-    if (!arrestCampRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.ARREST_CAMP, {
-      campId: arrestCampRequest.campId,
-    });
-  }, [arrestCampRequest]);
-
-  useEffect(() => {
-    if (!focusCampRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.FOCUS_CAMP, {
-      campId: focusCampRequest.campId,
-      unitId: focusCampRequest.unitId,
-    });
-  }, [focusCampRequest]);
-
-  useEffect(() => {
-    if (!navalRequest) return;
-    gameRef.current?.events.emit(KingdomEvents.BUY_NAVAL, {
-      kind: navalRequest.kind,
-    });
-  }, [navalRequest]);
+    gameRef.current?.registry.set('goldBalance', gold);
+    gameRef.current?.registry.set('infiniteGold', infiniteGold);
+  }, [gold, infiniteGold]);
 
   return <div className="phaser-host" ref={hostRef} />;
 }

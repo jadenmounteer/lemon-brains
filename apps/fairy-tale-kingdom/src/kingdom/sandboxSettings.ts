@@ -16,7 +16,7 @@ export type UndeadKindEnable = {
 export type UnitKindEnable = Record<UnitRole, boolean>;
 
 export interface SandboxSettings {
-  version: 1 | 2 | 3;
+  version: 1 | 2 | 3 | 4 | 5;
   war: {
     /** 0–2 overall war intensity (1 = default). */
     intensity: number;
@@ -49,6 +49,10 @@ export interface SandboxSettings {
   buildings: {
     wallHpMult: number;
   };
+  life: {
+    /** Fairy Godmother auto-grants career wishes when criteria are met. */
+    fgmAutoGrant: boolean;
+  };
 }
 
 /** Roles shown as sandbox unit toggles (marketplace hire list). */
@@ -70,10 +74,10 @@ const ALL_MONSTERS_ON: MonsterKindEnable = {
   dragon: true,
 };
 
-const ALL_UNDEAD_ON: UndeadKindEnable = {
-  vampire: true,
-  necromancer: true,
-  ghost: true,
+const ALL_UNDEAD_OFF: UndeadKindEnable = {
+  vampire: false,
+  necromancer: false,
+  ghost: false,
 };
 
 function allUnitsOn(): UnitKindEnable {
@@ -97,7 +101,7 @@ function allUnitsOn(): UnitKindEnable {
 }
 
 export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
-  version: 3,
+  version: 4,
   war: {
     intensity: 1,
     campSpawnRate: 1,
@@ -121,13 +125,16 @@ export const DEFAULT_SANDBOX_SETTINGS: SandboxSettings = {
     witchCurse: 1,
   },
   undead: {
-    vampire: 1,
-    necromancer: 1,
-    ghost: 1,
-    kinds: { ...ALL_UNDEAD_ON },
+    vampire: 0,
+    necromancer: 0,
+    ghost: 0,
+    kinds: { ...ALL_UNDEAD_OFF },
   },
   buildings: {
     wallHpMult: 1,
+  },
+  life: {
+    fgmAutoGrant: true,
   },
 };
 
@@ -146,9 +153,16 @@ export function normalizeSandboxSettings(
   raw: Partial<SandboxSettings> | null | undefined
 ): SandboxSettings {
   const d = DEFAULT_SANDBOX_SETTINGS;
-  if (!raw || (raw.version !== 1 && raw.version !== 2 && raw.version !== 3)) {
+  if (!raw || (raw.version !== 1 && raw.version !== 2 && raw.version !== 3 && raw.version !== 4 && raw.version !== 5)) {
     return structuredClone(d);
   }
+
+  const hadUndeadKinds =
+    raw.undead?.kinds &&
+    typeof raw.undead.kinds === 'object' &&
+    ('vampire' in raw.undead.kinds ||
+      'necromancer' in raw.undead.kinds ||
+      'ghost' in raw.undead.kinds);
 
   // v1 → v2: adopt calmer sickness defaults when the player still had stock values
   let hungerRise = raw.sickness?.hungerRise ?? d.sickness.hungerRise;
@@ -158,8 +172,23 @@ export function normalizeSandboxSettings(
     if (sickAtHunger === 75) sickAtHunger = d.sickness.sickAtHunger;
   }
 
+  const undeadKinds = hadUndeadKinds
+    ? {
+        ...ALL_UNDEAD_OFF,
+        ...(raw.undead?.kinds ?? {}),
+      }
+    : { ...ALL_UNDEAD_OFF };
+
+  const undeadRates = hadUndeadKinds
+    ? {
+        vampire: clampMult(raw.undead?.vampire ?? d.undead.vampire),
+        necromancer: clampMult(raw.undead?.necromancer ?? d.undead.necromancer),
+        ghost: clampMult(raw.undead?.ghost ?? d.undead.ghost),
+      }
+    : { vampire: 0, necromancer: 0, ghost: 0 };
+
   return {
-    version: 3,
+    version: 5,
     war: {
       intensity: clampMult(raw.war?.intensity ?? d.war.intensity),
       campSpawnRate: clampMult(raw.war?.campSpawnRate ?? d.war.campSpawnRate),
@@ -196,13 +225,8 @@ export function normalizeSandboxSettings(
       witchCurse: clampMult(raw.sickness?.witchCurse ?? d.sickness.witchCurse),
     },
     undead: {
-      vampire: clampMult(raw.undead?.vampire ?? d.undead.vampire),
-      necromancer: clampMult(raw.undead?.necromancer ?? d.undead.necromancer),
-      ghost: clampMult(raw.undead?.ghost ?? d.undead.ghost),
-      kinds: {
-        ...ALL_UNDEAD_ON,
-        ...(raw.undead?.kinds ?? {}),
-      },
+      ...undeadRates,
+      kinds: undeadKinds,
     },
     buildings: {
       wallHpMult: clamp(
@@ -210,6 +234,9 @@ export function normalizeSandboxSettings(
         0.25,
         4
       ),
+    },
+    life: {
+      fgmAutoGrant: raw.life?.fgmAutoGrant ?? d.life.fgmAutoGrant,
     },
   };
 }

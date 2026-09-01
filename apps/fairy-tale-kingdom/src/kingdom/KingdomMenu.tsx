@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { KingdomGameMode } from '../game/core/GameModeProfile';
 import { PlayingManualPanel } from './PlayingManualPanel';
 import { SandboxSettingsPanel } from './SandboxSettingsPanel';
 import type { SandboxSettings, SandboxSpawnAction } from './sandboxSettings';
@@ -6,13 +7,14 @@ import type { SandboxSettings, SandboxSpawnAction } from './sandboxSettings';
 interface KingdomMenuProps {
   kingdomName: string;
   daysPlayed: number;
-  onStartNewKingdom: (name: string) => void | Promise<void>;
+  onStartNewKingdom: (
+    name: string,
+    mode: KingdomGameMode
+  ) => void | Promise<void>;
   forceOpen?: boolean;
   forceTitle?: string;
   infiniteGold?: boolean;
   onToggleInfiniteGold?: (on: boolean) => void;
-  showCareerTodos?: boolean;
-  onToggleShowCareerTodos?: (on: boolean) => void;
   sandboxSettings?: SandboxSettings;
   onSandboxSettingsChange?: (next: SandboxSettings) => void;
   onSandboxSettingsReset?: () => void;
@@ -37,8 +39,6 @@ export function KingdomMenu({
   forceTitle,
   infiniteGold = false,
   onToggleInfiniteGold,
-  showCareerTodos = true,
-  onToggleShowCareerTodos,
   sandboxSettings,
   onSandboxSettingsChange,
   onSandboxSettingsReset,
@@ -64,6 +64,7 @@ export function KingdomMenu({
   const [showManual, setShowManual] = useState(false);
   const [showSandbox, setShowSandbox] = useState(false);
   const [name, setName] = useState('');
+  const [gameMode, setGameMode] = useState<KingdomGameMode>('learning');
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -83,7 +84,7 @@ export function KingdomMenu({
     if (!trimmed || busy) return;
     setBusy(true);
     try {
-      await onStartNewKingdom(trimmed);
+      await onStartNewKingdom(trimmed, gameMode);
       setName('');
       setShowNewForm(false);
       if (!forceOpen) setOpen(false);
@@ -208,18 +209,6 @@ export function KingdomMenu({
                   >
                     Start new kingdom
                   </button>
-                  {onToggleShowCareerTodos && (
-                    <button
-                      type="button"
-                      className="menu-action"
-                      aria-pressed={showCareerTodos}
-                      onClick={() => onToggleShowCareerTodos(!showCareerTodos)}
-                    >
-                      {showCareerTodos
-                        ? 'Career wishes: shown'
-                        : 'Career wishes: hidden'}
-                    </button>
-                  )}
                   {onToggleInfiniteGold && (
                     <button
                       type="button"
@@ -246,6 +235,38 @@ export function KingdomMenu({
                     Starting fresh resets gold, days, buildings, and generates a
                     new random map. Raids begin again.
                   </p>
+                  <fieldset className="kingdom-mode-fieldset">
+                    <legend className="sr-only">Kingdom mode</legend>
+                    <label className="kingdom-mode-option">
+                      <input
+                        type="radio"
+                        name="kingdom-mode"
+                        value="learning"
+                        checked={gameMode === 'learning'}
+                        onChange={() => setGameMode('learning')}
+                      />
+                      <span>
+                        <strong>Learning</strong>
+                        <span className="muted">
+                          {' '}
+                          — calmer raids, more reading gold
+                        </span>
+                      </span>
+                    </label>
+                    <label className="kingdom-mode-option">
+                      <input
+                        type="radio"
+                        name="kingdom-mode"
+                        value="normal"
+                        checked={gameMode === 'normal'}
+                        onChange={() => setGameMode('normal')}
+                      />
+                      <span>
+                        <strong>Normal</strong>
+                        <span className="muted"> — standard pressure</span>
+                      </span>
+                    </label>
+                  </fieldset>
                   <label className="sr-only" htmlFor="kingdom-name-input">
                     Kingdom name
                   </label>

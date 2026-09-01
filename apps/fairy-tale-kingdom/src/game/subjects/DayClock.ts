@@ -32,4 +32,10 @@ export class DayClock {
     if (h >= 17 && h < 21) return 'Evening';
     return 'Night';
   }
+
+  /** Single source of truth for night-only systems (thieves, undead, camps). */
+  isNight(): boolean {
+    const h = this.hour;
+    return h >= 21 || h < 5;
+  }
 }
