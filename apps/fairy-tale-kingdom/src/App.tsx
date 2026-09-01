@@ -355,6 +355,44 @@ export default function App() {
     [addGold, flash, pendingPlaceCost]
   );
 
+  const handleMoveBuilding = useCallback(
+    (buildingId: string) => {
+      setSelectedBuilding(null);
+      sendCommand({
+        type: 'BEGIN_RELOCATE',
+        seq: nextCommandSeq(),
+        buildingId,
+      });
+      flash('Click the map to move your building');
+    },
+    [flash, sendCommand]
+  );
+
+  const handleDemolishBuilding = useCallback(
+    (buildingId: string) => {
+      setSelectedBuilding(null);
+      sendCommand({
+        type: 'DEMOLISH_BUILDING',
+        seq: nextCommandSeq(),
+        buildingId,
+      });
+    },
+    [sendCommand]
+  );
+
+  const handleBuildingDemolished = useCallback(
+    (refund: number) => {
+      if (!infiniteGold && refund > 0) {
+        void addGold(refund).then((total) => {
+          flash(`Building demolished — ${refund}g refunded (${total} total)`);
+        });
+      } else {
+        flash('Building demolished');
+      }
+    },
+    [addGold, flash, infiniteGold]
+  );
+
   const handleRansom = useCallback(
     async (id: string, cost: number) => {
       const ok = await spend(cost);
@@ -666,6 +704,7 @@ export default function App() {
             }}
             onKingdomStats={setStats}
             onPlaceMode={setPlaceMode}
+            onBuildingDemolished={handleBuildingDemolished}
             onWallPlaced={(payload) => {
               const cost = wallPlacementCost(payload.cells);
               if (!infiniteGold) {
@@ -705,6 +744,10 @@ export default function App() {
               }
               if (message === 'Placement cancelled') {
                 refundPendingPlace(true);
+                return;
+              }
+              if (message === 'Move cancelled') {
+                flash(message);
                 return;
               }
               flash(message);
@@ -806,6 +849,20 @@ export default function App() {
                   onPromoteCareer={(targetRole, cost) => {
                     void handleCareerHire(selected.id, targetRole, cost);
                   }}
+                  onGrantMarriage={() => {
+                    sendCommand({
+                      type: 'GRANT_MARRIAGE',
+                      seq: nextCommandSeq(),
+                      subjectId: selected.id,
+                    });
+                  }}
+                  onGrantChild={() => {
+                    sendCommand({
+                      type: 'GRANT_CHILD',
+                      seq: nextCommandSeq(),
+                      subjectId: selected.id,
+                    });
+                  }}
                 />
               )}
               {selectedBuilding && (
@@ -826,6 +883,8 @@ export default function App() {
                     setSelectedBuilding(null);
                     clearSelection();
                   }}
+                  onMove={handleMoveBuilding}
+                  onDemolish={handleDemolishBuilding}
                 />
               )}
               {selectedCamp && (
@@ -910,7 +969,9 @@ export default function App() {
                     void handleBuyNaval(kind);
                   }}
                   onCancelPlace={() => {
-                    refundPendingPlace(true);
+                    if (placeMode.mode !== 'relocate') {
+                      refundPendingPlace(true);
+                    }
                     sendCommand({ type: 'CANCEL_PLACE', seq: nextCommandSeq() });
                   }}
                   onClose={() => setShowMarket(false)}

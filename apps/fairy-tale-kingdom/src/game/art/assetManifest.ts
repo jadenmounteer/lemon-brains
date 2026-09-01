@@ -192,11 +192,11 @@ export const UnitFrame = {
 
 export const UNIT_FRAME_COUNT = 17;
 
-export function idleAnimKey(role: AnimRole): string {
+export function idleAnimKey(role: string): string {
   return `${role}-idle`;
 }
 
-export function walkAnimKey(role: AnimRole, dir: Direction): string {
+export function walkAnimKey(role: string, dir: Direction): string {
   return `${role}-walk-${dir}`;
 }
 

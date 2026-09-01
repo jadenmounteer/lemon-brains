@@ -16,6 +16,7 @@ import {
   type RaidWarningPayload,
   type RoyalCapturedPayload,
   type WallPlacedPayload,
+  type BuildingDemolishedPayload,
 } from './subjects/events';
 import type {
   BuildingSnapshot,
@@ -50,6 +51,7 @@ interface PhaserGameProps {
   onKingdomStats: (stats: KingdomStats) => void;
   onPlaceMode: (mode: PlaceModePayload) => void;
   onWallPlaced?: (payload: WallPlacedPayload) => void;
+  onBuildingDemolished?: (refund: number) => void;
   onMarketToast: (message: string) => void;
   onFoodChanged: (food: number) => void;
   onRoyalCaptured: (payload: RoyalCapturedPayload) => void;
@@ -78,6 +80,7 @@ export function PhaserGame({
   onKingdomStats,
   onPlaceMode,
   onWallPlaced,
+  onBuildingDemolished,
   onMarketToast,
   onFoodChanged,
   onRoyalCaptured,
@@ -100,6 +103,7 @@ export function PhaserGame({
   const onStatsRef = useRef(onKingdomStats);
   const onPlaceRef = useRef(onPlaceMode);
   const onWallPlacedRef = useRef(onWallPlaced);
+  const onDemolishedRef = useRef(onBuildingDemolished);
   const onToastRef = useRef(onMarketToast);
   const onFoodRef = useRef(onFoodChanged);
   const onCaptureRef = useRef(onRoyalCaptured);
@@ -118,6 +122,7 @@ export function PhaserGame({
   onStatsRef.current = onKingdomStats;
   onPlaceRef.current = onPlaceMode;
   onWallPlacedRef.current = onWallPlaced;
+  onDemolishedRef.current = onBuildingDemolished;
   onToastRef.current = onMarketToast;
   onFoodRef.current = onFoodChanged;
   onCaptureRef.current = onRoyalCaptured;
@@ -177,6 +182,9 @@ export function PhaserGame({
     const handleWallPlaced = (payload: WallPlacedPayload) => {
       onWallPlacedRef.current?.(payload);
     };
+    const handleDemolished = (payload: BuildingDemolishedPayload) => {
+      onDemolishedRef.current?.(payload.refund);
+    };
     const handleToast = (payload: MarketToastPayload) => {
       onToastRef.current(payload.message);
     };
@@ -205,6 +213,7 @@ export function PhaserGame({
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
     game.events.on(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
     game.events.on(KingdomEvents.WALL_PLACED, handleWallPlaced);
+    game.events.on(KingdomEvents.BUILDING_DEMOLISHED, handleDemolished);
     game.events.on(KingdomEvents.MARKET_TOAST, handleToast);
     game.events.on(KingdomEvents.FOOD_CHANGED, handleFood);
     game.events.on(KingdomEvents.ROYAL_CAPTURED, handleCapture);
@@ -224,6 +233,7 @@ export function PhaserGame({
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
       game.events.off(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
       game.events.off(KingdomEvents.WALL_PLACED, handleWallPlaced);
+      game.events.off(KingdomEvents.BUILDING_DEMOLISHED, handleDemolished);
       game.events.off(KingdomEvents.MARKET_TOAST, handleToast);
       game.events.off(KingdomEvents.FOOD_CHANGED, handleFood);
       game.events.off(KingdomEvents.ROYAL_CAPTURED, handleCapture);

@@ -37,6 +37,7 @@ export class WeddingCeremonySystem {
   private couple: { a: string; b: string; bishop: string } | null = null;
   private guestIds: string[] = [];
   private props: Phaser.GameObjects.Image[] = [];
+  private onRiteComplete: (() => void) | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -47,6 +48,10 @@ export class WeddingCeremonySystem {
 
   isActive(): boolean {
     return this.active;
+  }
+
+  setOnRiteComplete(cb: (() => void) | null): void {
+    this.onRiteComplete = cb;
   }
 
   /**
@@ -92,6 +97,7 @@ export class WeddingCeremonySystem {
         break;
       case 'rite':
         this.completeMarriage();
+        this.onRiteComplete?.();
         this.stage = 'cheer';
         this.stageMs = STAGE_MS.cheer;
         this.applyCheer();

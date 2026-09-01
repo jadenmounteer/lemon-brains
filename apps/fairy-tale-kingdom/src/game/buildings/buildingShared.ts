@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
-import { PROP_KEYS, TILE_SIZE, wallTextureKey } from '../art/assetManifest';
+import { PROP_KEYS, TILE_SIZE, UNIT_WIDTH, wallTextureKey } from '../art/assetManifest';
 import type { BuildKind } from '../../marketplace/catalog';
 import { isFortKind } from '../combat/stats';
 import type { Point } from '../subjects/zones';
 
 export const KEEP_ID = 'keep';
-export const FORT_TILE = TILE_SIZE;
+/** Fort cell size — wide enough for ~3 NPCs abreast on battlements. */
+export const FORT_TILE = UNIT_WIDTH * 3;
 /** @deprecated Fixed 3-cell runs — drag placement uses fortLineCells instead. */
 export const WALL_PLACE_CELLS = 3;
 /** Max fort cells per wall drag stroke. */
@@ -89,19 +90,19 @@ export interface Aabb {
 
 const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   house: { w: 56, h: 48 },
-  wall: { w: 16, h: 16 },
+  wall: { w: FORT_TILE, h: FORT_TILE },
   tavern: { w: 48, h: 40 },
-  drawbridge: { w: 16, h: 16 },
-  stairs: { w: 20, h: 26 },
+  drawbridge: { w: FORT_TILE, h: FORT_TILE },
+  stairs: { w: FORT_TILE, h: FORT_TILE },
   field: { w: 40, h: 26 },
   granary: { w: 36, h: 42 },
   barracks: { w: 40, h: 30 },
   manor: { w: 64, h: 52 },
   ballista: { w: 24, h: 18 },
   watchtower: { w: 24, h: 36 },
-  cathedral: { w: 64, h: 56 },
+  cathedral: { w: 320, h: 280 },
   infirmary: { w: 56, h: 44 },
-  dungeon: { w: 40, h: 32 },
+  dungeon: { w: 200, h: 160 },
   bakery: { w: 44, h: 38 },
   market: { w: 44, h: 30 },
   cemetery: { w: 48, h: 34 },
@@ -109,7 +110,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   road: { w: 16, h: 16 },
   bridge: { w: 56, h: 20 },
   dock: { w: 40, h: 28 },
-  keep: { w: 160, h: 120 },
+  keep: { w: 800, h: 600 },
 };
 
 /** Snap world coord to fortification cell center. */

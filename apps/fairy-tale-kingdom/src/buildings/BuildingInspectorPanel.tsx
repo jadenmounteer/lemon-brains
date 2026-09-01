@@ -7,6 +7,10 @@ import {
   TRAINABLE_ROLES,
 } from '../marketplace/rules';
 import type { BuildingSnapshot } from '../game/subjects/types';
+import {
+  buildingRefundCost,
+  isMovableKind,
+} from '../game/buildings/buildingManagement';
 
 interface BuildingInspectorPanelProps {
   building: BuildingSnapshot;
@@ -16,6 +20,8 @@ interface BuildingInspectorPanelProps {
   /** Sandbox: when false for a role, hide that train row. */
   enabledRoles?: Partial<Record<UnitRole, boolean>>;
   onTrain: (buildingId: string, role: UnitRole) => void;
+  onMove?: (buildingId: string) => void;
+  onDemolish?: (buildingId: string) => void;
   onClose: () => void;
 }
 
@@ -26,12 +32,30 @@ export function BuildingInspectorPanel({
   stats,
   enabledRoles,
   onTrain,
+  onMove,
+  onDemolish,
   onClose,
 }: BuildingInspectorPanelProps) {
   const canAfford = (cost: number) => infiniteGold || gold >= cost;
   const trainRoles = TRAINABLE_ROLES[building.kind] ?? [];
   const royalUsedAtKeep =
     building.kind === 'keep' ? (building.royalUsed ?? 0) : undefined;
+  const refund = buildingRefundCost(building.kind);
+  const occupantCount =
+    (building.residents?.length ?? 0) + (building.workers?.length ?? 0);
+  const canMove = isMovableKind(building.kind);
+  const canDemolish = building.kind !== 'keep';
+
+  const handleDemolish = () => {
+    if (!onDemolish) return;
+    if (occupantCount > 0) {
+      const ok = window.confirm(
+        'Demolish anyway? Residents and workers will seek new homes.'
+      );
+      if (!ok) return;
+    }
+    onDemolish(building.id);
+  };
 
   return (
     <section className="panel inspector-panel" aria-live="polite">
@@ -166,6 +190,31 @@ export function BuildingInspectorPanel({
               );
             })}
           </ul>
+        </>
+      )}
+      {(canMove || canDemolish) && (
+        <>
+          <h3 className="inspector-subhead">Manage</h3>
+          <div className="inspector-actions">
+            {canMove && onMove ? (
+              <button
+                type="button"
+                className="market-buy"
+                onClick={() => onMove(building.id)}
+              >
+                Move
+              </button>
+            ) : null}
+            {canDemolish && onDemolish ? (
+              <button
+                type="button"
+                className="market-buy"
+                onClick={handleDemolish}
+              >
+                Demolish ({refund}g)
+              </button>
+            ) : null}
+          </div>
         </>
       )}
     </section>

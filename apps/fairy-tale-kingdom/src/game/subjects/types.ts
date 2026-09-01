@@ -218,6 +218,10 @@ export interface Subject {
   fatherId?: string;
   pregnant?: boolean;
   pregnantDaysLeft?: number;
+  /** Resolved at child grant — where the baby will live. */
+  pendingChildHouseId?: string;
+  appearanceVariant?: 0 | 1 | 2 | 3 | 4 | 5;
+  legendId?: string;
   thought?: string;
   backstory?: string;
   goal?: SubjectGoal | null;
@@ -273,8 +277,19 @@ export interface SubjectSnapshot {
   pregnantLabel?: string;
   spouseLabel?: string;
   titleLabel?: string;
+  familyAspiration?: FamilyAspirationSnapshot | null;
   /** Keep / liege this subject is loyal to. */
   loyaltyLabel?: string;
+}
+
+export interface FamilyAspirationSnapshot {
+  kind: string;
+  title: string;
+  partnerName?: string;
+  criteria: { id: string; label: string; met: boolean }[];
+  canGrant: boolean;
+  blockReason?: string;
+  cost: number;
 }
 
 export interface DaySnapshot {

@@ -65,4 +65,44 @@ describe('dispatchGameCommand', () => {
       direction: 1,
     });
   });
+
+  it('maps BEGIN_PLACE', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'BEGIN_PLACE',
+      seq: 6,
+      kind: 'house',
+      maxWallCells: 10,
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(KingdomEvents.BEGIN_PLACE, {
+      kind: 'house',
+      maxWallCells: 10,
+    });
+  });
+
+  it('maps BEGIN_RELOCATE', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'BEGIN_RELOCATE',
+      seq: 7,
+      buildingId: 'house-0',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(
+      KingdomEvents.BEGIN_RELOCATE,
+      { buildingId: 'house-0' }
+    );
+  });
+
+  it('maps DEMOLISH_BUILDING', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'DEMOLISH_BUILDING',
+      seq: 8,
+      buildingId: 'bakery-0',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(
+      KingdomEvents.DEMOLISH_BUILDING,
+      { buildingId: 'bakery-0' }
+    );
+  });
 });

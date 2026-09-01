@@ -2,20 +2,20 @@ import { layoutPoint } from './layoutUtils';
 
 export const DUNGEON_CELL_COUNT = 4;
 
-const GATE = { x: 0, y: 10 };
+const GATE = { x: 0, y: 50 };
 const CELLS = [
-  { x: -14, y: -4 },
-  { x: -4, y: -4 },
-  { x: 6, y: -4 },
-  { x: 16, y: -4 },
+  { x: -70, y: -20 },
+  { x: -20, y: -20 },
+  { x: 30, y: -20 },
+  { x: 80, y: -20 },
 ];
 const PATROL = [
-  { x: -12, y: 6 },
-  { x: 0, y: 2 },
-  { x: 12, y: 6 },
-  { x: 0, y: -8 },
+  { x: -60, y: 30 },
+  { x: 0, y: 10 },
+  { x: 60, y: 30 },
+  { x: 0, y: -40 },
 ];
-const KEEPER_DESK = { x: 10, y: 8 };
+const KEEPER_DESK = { x: 50, y: 40 };
 
 export function dungeonGatePoint(
   origin: { x: number; y: number },
@@ -49,7 +49,7 @@ export function dungeonKeeperDesk(
   return layoutPoint(origin, KEEPER_DESK, subjectId, 2);
 }
 
-/** All anchor offsets must stay inside the dungeon footprint (~40×32). */
+/** All anchor offsets must stay inside the dungeon footprint (~200×160). */
 export function dungeonAnchorBounds(): { minX: number; maxX: number; minY: number; maxY: number } {
   const xs = [...CELLS, GATE, ...PATROL, KEEPER_DESK].map((p) => p.x);
   const ys = [...CELLS, GATE, ...PATROL, KEEPER_DESK].map((p) => p.y);

@@ -8,6 +8,10 @@ export type GameCommand =
   | { type: 'TRAIN_AT_BUILDING'; seq: number; buildingId: string; role: UnitRole }
   | { type: 'BEGIN_PLACE'; seq: number; kind: BuildKind; maxWallCells?: number }
   | { type: 'CANCEL_PLACE'; seq: number }
+  | { type: 'BEGIN_RELOCATE'; seq: number; buildingId: string }
+  | { type: 'DEMOLISH_BUILDING'; seq: number; buildingId: string }
+  | { type: 'GRANT_MARRIAGE'; seq: number; subjectId: string }
+  | { type: 'GRANT_CHILD'; seq: number; subjectId: string }
   | { type: 'PAY_RANSOM'; seq: number; id: string }
   | { type: 'TRANSFORM_PEASANT'; seq: number; fgmId: string }
   | {

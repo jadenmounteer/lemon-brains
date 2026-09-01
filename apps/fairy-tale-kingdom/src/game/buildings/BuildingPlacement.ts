@@ -21,7 +21,8 @@ export interface BuildingPlacementHost {
     y: number,
     wallId?: string | null,
     rotation?: 0 | 90,
-    replaceWallId?: string | null
+    replaceWallId?: string | null,
+    ignoreBuildingId?: string | null
   ): boolean;
   findWallSnap(
     worldX: number,
@@ -47,16 +48,23 @@ export interface BuildingPlacementHost {
     }
   ): BuildingRecord;
   replaceWallWithGate(wallId: string): void;
+  commitRelocate(
+    buildingId: string,
+    x: number,
+    y: number,
+    rotation?: 0 | 90
+  ): boolean;
   afterPlacementCommit(): void;
 }
 
 export interface WallCommitResult {
   committed: boolean;
   wallCells: number;
+  relocated?: boolean;
 }
 
 /**
- * Ghost preview + commit for marketplace placement.
+ * Ghost preview + commit for marketplace placement and building relocation.
  * Validation and sprite creation stay on the host (BuildingSystem facade).
  */
 export class BuildingPlacement {
@@ -72,11 +80,25 @@ export class BuildingPlacement {
   private wallDragging = false;
   private maxWallCells = WALL_MAX_DRAG_CELLS;
   private lastCommittedWallCells = 0;
+  private relocateRecord: BuildingRecord | null = null;
 
   constructor(private readonly host: BuildingPlacementHost) {}
 
   isPlacing(): boolean {
     return this.placeKind !== null;
+  }
+
+  isRelocating(): boolean {
+    return this.relocateRecord !== null;
+  }
+
+  placementMode(): 'place' | 'relocate' | null {
+    if (!this.placeKind) return null;
+    return this.relocateRecord ? 'relocate' : 'place';
+  }
+
+  relocatingBuildingId(): string | null {
+    return this.relocateRecord?.id ?? null;
   }
 
   placingKind(): BuildKind | null {
@@ -114,9 +136,35 @@ export class BuildingPlacement {
       .setAlpha(0.65);
   }
 
+  beginRelocate(record: BuildingRecord): void {
+    this.cancelPlace();
+    this.placeKind = record.kind;
+    this.relocateRecord = record;
+    this.placeRotation = (record.rotation as 0 | 90) ?? 0;
+    record.sprite.setAlpha(0.3);
+    record.interiorSprite?.setAlpha(0.3);
+    const tex =
+      record.kind === 'bridge' && this.placeRotation === 90
+        ? PROP_KEYS.bridgeV
+        : textureFor(record.kind, Boolean(record.closed), 0);
+    this.ghost = this.host.scene.add
+      .image(record.x, record.y, tex)
+      .setDepth(50)
+      .setOrigin(
+        0.5,
+        record.kind === 'wall' || record.kind === 'drawbridge' ? 0.75 : 0.85
+      )
+      .setAlpha(0.65);
+  }
+
   cancelPlace(): void {
+    if (this.relocateRecord) {
+      this.relocateRecord.sprite.setAlpha(1);
+      this.relocateRecord.interiorSprite?.setAlpha(1);
+    }
     this.placeKind = null;
     this.placeRotation = 0;
+    this.relocateRecord = null;
     this.ghost?.destroy();
     this.ghost = null;
     this.clearWallGhostExtras();
@@ -140,7 +188,7 @@ export class BuildingPlacement {
 
   /** Pointer down while placing a wall — start a drag stroke. */
   beginWallDrag(worldX: number, worldY: number): void {
-    if (this.placeKind !== 'wall') return;
+    if (this.placeKind !== 'wall' || this.relocateRecord) return;
     this.wallDragging = true;
     this.wallDragStart = {
       x: fortSnap(worldX),
@@ -153,13 +201,22 @@ export class BuildingPlacement {
     if (!this.ghost || !this.placeKind) return;
     this.ghostReplaceWallId = null;
     const kind = this.placeKind;
+    const ignoreId = this.relocateRecord?.id ?? null;
 
     if (kind === 'stairs') {
       const snap = this.host.findWallSnap(worldX, worldY);
       if (snap) {
         this.ghost.setPosition(snap.x, snap.y);
         this.ghostWallId = snap.wallId;
-        this.ghostValid = this.host.canPlaceAt('stairs', snap.x, snap.y, snap.wallId);
+        this.ghostValid = this.host.canPlaceAt(
+          'stairs',
+          snap.x,
+          snap.y,
+          snap.wallId,
+          0,
+          null,
+          ignoreId
+        );
       } else {
         this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
         this.ghostWallId = null;
@@ -177,7 +234,8 @@ export class BuildingPlacement {
           snap.y,
           null,
           0,
-          snap.replaceWallId
+          snap.replaceWallId,
+          ignoreId
         );
       } else {
         this.ghost.setPosition(fortSnap(worldX), fortSnap(worldY));
@@ -190,7 +248,7 @@ export class BuildingPlacement {
       const line = this.host.fortLineCells(start.x, start.y, endX, endY);
       const capped = line.slice(0, this.maxWallCells);
       const valid = capped.filter((cell) =>
-        this.host.canPlaceAt('wall', cell.x, cell.y)
+        this.host.canPlaceAt('wall', cell.x, cell.y, null, 0, null, ignoreId)
       );
       this.wallRunPreview = valid;
       this.ghostValid = valid.length > 0;
@@ -229,7 +287,15 @@ export class BuildingPlacement {
         : snapCoord(worldY);
       this.ghost.setPosition(x, y);
       this.ghostWallId = null;
-      this.ghostValid = this.host.canPlaceAt(kind, x, y, null, this.placeRotation);
+      this.ghostValid = this.host.canPlaceAt(
+        kind,
+        x,
+        y,
+        null,
+        this.placeRotation,
+        null,
+        ignoreId
+      );
     }
     this.ghost.setTint(this.ghostValid ? 0xffffff : 0xff5555);
   }
@@ -249,6 +315,18 @@ export class BuildingPlacement {
     const wallId = this.ghostWallId ?? undefined;
     const replaceWallId = this.ghostReplaceWallId;
     const rotation = kind === 'bridge' ? this.placeRotation : undefined;
+    const relocateId = this.relocateRecord?.id;
+
+    if (relocateId) {
+      const moved = this.host.commitRelocate(relocateId, x, y, rotation);
+      if (!moved) {
+        return { committed: false, wallCells: 0 };
+      }
+      this.host.afterPlacementCommit();
+      this.cancelPlace();
+      return { committed: true, wallCells: 0, relocated: true };
+    }
+
     const wallRun =
       kind === 'wall' && this.wallRunPreview.length > 0
         ? [...this.wallRunPreview]

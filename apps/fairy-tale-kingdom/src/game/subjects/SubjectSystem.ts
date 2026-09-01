@@ -1,5 +1,10 @@
 import Phaser from 'phaser';
 import {
+  appearanceTint,
+  resolveSubjectTexture,
+} from '../art/resolveSubjectTexture';
+import type { FamilyAspirationView } from '../family/evaluateFamilyAspiration';
+import {
   UNIT_HEIGHT,
   UNIT_WIDTH,
   idleAnimKey,
@@ -140,6 +145,9 @@ export class SubjectSystem {
   private daysPlayed = 0;
   private patrolInspectionIdx = new Map<string, number>();
   private loyaltyHighlightKeepId: string | null = null;
+  private familyEvaluator:
+    | ((subjectId: string) => FamilyAspirationView | null)
+    | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -179,8 +187,28 @@ export class SubjectSystem {
       openCastleJob: (exceptId) => this.openCastleJob(exceptId),
       transformRole: (id, role, opts) => this.transformRole(id, role, opts),
       notifyChanged: () => this.notifyChanged(),
-      displayTextureKey: (role) => displayTextureKey(role),
+      linkRoyalSpouses: () => this.linkRoyalSpousesIfBothPresent(),
     });
+  }
+
+  setFamilyEvaluator(
+    cb: (subjectId: string) => FamilyAspirationView | null
+  ): void {
+    this.familyEvaluator = cb;
+  }
+
+  seedStarterFamilies(houseIds: string[]): void {
+    this.spawner.seedStarterFamilies(houseIds);
+  }
+
+  linkRoyalSpousesIfBothPresent(): void {
+    const king = this.registry.all.find((s) => s.data.role === 'king');
+    const queen = this.registry.all.find((s) => s.data.role === 'queen');
+    if (!king || !queen) return;
+    if (king.data.spouseId === queen.data.id && queen.data.spouseId === king.data.id) {
+      return;
+    }
+    this.linkSpouses(king.data.id, queen.data.id);
   }
 
   setBuildings(buildings: BuildingSystem): void {
@@ -579,6 +607,17 @@ export class SubjectSystem {
     return id;
   }
 
+  linkSpouses(aId: string, bId: string): void {
+    const a = this.getById(aId);
+    const b = this.getById(bId);
+    if (!a || !b) return;
+    a.data.married = true;
+    b.data.married = true;
+    a.data.spouseId = bId;
+    b.data.spouseId = aId;
+    this.onChanged?.();
+  }
+
   /** Miserable peasants/children walk off to join (or found) a fringe camp. */
   tryDefectMiserable(): void {
     for (const s of [...this.registry.all]) {
@@ -896,7 +935,7 @@ export class SubjectSystem {
       managed.data.workplaceId = undefined;
       managed.data.job = undefined;
     }
-    const texKey = displayTextureKey(role);
+    const texKey = textureKeyForSubject(managed.data);
     managed.sprite.setTexture(texKey, 0);
     managed.sprite.play(idleAnimKey(texKey));
     managed.interrupt = null;
@@ -1475,8 +1514,8 @@ export class SubjectSystem {
     this.scene.tweens.killTweensOf(b.sprite);
     a.moving = false;
     b.moving = false;
-    a.sprite.play(idleAnimKey(displayTextureKey(a.data.role)));
-    b.sprite.play(idleAnimKey(displayTextureKey(b.data.role)));
+    a.sprite.play(idleAnimKey(textureKeyForSubject(a.data)));
+    b.sprite.play(idleAnimKey(textureKeyForSubject(b.data)));
   }
 
   spawnSeed(): void {
@@ -1525,6 +1564,9 @@ export class SubjectSystem {
         campId: s.campId,
         allegiance: s.allegiance,
         loyaltyKeepId: s.loyaltyKeepId,
+        pendingChildHouseId: s.pendingChildHouseId,
+        appearanceVariant: s.appearanceVariant,
+        legendId: s.legendId,
       });
       const managed = this.getById(s.id);
       if (managed) {
@@ -1540,6 +1582,7 @@ export class SubjectSystem {
       this.registry.bumpNextIdFromSavedId(s.id);
     }
     this.migrateMonarchs();
+    this.linkRoyalSpousesIfBothPresent();
     this.ensureMarker();
     // Sickness / quarantine disabled — clear leftover sick/flee state from older saves
     for (const s of this.registry.all) {
@@ -2113,7 +2156,7 @@ export class SubjectSystem {
     else if (this.inspired && managed.data.role === 'peasant') moveSpeed *= 1.15;
 
     const dir = facingFromDelta(dx, dy);
-    const texKey = displayTextureKey(managed.data.role);
+    const texKey = textureKeyForSubject(managed.data);
     managed.sprite.play(walkAnimKey(texKey, dir), true);
     managed.moving = true;
     const dist = Math.hypot(dx, dy);
@@ -2620,7 +2663,8 @@ export class SubjectSystem {
 
   private applyBodyScale(managed: ManagedSubject): void {
     const scaleX = bodyScaleX(managed.data.body);
-    managed.sprite.setScale(scaleX, 1);
+    const childScale = managed.data.role === 'child' ? 0.85 : 1;
+    managed.sprite.setScale(scaleX * childScale, childScale);
   }
 
   private removeSubject(managed: ManagedSubject): void {
@@ -2643,7 +2687,12 @@ export class SubjectSystem {
     } else if (managed.data.role === 'thief') {
       managed.sprite.setTint(0x4a3a5a);
     } else {
-      managed.sprite.clearTint();
+      const variantTint = appearanceTint(managed.data.appearanceVariant);
+      if (variantTint && variantTint !== 0xffffff) {
+        managed.sprite.setTint(variantTint);
+      } else {
+        managed.sprite.clearTint();
+      }
     }
   }
 
@@ -2981,6 +3030,9 @@ export class SubjectSystem {
       loyaltyLabel: this.buildings?.loyaltyLabelForKeep(
         managed.data.loyaltyKeepId
       ),
+      familyAspiration: this.familyEvaluator
+        ? mapFamilyAspiration(this.familyEvaluator(managed.data.id))
+        : null,
     };
   }
 
@@ -3009,8 +3061,35 @@ function jobDisplayLabel(managed: ManagedSubject): string {
 }
 
 /** Thieves reuse the bandit sheet (tinted) instead of a dedicated sprite. */
-function displayTextureKey(role: UnitRole): UnitRole {
-  return role === 'thief' ? 'bandit' : role;
+function textureKeyForSubject(
+  data: Pick<
+    Subject,
+    'role' | 'gender' | 'ageYears' | 'job' | 'appearanceVariant' | 'legendId'
+  >
+): string {
+  return resolveSubjectTexture({
+    role: data.role,
+    gender: data.gender,
+    ageYears: data.ageYears,
+    job: data.job,
+    appearanceVariant: data.appearanceVariant,
+    legendId: data.legendId,
+  });
+}
+
+function mapFamilyAspiration(
+  view: FamilyAspirationView | null
+): SubjectSnapshot['familyAspiration'] {
+  if (!view) return null;
+  return {
+    kind: view.kind,
+    title: view.title,
+    partnerName: view.partnerName,
+    criteria: view.criteria,
+    canGrant: view.canGrant,
+    blockReason: view.blockReason,
+    cost: view.cost,
+  };
 }
 
 function facingFromDelta(dx: number, dy: number): Direction {

@@ -26,6 +26,26 @@ export function dispatchGameCommand(
     case 'CANCEL_PLACE':
       game.events.emit(KingdomEvents.CANCEL_PLACE);
       break;
+    case 'BEGIN_RELOCATE':
+      game.events.emit(KingdomEvents.BEGIN_RELOCATE, {
+        buildingId: command.buildingId,
+      });
+      break;
+    case 'DEMOLISH_BUILDING':
+      game.events.emit(KingdomEvents.DEMOLISH_BUILDING, {
+        buildingId: command.buildingId,
+      });
+      break;
+    case 'GRANT_MARRIAGE':
+      game.events.emit(KingdomEvents.GRANT_MARRIAGE, {
+        subjectId: command.subjectId,
+      });
+      break;
+    case 'GRANT_CHILD':
+      game.events.emit(KingdomEvents.GRANT_CHILD, {
+        subjectId: command.subjectId,
+      });
+      break;
     case 'PAY_RANSOM':
       game.events.emit(KingdomEvents.PAY_RANSOM, { id: command.id });
       break;

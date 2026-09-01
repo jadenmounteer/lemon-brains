@@ -10,7 +10,7 @@ import {
   wallTextureKey,
   type AnimRole,
 } from './assetManifest';
-import { palette } from './palette';
+import { FORT_TILE } from '../buildings/buildingShared';
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -218,7 +218,8 @@ function drawUnitFrame(
   originX: number,
   role: AnimRole,
   facing: 'down' | 'left' | 'right' | 'up',
-  walkStep: number | null
+  walkStep: number | null,
+  clothOverride?: number
 ) {
   if (role === 'troll') {
     drawTrollFrame(ctx, originX, facing, walkStep);
@@ -264,7 +265,7 @@ function drawUnitFrame(
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
-  const cloth = clothFor(role);
+  const cloth = clothOverride ?? clothFor(role);
   const tall = 0;
   const skinTone = role === 'zombie' ? palette.skinZombie : palette.skin;
 
@@ -888,10 +889,15 @@ function drawRoyalFrame(
   }
 }
 
-function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
+function drawUnitSheet(
+  scene: Phaser.Scene,
+  role: AnimRole,
+  opts?: { key?: string; cloth?: number }
+) {
+  const key = opts?.key ?? role;
   const width = UNIT_WIDTH * UNIT_FRAME_COUNT;
   const height = UNIT_HEIGHT;
-  const tex = createCanvas(scene, role, width, height);
+  const tex = createCanvas(scene, key, width, height);
   const ctx = tex.getContext();
   ctx.clearRect(0, 0, width, height);
 
@@ -902,19 +908,19 @@ function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
     'up',
   ];
 
-  drawUnitFrame(ctx, 0, role, 'down', null);
+  drawUnitFrame(ctx, 0, role, 'down', null, opts?.cloth);
 
   let frame = 1;
   for (const facing of facings) {
     for (let step = 0; step < 4; step++) {
-      drawUnitFrame(ctx, frame * UNIT_WIDTH, role, facing, step);
+      drawUnitFrame(ctx, frame * UNIT_WIDTH, role, facing, step, opts?.cloth);
       frame++;
     }
   }
 
   tex.refresh();
 
-  const sheet = scene.textures.get(role);
+  const sheet = scene.textures.get(key);
   for (let i = 0; i < UNIT_FRAME_COUNT; i++) {
     const name = String(i);
     if (!sheet.has(name)) {
@@ -923,12 +929,29 @@ function drawUnitSheet(scene: Phaser.Scene, role: AnimRole) {
   }
 }
 
+function drawPeasantVariantSheets(scene: Phaser.Scene): void {
+  const variants: Array<[string, number]> = [
+    ['peasant_elder_m', palette.stoneDark],
+    ['peasant_elder_f', 0xb8a898],
+    ['peasant_farmer', 0x5a7a3a],
+    ['peasant_baker', 0xd4a574],
+    ['peasant_merchant', 0x8b6914],
+    ['peasant_fisher', 0x3a5a7a],
+  ];
+  for (const [key, cloth] of variants) {
+    drawUnitSheet(scene, 'peasant', { key, cloth });
+  }
+}
+
 function drawKeep(scene: Phaser.Scene) {
-  // ~2× former keep — multi-room exterior + readable floor plan interior
-  const w = 160;
-  const h = 124;
+  const scale = 5;
+  const baseW = 160;
+  const baseH = 124;
+  const w = baseW * scale;
+  const h = baseH * scale;
   const tex = createCanvas(scene, PROP_KEYS.keep, w, h);
   const ctx = tex.getContext();
+  ctx.scale(scale, scale);
   // Outer bailey wall
   fillRect(ctx, 6, 28, 148, 88, palette.stone);
   fillRect(ctx, 6, 28, 148, 2, palette.ink);
@@ -964,6 +987,7 @@ function drawKeep(scene: Phaser.Scene) {
 
   const int = createCanvas(scene, PROP_KEYS.keepInterior, w, h);
   const ic = int.getContext();
+  ic.scale(scale, scale);
   // Base stone floor
   fillRect(ic, 6, 28, 148, 88, palette.stoneDark);
   // Courtyard (south-center, lighter)
@@ -1086,26 +1110,31 @@ function drawHouse(scene: Phaser.Scene) {
   int.refresh();
 }
 
-/** Neighbor bits: N=1 E=2 S=4 W=8 */
+/** Neighbor bits: N=1 E=2 S=4 W=8 — wide battlements (3 NPCs abreast). */
 function drawWallVariant(scene: Phaser.Scene, mask: number, key: string) {
-  const w = 16;
-  const h = 32;
+  const w = FORT_TILE;
+  const h = FORT_TILE * 2;
   const tex = createCanvas(scene, key, w, h);
   const ctx = tex.getContext();
-  // Thick stone base (10px wide)
-  fillRect(ctx, 3, 10, 10, 18, palette.stone);
-  fillRect(ctx, 3, 10, 10, 1, palette.ink);
-  if (mask & 1) fillRect(ctx, 4, 0, 8, 12, palette.stone);
-  if (mask & 4) fillRect(ctx, 4, 26, 8, 6, palette.stone);
-  if (mask & 2) fillRect(ctx, 10, 12, 6, 12, palette.stone);
-  if (mask & 8) fillRect(ctx, 0, 12, 6, 12, palette.stone);
-  // Crenellated parapet — alternating merlons
-  fillRect(ctx, 3, 4, 3, 6, palette.stone);
-  fillRect(ctx, 10, 4, 3, 6, palette.stone);
-  fillRect(ctx, 3, 4, 3, 1, palette.ink);
-  fillRect(ctx, 10, 4, 3, 1, palette.ink);
-  fillRect(ctx, 3, 10, 1, 18, palette.stoneDark);
-  fillRect(ctx, 12, 10, 1, 18, palette.stoneDark);
+  const pad = 4;
+  const coreW = w - pad * 2;
+  // Thick stone walkway
+  fillRect(ctx, pad, h * 0.35, coreW, h * 0.55, palette.stone);
+  fillRect(ctx, pad, h * 0.35, coreW, 2, palette.ink);
+  if (mask & 1) fillRect(ctx, pad + 4, 0, coreW - 8, h * 0.42, palette.stone);
+  if (mask & 4) fillRect(ctx, pad + 4, h * 0.82, coreW - 8, h * 0.18, palette.stone);
+  if (mask & 2) fillRect(ctx, w - pad - 8, h * 0.38, 10, h * 0.5, palette.stone);
+  if (mask & 8) fillRect(ctx, pad - 2, h * 0.38, 10, h * 0.5, palette.stone);
+  // Crenellations — wide merlons across the top
+  for (let i = 0; i < 3; i++) {
+    const mx = pad + 6 + i * (coreW / 3);
+    fillRect(ctx, mx, h * 0.22, coreW / 4 - 4, h * 0.16, palette.stone);
+    fillRect(ctx, mx, h * 0.22, coreW / 4 - 4, 2, palette.ink);
+  }
+  fillRect(ctx, pad, h * 0.35, 3, h * 0.55, palette.stoneDark);
+  fillRect(ctx, w - pad - 3, h * 0.35, 3, h * 0.55, palette.stoneDark);
+  // Walkway highlight (where NPCs stand)
+  fillRect(ctx, pad + 6, h * 0.52, coreW - 12, 4, 0x9a9f94);
   tex.refresh();
 }
 
@@ -1291,48 +1320,61 @@ function drawTavernInterior(scene: Phaser.Scene) {
 }
 
 function drawDrawbridge(scene: Phaser.Scene) {
-  const w = 32;
-  const h = 24;
+  const w = FORT_TILE;
+  const h = FORT_TILE * 2;
   const open = createCanvas(scene, PROP_KEYS.drawbridge, w, h);
   const octx = open.getContext();
-  fillRect(octx, 2, 12, 28, 10, palette.wood);
-  fillRect(octx, 2, 12, 28, 1, palette.ink);
+  fillRect(octx, 4, h * 0.55, w - 8, h * 0.32, palette.wood);
+  fillRect(octx, 4, h * 0.55, w - 8, 2, palette.ink);
   for (let i = 0; i < 5; i++) {
-    fillRect(octx, 4 + i * 5, 14, 2, 6, palette.woodDark);
+    fillRect(octx, 8 + i * ((w - 16) / 5), h * 0.58, 4, h * 0.22, palette.woodDark);
   }
-  fillRect(octx, 0, 6, 4, 8, palette.metal);
-  fillRect(octx, 28, 6, 4, 8, palette.metal);
-  fillRect(octx, 1, 6, 2, 6, palette.ink);
-  fillRect(octx, 29, 6, 2, 6, palette.ink);
+  fillRect(octx, 2, h * 0.38, 6, h * 0.2, palette.metal);
+  fillRect(octx, w - 8, h * 0.38, 6, h * 0.2, palette.metal);
+  fillRect(octx, 3, h * 0.38, 4, h * 0.16, palette.ink);
+  fillRect(octx, w - 7, h * 0.38, 4, h * 0.16, palette.ink);
+  // Stone jambs flush with wall width
+  fillRect(octx, 0, h * 0.35, 6, h * 0.45, palette.stone);
+  fillRect(octx, w - 6, h * 0.35, 6, h * 0.45, palette.stone);
   open.refresh();
 
   const closed = createCanvas(scene, PROP_KEYS.drawbridgeClosed, w, h);
   const cctx = closed.getContext();
-  fillRect(cctx, 6, 2, 20, 18, palette.wood);
-  fillRect(cctx, 6, 2, 20, 1, palette.ink);
-  fillRect(cctx, 8, 4, 2, 14, palette.woodDark);
-  fillRect(cctx, 15, 4, 2, 14, palette.woodDark);
-  fillRect(cctx, 22, 4, 2, 14, palette.woodDark);
-  fillRect(cctx, 12, 6, 8, 6, palette.stoneDark);
-  fillRect(cctx, 4, 0, 4, 4, palette.metal);
-  fillRect(cctx, 24, 0, 4, 4, palette.metal);
-  fillRect(cctx, 5, 0, 2, 3, palette.ink);
-  fillRect(cctx, 25, 0, 2, 3, palette.ink);
+  fillRect(cctx, 8, h * 0.32, w - 16, h * 0.48, palette.wood);
+  fillRect(cctx, 8, h * 0.32, w - 16, 2, palette.ink);
+  for (let i = 0; i < 4; i++) {
+    fillRect(cctx, 12 + i * 8, h * 0.36, 4, h * 0.38, palette.woodDark);
+  }
+  fillRect(cctx, w / 2 - 10, h * 0.42, 20, 14, palette.stoneDark);
+  fillRect(cctx, 2, h * 0.28, 8, 10, palette.metal);
+  fillRect(cctx, w - 10, h * 0.28, 8, 10, palette.metal);
+  fillRect(cctx, 0, h * 0.35, 6, h * 0.45, palette.stone);
+  fillRect(cctx, w - 6, h * 0.35, 6, h * 0.45, palette.stone);
   closed.refresh();
 }
 
 function drawStairs(scene: Phaser.Scene) {
-  const w = 20;
-  const h = 28;
+  const w = FORT_TILE;
+  const h = FORT_TILE * 2;
   const tex = createCanvas(scene, PROP_KEYS.stairs, w, h);
   const ctx = tex.getContext();
-  for (let i = 0; i < 6; i++) {
-    fillRect(ctx, 1 + i, 24 - i * 4, 18 - i * 2, 4, palette.stone);
-    fillRect(ctx, 1 + i, 24 - i * 4, 18 - i * 2, 1, palette.ink);
+  // Wall backing (flush with fort segment)
+  fillRect(ctx, 0, h * 0.35, w, h * 0.55, palette.stone);
+  fillRect(ctx, 0, h * 0.35, w, 2, palette.ink);
+  // Exterior stone steps climbing the wall face
+  for (let i = 0; i < 5; i++) {
+    const stepW = w - 8 - i * 4;
+    const stepX = 4 + i * 2;
+    const stepY = h - 8 - i * 14;
+    fillRect(ctx, stepX, stepY, stepW, 10, palette.stone);
+    fillRect(ctx, stepX, stepY, stepW, 2, palette.ink);
   }
-  fillRect(ctx, 7, 0, 6, 5, palette.stoneDark);
-  fillRect(ctx, 7, 0, 6, 1, palette.ink);
-  fillRect(ctx, 0, 8, 3, 16, palette.stone);
+  // Parapet notch at top
+  fillRect(ctx, w / 2 - 10, h * 0.22, 20, 12, palette.stoneDark);
+  fillRect(ctx, w / 2 - 10, h * 0.22, 20, 2, palette.ink);
+  // Side wall cheeks
+  fillRect(ctx, 0, h * 0.4, 5, h * 0.45, palette.stoneDark);
+  fillRect(ctx, w - 5, h * 0.4, 5, h * 0.45, palette.stoneDark);
   tex.refresh();
 }
 
@@ -1546,10 +1588,14 @@ function drawCave(scene: Phaser.Scene) {
 }
 
 function drawCathedral(scene: Phaser.Scene) {
-  const w = 64;
-  const h = 60;
+  const scale = 5;
+  const baseW = 64;
+  const baseH = 60;
+  const w = baseW * scale;
+  const h = baseH * scale;
   const tex = createCanvas(scene, PROP_KEYS.cathedral, w, h);
   const ctx = tex.getContext();
+  ctx.scale(scale, scale);
   fillRect(ctx, 8, 22, 48, 34, palette.stone);
   fillRect(ctx, 8, 22, 48, 2, palette.ink);
   for (let row = 0; row < 12; row++) {
@@ -1565,6 +1611,7 @@ function drawCathedral(scene: Phaser.Scene) {
 
   const int = createCanvas(scene, PROP_KEYS.cathedralInterior, w, h);
   const ic = int.getContext();
+  ic.scale(scale, scale);
   fillRect(ic, 8, 22, 48, 34, palette.stoneDark);
   fillRect(ic, 10, 24, 44, 30, 0x3a3a48);
   // aisle + altar
@@ -2152,6 +2199,12 @@ export function generateTextures(scene: Phaser.Scene): void {
   for (const key of [
     TERRAIN_KEY,
     ...uniqueSheetRoles(),
+    'peasant_elder_m',
+    'peasant_elder_f',
+    'peasant_farmer',
+    'peasant_baker',
+    'peasant_merchant',
+    'peasant_fisher',
     ...propKeys,
   ]) {
     if (scene.textures.exists(key)) {
@@ -2163,6 +2216,7 @@ export function generateTextures(scene: Phaser.Scene): void {
   for (const role of uniqueSheetRoles()) {
     drawUnitSheet(scene, role);
   }
+  drawPeasantVariantSheets(scene);
   drawKeep(scene);
   drawHouse(scene);
   drawWall(scene);

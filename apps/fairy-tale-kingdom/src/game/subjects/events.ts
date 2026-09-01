@@ -22,6 +22,9 @@ export const KingdomEvents = {
   HIRE_SUBJECT: 'kingdom:hire-subject',
   BEGIN_PLACE: 'kingdom:begin-place',
   CANCEL_PLACE: 'kingdom:cancel-place',
+  BEGIN_RELOCATE: 'kingdom:begin-relocate',
+  DEMOLISH_BUILDING: 'kingdom:demolish-building',
+  BUILDING_DEMOLISHED: 'kingdom:building-demolished',
   PLACE_MODE_CHANGED: 'kingdom:place-mode-changed',
   WALL_PLACED: 'kingdom:wall-placed',
   KINGDOM_STATS: 'kingdom:stats',
@@ -45,6 +48,10 @@ export const KingdomEvents = {
   SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
   CAMERA_ZOOM: 'kingdom:camera-zoom',
   TRAIN_AT_BUILDING: 'kingdom:train-at-building',
+  GRANT_MARRIAGE: 'kingdom:grant-marriage',
+  GRANT_CHILD: 'kingdom:grant-child',
+  MARRIAGE_HOUSE_SPENT: 'kingdom:marriage-house-spent',
+  AUTO_GRANT_FAMILY_WISH: 'kingdom:auto-grant-family-wish',
 } as const;
 
 export type SubjectSelectedPayload = SubjectSnapshot | null;
@@ -88,6 +95,21 @@ export interface WallPlacedPayload {
 export interface PlaceModePayload {
   active: boolean;
   kind: BuildKind | null;
+  mode?: 'place' | 'relocate';
+  buildingId?: string | null;
+}
+
+export interface BeginRelocatePayload {
+  buildingId: string;
+}
+
+export interface DemolishBuildingPayload {
+  buildingId: string;
+}
+
+export interface BuildingDemolishedPayload {
+  buildingId: string;
+  refund: number;
 }
 
 export type KingdomStatsPayload = KingdomStats;
@@ -170,4 +192,17 @@ export interface CameraZoomPayload {
 export interface TrainAtBuildingPayload {
   buildingId: string;
   role: UnitRole;
+}
+
+export interface GrantFamilyPayload {
+  subjectId: string;
+}
+
+export interface MarriageHouseSpentPayload {
+  cost: number;
+}
+
+export interface AutoGrantFamilyWishPayload {
+  kind: 'marry' | 'have_child';
+  subjectId: string;
 }

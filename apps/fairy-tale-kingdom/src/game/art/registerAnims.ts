@@ -11,6 +11,7 @@ import {
   walkFramesFor,
   type AnimRole,
 } from './assetManifest';
+import { PEASANT_VISUAL_KEYS } from './resolveSubjectTexture';
 
 function ensureAnim(
   scene: Phaser.Scene,
@@ -45,6 +46,11 @@ function registerRole(scene: Phaser.Scene, role: AnimRole) {
 export function registerAnims(scene: Phaser.Scene): void {
   for (const role of uniqueSheetRoles()) {
     registerRole(scene, role);
+  }
+  for (const key of PEASANT_VISUAL_KEYS) {
+    if (scene.textures.exists(key)) {
+      registerRole(scene, key as AnimRole);
+    }
   }
 
   if (scene.textures.exists(PROP_KEYS.hearthFire)) {

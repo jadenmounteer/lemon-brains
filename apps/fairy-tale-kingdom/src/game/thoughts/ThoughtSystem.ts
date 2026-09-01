@@ -9,6 +9,7 @@ import {
 import { Phase12Balance } from '../economy/phase12Balance';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
+import { isFamilyGoalKind } from '../family/familyGoals';
 import { roleLabel } from '../subjects/schedules';
 
 const IDLE_THOUGHTS = [
@@ -59,6 +60,8 @@ export class ThoughtSystem {
 
     const aspirant = CAREER_ASPIRANT_ROLES.includes(s.data.role);
     const goal = s.data.goal;
+
+    if (goal && isFamilyGoalKind(goal.kind)) return;
 
     if (goal?.kind.startsWith('become_')) {
       const target = goal.kind.slice('become_'.length) as UnitRole;

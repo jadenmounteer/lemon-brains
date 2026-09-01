@@ -22,8 +22,11 @@ import {
 import { TRAINABLE_ROLES } from '../../marketplace/rules';
 import { getSandboxRuntime } from '../sandboxRuntime';
 import { appendLifeLog as appendLifeLogEntry } from '../thoughts/lifeLog';
+import { appearanceTint, resolveSubjectTexture } from '../art/resolveSubjectTexture';
+import { FAMILY_GOAL_MARRY } from '../family/familyGoals';
 import { KingdomEvents } from './events';
 import { genderForNewSubject } from './gender';
+import { LEGEND_VILLAGERS } from './legendVillagers';
 import { pickName } from './names';
 import { roleLabel, slotAtHour } from './schedules';
 import type {
@@ -68,8 +71,18 @@ export type SubjectSpawnerDeps = {
     opts?: { temporaryPrincess?: boolean; married?: boolean }
   ) => boolean;
   notifyChanged: () => void;
-  displayTextureKey: (role: UnitRole) => UnitRole;
+  linkRoyalSpouses: () => void;
 };
+
+function randomAdultAge(): number {
+  return Math.random() < 0.85
+    ? 18 + Math.floor(Math.random() * 27)
+    : 55 + Math.floor(Math.random() * 18);
+}
+
+function appearanceVariantForSeed(seed: number): 0 | 1 | 2 | 3 | 4 | 5 {
+  return (seed % 6) as 0 | 1 | 2 | 3 | 4 | 5;
+}
 
 function defaultAgeYears(role: UnitRole): number {
   if (role === 'child') return 8;
@@ -84,6 +97,7 @@ function defaultAgeYears(role: UnitRole): number {
   ) {
     return 48 + Math.floor(Math.random() * 22);
   }
+  if (role === 'peasant') return randomAdultAge();
   return 25;
 }
 
@@ -182,8 +196,91 @@ export class SubjectSpawner {
     this.deps.scene.time.delayedCall(200, () =>
       this.deps.nudgeTowardSchedule(managed)
     );
+    if (role === 'king' || role === 'queen') {
+      this.deps.linkRoyalSpouses();
+    }
     this.deps.notifyChanged();
     return true;
+  }
+
+  /** Cross-household singles + elder couple + legend villagers for new kingdoms. */
+  seedStarterFamilies(houseIds: string[]): void {
+    if (houseIds.length < 2) return;
+
+    const [house0, house1, house2] = houseIds;
+    const maleId = `subject-${this.deps.registry.nextId++}`;
+    const femaleId = `subject-${this.deps.registry.nextId++}`;
+
+    this.createSubject('peasant', house0!, maleId, pickName(301), {
+      gender: 'male',
+      ageYears: 20 + Math.floor(Math.random() * 8),
+      appearanceVariant: 0,
+      happiness: 68,
+      skipBirthLog: true,
+    });
+    this.createSubject('peasant', house1!, femaleId, pickName(302), {
+      gender: 'female',
+      ageYears: 19 + Math.floor(Math.random() * 8),
+      appearanceVariant: 1,
+      happiness: 68,
+      skipBirthLog: true,
+    });
+
+    const male = this.deps.registry.getById(maleId)!;
+    const female = this.deps.registry.getById(femaleId)!;
+    const mName = male.data.name.split(',')[0]!;
+    const fName = female.data.name.split(',')[0]!;
+    male.data.goal = {
+      kind: FAMILY_GOAL_MARRY,
+      targetId: femaleId,
+      text: `I wish to marry ${fName}.`,
+    };
+    female.data.goal = {
+      kind: FAMILY_GOAL_MARRY,
+      targetId: maleId,
+      text: `I wish to marry ${mName}.`,
+    };
+
+    if (house2) {
+      const elderMId = `subject-${this.deps.registry.nextId++}`;
+      const elderFId = `subject-${this.deps.registry.nextId++}`;
+      this.createSubject('peasant', house2, elderMId, pickName(303), {
+        gender: 'male',
+        ageYears: 61,
+        appearanceVariant: 4,
+        married: true,
+        skipBirthLog: true,
+      });
+      this.createSubject('peasant', house2, elderFId, pickName(304), {
+        gender: 'female',
+        ageYears: 59,
+        appearanceVariant: 2,
+        married: true,
+        spouseId: elderMId,
+        skipBirthLog: true,
+      });
+      const elderM = this.deps.registry.getById(elderMId)!;
+      elderM.data.spouseId = elderFId;
+      elderM.data.married = true;
+    }
+
+    const legendHomes = [house0!, house1!];
+    for (let i = 0; i < Math.min(2, LEGEND_VILLAGERS.length); i++) {
+      const legend = LEGEND_VILLAGERS[i]!;
+      const id = `subject-${this.deps.registry.nextId++}`;
+      this.createSubject('peasant', legendHomes[i]!, id, legend.name, {
+        gender: legend.gender,
+        ageYears: legend.ageYears,
+        job: legend.job,
+        appearanceVariant: legend.appearanceVariant,
+        legendId: legend.id,
+        backstory: legend.backstory,
+        happiness: 72,
+        skipBirthLog: true,
+      });
+    }
+
+    this.deps.notifyChanged();
   }
 
   hireAtBuilding(buildingId: string, role: UnitRole): boolean {
@@ -256,14 +353,26 @@ export class SubjectSpawner {
         }
       }
     } else {
-      houseId = buildings.pickHouseForHire(
-        this.deps.registry.occupantCounts((id) =>
-          Boolean(buildings.getHousePoint(id))
-        )
+      const occupantCounts = this.deps.registry.occupantCounts((id) =>
+        Boolean(buildings.getHousePoint(id))
       );
-      if (!houseId) {
-        this.toast('No free beds — build a house first');
-        return false;
+      if (
+        (target.kind === 'house' || target.kind === 'manor') &&
+        !livesAtKeep(role)
+      ) {
+        const used = occupantCounts.get(target.id) ?? 0;
+        const cap = buildings.bedsFor(target.kind);
+        if (used >= cap) {
+          this.toast('No free beds at this house');
+          return false;
+        }
+        houseId = target.id;
+      } else {
+        houseId = buildings.pickHouseForHire(occupantCounts);
+        if (!houseId) {
+          this.toast('No free beds — build a house first');
+          return false;
+        }
       }
     }
 
@@ -335,6 +444,9 @@ export class SubjectSpawner {
     if (!ok) return false;
     managed.data.goal = null;
     this.deps.bindWorkplace(managed, role);
+    if (role === 'king' || role === 'queen') {
+      this.deps.linkRoyalSpouses();
+    }
     this.deps.notifyChanged();
     return true;
   }
@@ -396,6 +508,9 @@ export class SubjectSpawner {
       allegiance?: Subject['allegiance'];
       loyaltyKeepId?: string | null;
       spawnAt?: Point;
+      pendingChildHouseId?: string;
+      appearanceVariant?: 0 | 1 | 2 | 3 | 4 | 5;
+      legendId?: string;
     }
   ): void {
     const slot = slotAtHour(role, this.deps.getClockHour(), opts?.job);
@@ -411,8 +526,17 @@ export class SubjectSpawner {
     const ageYears = opts?.ageYears ?? defaultAgeYears(role);
     const body = opts?.body ?? 'average';
     const happiness = opts?.happiness ?? 60;
+    const appearanceVariant =
+      opts?.appearanceVariant ?? appearanceVariantForSeed(seed);
 
-    const texKey = this.deps.displayTextureKey(role);
+    const texKey = resolveSubjectTexture({
+      role,
+      gender,
+      ageYears,
+      job: opts?.job,
+      appearanceVariant,
+      legendId: opts?.legendId,
+    });
     const sprite = this.deps.scene.add.sprite(start.x, start.y, texKey, 0);
     sprite.setDepth(20);
     sprite.setOrigin(0.5, 1);
@@ -423,6 +547,10 @@ export class SubjectSpawner {
     sprite.input!.cursor = 'pointer';
     sprite.setData('subjectId', id);
     sprite.play(idleAnimKey(texKey));
+    const variantTint = appearanceTint(appearanceVariant);
+    if (variantTint && variantTint !== 0xffffff) {
+      sprite.setTint(variantTint);
+    }
 
     let lifeLog = opts?.lifeLog;
     if (!opts?.skipBirthLog && !lifeLog?.length) {
@@ -474,6 +602,9 @@ export class SubjectSpawner {
       campId: opts?.campId ?? null,
       allegiance: opts?.allegiance ?? 'kingdom',
       loyaltyKeepId: opts?.loyaltyKeepId ?? null,
+      pendingChildHouseId: opts?.pendingChildHouseId,
+      appearanceVariant,
+      legendId: opts?.legendId,
     };
 
     const managed: ManagedSubject = {

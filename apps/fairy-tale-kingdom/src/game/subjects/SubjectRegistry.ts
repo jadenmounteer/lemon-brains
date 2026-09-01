@@ -194,6 +194,9 @@ export class SubjectRegistry {
       campId: s.data.campId,
       allegiance: s.data.allegiance,
       loyaltyKeepId: s.data.loyaltyKeepId ?? null,
+      pendingChildHouseId: s.data.pendingChildHouseId,
+      appearanceVariant: s.data.appearanceVariant,
+      legendId: s.data.legendId,
     }));
   }
 

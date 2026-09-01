@@ -5,6 +5,8 @@ import {
   evaluateCareerAspiration,
   type CareerAspirationView,
 } from '../game/career/evaluateAspiration';
+import { isFamilyGoalKind } from '../game/family/familyGoals';
+import type { FamilyAspirationSnapshot } from '../game/subjects/types';
 import { useState } from 'react';
 
 interface InspectorPanelProps {
@@ -17,6 +19,8 @@ interface InspectorPanelProps {
   onTransformPeasant?: () => void;
   onCommandTroops?: (troopCount: number) => void;
   onPromoteCareer?: (targetRole: UnitRole, cost: number) => void;
+  onGrantMarriage?: () => void;
+  onGrantChild?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
   onCollapse?: () => void;
@@ -38,6 +42,50 @@ function buildAspirationInput(stats: KingdomStats): Parameters<
       executioner: stats.hasExecutioner ? 1 : 0,
     },
   };
+}
+
+function FamilyAspirationSection({
+  aspiration,
+  onGrant,
+  grantLabel,
+}: {
+  aspiration: FamilyAspirationSnapshot;
+  onGrant?: () => void;
+  grantLabel: string;
+}) {
+  return (
+    <div className="inspector-aspiration">
+      <h3 className="inspector-subhead">Family aspiration</h3>
+      <p>{aspiration.title}</p>
+      {aspiration.partnerName ? (
+        <p className="muted">With {aspiration.partnerName}</p>
+      ) : null}
+      <h4 className="inspector-subhead">Requirements</h4>
+      <ul className="schedule-list">
+        {aspiration.criteria.map((c) => (
+          <li key={c.id}>
+            {c.met ? '✓' : '✗'} {c.label}
+          </li>
+        ))}
+      </ul>
+      {onGrant && (
+        <button
+          type="button"
+          className="market-buy"
+          style={{ marginTop: '0.75rem' }}
+          disabled={!aspiration.canGrant}
+          title={aspiration.blockReason}
+          onClick={onGrant}
+        >
+          {grantLabel}
+          {aspiration.cost > 0 ? ` — ${aspiration.cost}g` : ''}
+        </button>
+      )}
+      {!aspiration.canGrant && aspiration.blockReason && (
+        <p className="muted">{aspiration.blockReason}</p>
+      )}
+    </div>
+  );
 }
 
 function AspirationSection({
@@ -88,6 +136,8 @@ export function InspectorPanel({
   onTransformPeasant,
   onCommandTroops,
   onPromoteCareer,
+  onGrantMarriage,
+  onGrantChild,
   collapsed = false,
   onExpand,
   onCollapse,
@@ -95,7 +145,7 @@ export function InspectorPanel({
   const [troopCount, setTroopCount] = useState(3);
 
   const aspiration = useMemo(() => {
-    if (!subject.goal) return null;
+    if (!subject.goal || isFamilyGoalKind(subject.goal.kind)) return null;
     return evaluateCareerAspiration(
       { role: subject.role, goal: subject.goal },
       buildAspirationInput(stats),
@@ -224,7 +274,23 @@ export function InspectorPanel({
           <span className="muted">Thinking</span> “{subject.thought}”
         </p>
       ) : null}
-      {aspiration ? (
+      {subject.familyAspiration ? (
+        <FamilyAspirationSection
+          aspiration={subject.familyAspiration}
+          grantLabel={
+            subject.familyAspiration.kind === 'marry'
+              ? 'Grant marriage'
+              : 'Grant child'
+          }
+          onGrant={
+            subject.familyAspiration.kind === 'marry'
+              ? onGrantMarriage
+              : subject.familyAspiration.kind === 'have_child'
+                ? onGrantChild
+                : undefined
+          }
+        />
+      ) : aspiration ? (
         <AspirationSection
           aspiration={aspiration}
           onPromote={

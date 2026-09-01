@@ -139,8 +139,16 @@ export class BuildingCombat {
     this.host.vfx?.impactShake(b.sprite);
   }
 
-  private destroyBuilding(b: BuildingRecord): void {
-    const burned = isBurnable(b.kind);
+  /** Player-initiated demolish (no burn VFX / siege toasts). */
+  demolishBuilding(b: BuildingRecord): void {
+    this.destroyBuilding(b, { playerDemolish: true });
+  }
+
+  private destroyBuilding(
+    b: BuildingRecord,
+    opts?: { playerDemolish?: boolean }
+  ): void {
+    const burned = !opts?.playerDemolish && isBurnable(b.kind);
     this.host.burningIds.delete(b.id);
     this.host.vfx?.stopBurn(b.id);
     if (burned) {
@@ -155,7 +163,7 @@ export class BuildingCombat {
         this.host.removeRecord(s);
       }
     }
-    if (isFortKind(b.kind)) {
+    if (!opts?.playerDemolish && isFortKind(b.kind)) {
       this.host.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message:
           b.kind === 'drawbridge'

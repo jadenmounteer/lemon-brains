@@ -37,6 +37,10 @@ import { BuildingInteriors } from './BuildingInteriors';
 import { BuildingPlacement } from './BuildingPlacement';
 import { BuildingQueries } from './BuildingQueries';
 import {
+  buildingRefundCost,
+  isMovableKind,
+} from './buildingManagement';
+import {
   KEEP_ID,
   FORT_TILE,
   WALL_PLACE_CELLS,
@@ -49,6 +53,7 @@ import {
   intersects,
   pointInAabb,
   textureFor,
+  snapCoord,
   type Aabb,
   type BuildingRecord,
 } from './buildingShared';
@@ -182,6 +187,8 @@ export class BuildingSystem {
       previewWallMask: (x, y) => this.previewWallMask(x, y),
       addBuilding: (...args) => this.addBuilding(...args),
       replaceWallWithGate: (id) => this.replaceWallWithGate(id),
+      commitRelocate: (id, x, y, rotation) =>
+        this.commitRelocate(id, x, y, rotation),
       afterPlacementCommit: () => {
         this.recomputeHouseLabels();
         this.refreshWallTextures();
@@ -274,6 +281,28 @@ export class BuildingSystem {
     this.refreshWallTextures();
     this.rebuildPathGrid();
     this.rebuildWallPathGrid();
+  }
+
+  /** Starter dwellings for seeded peasant families (new kingdom). */
+  seedFamilyHomes(): string[] {
+    const offsets = [
+      { x: 100, y: 60 },
+      { x: -110, y: 70 },
+      { x: 130, y: -90 },
+    ];
+    const ids: string[] = [];
+    for (const off of offsets) {
+      const x = this.keep.x + off.x;
+      const y = this.keep.y + off.y;
+      if (!this.canPlaceAt('house', x, y)) continue;
+      const rec = this.addBuilding('house', x, y);
+      ids.push(rec.id);
+    }
+    this.recomputeHouseLabels();
+    this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
+    this.onLayoutChanged?.();
+    return ids;
   }
 
   restore(
@@ -820,6 +849,34 @@ export class BuildingSystem {
     return this.buildings;
   }
 
+  /** Walkable point near the keep for auto-placed family homes. */
+  spawnPointNearKeep(kind: BuildKind = 'house'): Point | null {
+    const offsets = [
+      { x: 120, y: 40 },
+      { x: -120, y: 50 },
+      { x: 80, y: -100 },
+      { x: -90, y: -80 },
+    ];
+    for (const off of offsets) {
+      const x = this.keep.x + off.x;
+      const y = this.keep.y + off.y;
+      if (this.canPlaceAt(kind, x, y)) {
+        return { x, y };
+      }
+    }
+    return null;
+  }
+
+  addPlayerHouse(x: number, y: number): BuildingRecord | null {
+    if (!this.canPlaceAt('house', x, y)) return null;
+    const rec = this.addBuilding('house', x, y);
+    this.recomputeHouseLabels();
+    this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
+    this.onLayoutChanged?.();
+    return rec;
+  }
+
   getById(id: string): BuildingRecord | undefined {
     if (id === KEEP_ID && this.keepHp > 0 && this.keepSprite) {
       return {
@@ -1023,6 +1080,44 @@ export class BuildingSystem {
 
   beginPlace(kind: BuildKind, maxWallCells?: number): void {
     this.placement.beginPlace(kind, maxWallCells);
+  }
+
+  beginRelocate(buildingId: string): boolean {
+    const b = this.getById(buildingId);
+    if (!b || !isMovableKind(b.kind)) return false;
+    this.placement.beginRelocate(b);
+    return true;
+  }
+
+  isRelocating(): boolean {
+    return this.placement.isRelocating();
+  }
+
+  placementMode(): 'place' | 'relocate' | null {
+    return this.placement.placementMode();
+  }
+
+  relocatingBuildingId(): string | null {
+    return this.placement.relocatingBuildingId();
+  }
+
+  demolishBuilding(id: string): { ok: boolean; refund: number; reason?: string } {
+    if (id === KEEP_ID) {
+      return { ok: false, refund: 0, reason: 'Cannot demolish the keep' };
+    }
+    const b = this.getById(id);
+    if (!b) {
+      return { ok: false, refund: 0, reason: 'Building not found' };
+    }
+    const refund = buildingRefundCost(b.kind);
+    this.combat.demolishBuilding(b);
+    this.recomputeHouseLabels();
+    this.refreshWallTextures();
+    this.applyDrawbridgeState();
+    this.rebuildPathGrid();
+    this.rebuildWallPathGrid();
+    this.onLayoutChanged?.();
+    return { ok: true, refund };
   }
 
   beginWallDrag(worldX: number, worldY: number): void {
@@ -1514,7 +1609,26 @@ export class BuildingSystem {
     worldX: number,
     worldY: number
   ): { x: number; y: number; replaceWallId?: string } | null {
-    // Prefer an empty fort cell that already sits in the wall line (true gap).
+    // Prefer replacing the wall segment under the cursor (drawbridge snaps into the wall).
+    let bestWall: BuildingRecord | null = null;
+    let bestWallD = GATE_SNAP_DIST;
+    for (const w of this.buildings) {
+      if (w.kind !== 'wall') continue;
+      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
+      if (d < bestWallD) {
+        bestWallD = d;
+        bestWall = w;
+      }
+    }
+    if (bestWall && bestWallD <= GATE_SNAP_DIST * 0.85) {
+      return {
+        x: bestWall.x,
+        y: bestWall.y,
+        replaceWallId: bestWall.id,
+      };
+    }
+
+    // Empty fort cell in the wall line (true gap).
     let bestGap: { x: number; y: number } | null = null;
     let bestGapD = GATE_SNAP_DIST;
     let bestGapScore = -1;
@@ -1575,8 +1689,7 @@ export class BuildingSystem {
   }
 
   /**
-   * Stairs sit on the empty fort cell beside a wall (toward the cursor),
-   * so they don't stack on the battlements or collide with neighbor segments.
+   * Stairs mount flush on the wall segment (same fort cell), with steps on the exterior face.
    */
   findWallSnap(
     worldX: number,
@@ -1586,23 +1699,10 @@ export class BuildingSystem {
     let bestD = STAIR_SNAP_DIST;
     for (const w of this.buildings) {
       if (w.kind !== 'wall') continue;
-      const sides = [
-        { x: w.x, y: w.y + FORT_TILE },
-        { x: w.x, y: w.y - FORT_TILE },
-        { x: w.x + FORT_TILE, y: w.y },
-        { x: w.x - FORT_TILE, y: w.y },
-      ];
-      for (const side of sides) {
-        if (this.fortOccupied(side.x, side.y)) continue;
-        // Also accept when the pointer is on the wall itself — still pick this side
-        // if it's the nearest free approach cell for that wall.
-        const dSide = Phaser.Math.Distance.Between(worldX, worldY, side.x, side.y);
-        const dWall = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
-        const d = Math.min(dSide, dWall + FORT_TILE * 0.35);
-        if (d < bestD) {
-          bestD = d;
-          best = { x: side.x, y: side.y, wallId: w.id };
-        }
+      const d = Phaser.Math.Distance.Between(worldX, worldY, w.x, w.y);
+      if (d < bestD) {
+        bestD = d;
+        best = { x: w.x, y: w.y, wallId: w.id };
       }
     }
     return best;
@@ -1686,7 +1786,8 @@ export class BuildingSystem {
     y: number,
     wallId?: string | null,
     rotation: 0 | 90 = 0,
-    replaceWallId?: string | null
+    replaceWallId?: string | null,
+    ignoreBuildingId?: string | null
   ): boolean {
     if (kind === 'field' && !this.canPlaceField()) return false;
     if (kind === 'stairs' && !wallId) return false;
@@ -1698,7 +1799,18 @@ export class BuildingSystem {
         return false;
       }
     }
-    if (isFortKind(kind) && this.fortOccupied(x, y, replaceWallId ?? undefined)) {
+    if (kind === 'stairs' && wallId) {
+      const wall = this.getById(wallId);
+      if (!wall || wall.kind !== 'wall') return false;
+      if (fortKey(wall.x, wall.y) !== fortKey(x, y)) return false;
+      const hasStairs = this.buildings.some(
+        (s) => s.kind === 'stairs' && s.attachedWallId === wallId
+      );
+      if (hasStairs) return false;
+    } else if (
+      isFortKind(kind) &&
+      this.fortOccupied(x, y, replaceWallId ?? wallId ?? undefined)
+    ) {
       return false;
     }
     const candidate =
@@ -1718,6 +1830,7 @@ export class BuildingSystem {
       if (intersects(candidate, keepBox)) return false;
     }
     for (const b of this.buildings) {
+      if (ignoreBuildingId && b.id === ignoreBuildingId) continue;
       // Stairs sit against walls; ignore fort collision so continuous runs work.
       if (kind === 'stairs' && isFortKind(b.kind)) continue;
       // Drawbridge replacing this wall segment, or stairs attached to it.
@@ -1735,6 +1848,42 @@ export class BuildingSystem {
         if (intersects(candidate, unit)) return false;
       }
     }
+    return true;
+  }
+
+  private commitRelocate(
+    buildingId: string,
+    x: number,
+    y: number,
+    rotation: 0 | 90 = 0
+  ): boolean {
+    const b = this.getById(buildingId);
+    if (!b || !isMovableKind(b.kind)) return false;
+    if (
+      !this.canPlaceAt(b.kind, x, y, null, rotation, null, buildingId)
+    ) {
+      return false;
+    }
+    const px =
+      b.kind === 'road' || b.kind === 'dock' || b.kind === 'bridge'
+        ? fortSnap(x)
+        : snapCoord(x);
+    const py =
+      b.kind === 'road' || b.kind === 'dock' || b.kind === 'bridge'
+        ? fortSnap(y)
+        : snapCoord(y);
+    b.x = px;
+    b.y = py;
+    b.sprite.setPosition(px, py);
+    b.sprite.setAlpha(1);
+    if (b.kind === 'bridge') {
+      b.rotation = rotation;
+      b.sprite.setTexture(
+        rotation === 90 ? PROP_KEYS.bridgeV : PROP_KEYS.bridge
+      );
+    }
+    b.interiorSprite?.setPosition(px, py).setAlpha(1);
+    b.hearthSprite?.setPosition(px, py + 6);
     return true;
   }
 

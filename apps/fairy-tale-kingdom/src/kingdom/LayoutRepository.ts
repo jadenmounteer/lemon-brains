@@ -90,6 +90,9 @@ export interface SavedSubject {
   campId?: string | null;
   allegiance?: 'kingdom' | 'camp';
   loyaltyKeepId?: string | null;
+  pendingChildHouseId?: string;
+  appearanceVariant?: 0 | 1 | 2 | 3 | 4 | 5;
+  legendId?: string;
 }
 
 export interface LayoutRoyaltyState {
@@ -266,5 +269,15 @@ function normalizeSubject(s: SavedSubject): SavedSubject {
     interrupt: s.interrupt ?? undefined,
     campId: typeof s.campId === 'string' ? s.campId : undefined,
     allegiance: s.allegiance === 'camp' ? 'camp' : undefined,
+    loyaltyKeepId: s.loyaltyKeepId ?? undefined,
+    pendingChildHouseId:
+      typeof s.pendingChildHouseId === 'string' ? s.pendingChildHouseId : undefined,
+    appearanceVariant:
+      typeof s.appearanceVariant === 'number' &&
+      s.appearanceVariant >= 0 &&
+      s.appearanceVariant <= 5
+        ? (s.appearanceVariant as 0 | 1 | 2 | 3 | 4 | 5)
+        : undefined,
+    legendId: typeof s.legendId === 'string' ? s.legendId : undefined,
   };
 }

@@ -34,13 +34,16 @@ export const BUILDING_ROLE_CAPACITY: Partial<
   keep: {
     duke: 1,
     duchess: 1,
-    /** Castle staff share peasant slots on the keep. */
+    /** Castle staff slots (cook, servant, steward, scribe, cupbearer). */
     peasant: 8,
   },
   gallows: {
     executioner: 1,
   },
   dock: {
+    peasant: 3,
+  },
+  house: {
     peasant: 3,
   },
 };

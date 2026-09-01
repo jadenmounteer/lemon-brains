@@ -1,22 +1,22 @@
 import { layoutPoint } from './layoutUtils';
 
-const ALTAR = { x: 0, y: -14 };
-const BISHOP = { x: 0, y: -10 };
-const DOOR = { x: 0, y: 22 };
+const ALTAR = { x: 0, y: -70 };
+const BISHOP = { x: 0, y: -50 };
+const DOOR = { x: 0, y: 110 };
 const PEW_LEFT = [
-  { x: -18, y: 4 },
-  { x: -18, y: 12 },
-  { x: -18, y: 20 },
+  { x: -90, y: 20 },
+  { x: -90, y: 60 },
+  { x: -90, y: 100 },
 ];
 const PEW_RIGHT = [
-  { x: 18, y: 4 },
-  { x: 18, y: 12 },
-  { x: 18, y: 20 },
+  { x: 90, y: 20 },
+  { x: 90, y: 60 },
+  { x: 90, y: 100 },
 ];
 const AISLE = [
-  { x: -8, y: 14 },
-  { x: 0, y: 8 },
-  { x: 8, y: 14 },
+  { x: -40, y: 70 },
+  { x: 0, y: 40 },
+  { x: 40, y: 70 },
 ];
 
 export function cathedralAltar(origin: { x: number; y: number }): { x: number; y: number } {

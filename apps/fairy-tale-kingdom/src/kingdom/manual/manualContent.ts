@@ -325,14 +325,14 @@ export function buildManualSections(): ManualSection[] {
       id: 'families',
       label: 'Families & weddings',
       intro: [
-        'Love, houses, and heirs keep the parchment interesting. Watch couples court, marry under the bishop, and fill beds with children.',
+        'Villagers from different houses can fall in love and wish to marry. Open the inspector and grant marriage when the cathedral, bishop, and a home with room (or gold for a new house) are ready. Married couples may wish for a child — grant when a bed is free somewhere in the village. The Fairy Godmother may poof these wishes automatically in Learning Mode. Elders at 55+ look different; trades wear job clothes.',
       ],
       entries: [
         {
           artKey: 'prop:venueWedding',
           title: 'Weddings',
           body: [
-            'A bishop at a cathedral can marry eligible pairs (including prince and princess).',
+            'Cross-household couples earn mutual marry aspirations. Grant the wish when a bishop serves at the cathedral and housing is ready — the full ceremony runs in the square, then spouses share a home.',
             'Ceremony stages: guests gather → aisle procession → bishop rite (“I do!”) → cheers → feast handoff in the keep banquet hall. Nearby guests (capped) gain happiness.',
             'Married pairs share a house when beds allow; a temporary ball-princess who weds a prince stays a princess forever.',
           ],
@@ -341,7 +341,8 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:peasant',
           title: 'Peasant families',
           body: [
-            'Married commoners who live together may become pregnant (multi-day). Children play, grow, and join the workforce. If a house is haunted or burned, tenants flee to other beds — overflow can lose people.',
+            'Married commoners may wish for a child — grant only when a free bed exists (yours or elsewhere in the village). Pregnancy lasts several days, then a child is born into the chosen house.',
+            'Children play, grow, and join the workforce. No passive daily pregnancy rolls — children come from granted wishes. If a house is haunted or burned, tenants flee to other beds.',
           ],
         },
         {

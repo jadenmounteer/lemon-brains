@@ -27,10 +27,14 @@ import {
   KingdomEvents,
   type ArrestCampPayload,
   type BeginPlacePayload,
+  type BeginRelocatePayload,
   type BuyNavalPayload,
   type CareerHirePayload,
   type CommandDetachmentPayload,
   type DestroyCampPayload,
+  type DemolishBuildingPayload,
+  type AutoGrantFamilyWishPayload,
+  type GrantFamilyPayload,
   type FocusCampPayload,
   type CameraZoomPayload,
   type HireSubjectPayload,
@@ -47,6 +51,7 @@ import { TaskSystem } from '../subjects/TaskSystem';
 import { setWorldBiomes } from '../subjects/zones';
 import { ThoughtSystem } from '../thoughts/ThoughtSystem';
 import { FamilySystem } from '../family/FamilySystem';
+import { FamilyAspirationService } from '../family/FamilyAspirationService';
 import { WitchSystem } from '../witches/WitchSystem';
 import { EventVenueSystem } from '../events/EventVenueSystem';
 import { FestivalFunSystem } from '../events/FestivalFunSystem';
@@ -108,6 +113,7 @@ export class KingdomScene extends Phaser.Scene {
   private encampments!: EncampmentSystem;
   private thoughts!: ThoughtSystem;
   private family!: FamilySystem;
+  private familyAspirations!: FamilyAspirationService;
   private witches!: WitchSystem;
   private venues!: EventVenueSystem;
   private justice!: JusticeSystem; // used via executeCaptive
@@ -302,7 +308,16 @@ export class KingdomScene extends Phaser.Scene {
 
     this.thieves = new ThiefSystem(this, this.subjects, this.buildings);
     this.thoughts = new ThoughtSystem(this.subjects, this.buildings);
-    this.family = new FamilySystem(this, this.subjects, this.buildings);
+    this.familyAspirations = new FamilyAspirationService(
+      this.subjects,
+      this.buildings
+    );
+    this.family = new FamilySystem(
+      this,
+      this.subjects,
+      this.buildings,
+      this.familyAspirations
+    );
     this.witches = new WitchSystem(this, this.subjects, this.encampments);
     this.venues = new EventVenueSystem(
       this,
@@ -320,6 +335,10 @@ export class KingdomScene extends Phaser.Scene {
       this.buildings,
       this.bubbles
     );
+    this.weddingCeremony.setOnRiteComplete(() => {
+      const pending = this.family.consumePendingMarriage();
+      if (pending) this.family.applyMarriageHome(pending);
+    });
     this.dungeonLife = new DungeonLifeSystem(this, this.subjects, this.buildings, {
       getCaptives: () => this.captives,
       addCaptive: (c) => {
@@ -355,6 +374,7 @@ export class KingdomScene extends Phaser.Scene {
       this,
       this.subjects,
       this.buildings,
+      this.family,
       {
         getGold: () => this.game.registry.get('goldBalance') as number ?? 0,
         infiniteGold: () => Boolean(this.game.registry.get('infiniteGold')),
@@ -362,8 +382,19 @@ export class KingdomScene extends Phaser.Scene {
           const m = this.game.registry.get('kingdomGameMode');
           return m === 'learning' ? 'learning' : 'normal';
         },
+        weddingActive: () => this.weddingCeremony.isActive(),
       }
     );
+    this.subjects.setFamilyEvaluator((subjectId) => {
+      const gold = (this.game.registry.get('goldBalance') as number) ?? 0;
+      const infiniteGold = Boolean(this.game.registry.get('infiniteGold'));
+      return this.family.evaluateFor(
+        subjectId,
+        gold,
+        infiniteGold,
+        this.weddingCeremony.isActive()
+      );
+    });
     this.joustSpectacle = new JoustSpectacleSystem(
       this,
       this.subjects,
@@ -528,6 +559,10 @@ export class KingdomScene extends Phaser.Scene {
     } else {
       // New kingdom or map-size migrate: keep only, no units, seed camps
       this.buildings.seedStarters(WORLD_WIDTH, WORLD_HEIGHT);
+      const houseIds = this.buildings.seedFamilyHomes();
+      if (houseIds.length >= 2) {
+        this.subjects.seedStarterFamilies(houseIds);
+      }
       this.monsters.seedIfEmpty();
       this.encampments.seedStarterCamps(
         kingdomGameMode === 'learning'
@@ -668,12 +703,17 @@ export class KingdomScene extends Phaser.Scene {
           this.buildings.placingKind() === 'wall' &&
           this.buildings.isWallDragging();
         if (wallDrag || !wasPan) {
+          const relocating = this.buildings.isRelocating();
           const commit = this.buildings.tryCommitPlaceDetailed();
           if (commit.committed) {
             this.emitPlaceMode();
             this.world.emitStats();
             this.world.schedulePersist();
-            if (commit.wallCells > 0) {
+            if (commit.relocated) {
+              this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+                message: 'Building moved',
+              });
+            } else if (commit.wallCells > 0) {
               this.game.events.emit(KingdomEvents.WALL_PLACED, {
                 cells: commit.wallCells,
               });
@@ -685,8 +725,9 @@ export class KingdomScene extends Phaser.Scene {
           } else {
             const kind = this.buildings.placingKind();
             this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-              message:
-                kind === 'stairs'
+              message: relocating
+                ? 'Cannot move here'
+                : kind === 'stairs'
                   ? 'Stairs must snap beside a wall'
                   : kind === 'drawbridge'
                     ? 'Drawbridge must snap to a wall or wall gap'
@@ -743,10 +784,11 @@ export class KingdomScene extends Phaser.Scene {
 
     this.input.keyboard?.on('keydown-ESC', () => {
       if (this.buildings.isPlacing()) {
+        const relocating = this.buildings.isRelocating();
         this.buildings.cancelPlace();
         this.emitPlaceMode();
         this.game.events.emit(KingdomEvents.MARKET_TOAST, {
-          message: 'Placement cancelled',
+          message: relocating ? 'Move cancelled' : 'Placement cancelled',
         });
       } else {
         this.clearFollowCam();
@@ -770,7 +812,16 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.CLEAR_SELECTION, this.onClearSelection);
     this.game.events.on(KingdomEvents.HIRE_SUBJECT, this.onHire);
     this.game.events.on(KingdomEvents.TRAIN_AT_BUILDING, this.onTrainAtBuilding);
+    this.game.events.on(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
     this.game.events.on(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+    this.game.events.on(KingdomEvents.BEGIN_RELOCATE, this.onBeginRelocate);
+    this.game.events.on(KingdomEvents.DEMOLISH_BUILDING, this.onDemolishBuilding);
+    this.game.events.on(KingdomEvents.GRANT_MARRIAGE, this.onGrantMarriage);
+    this.game.events.on(KingdomEvents.GRANT_CHILD, this.onGrantChild);
+    this.game.events.on(
+      KingdomEvents.AUTO_GRANT_FAMILY_WISH,
+      this.onAutoGrantFamilyWish
+    );
     this.game.events.on(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
     this.game.events.on(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.on(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
@@ -916,6 +967,14 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.TRAIN_AT_BUILDING, this.onTrainAtBuilding);
     this.game.events.off(KingdomEvents.BEGIN_PLACE, this.onBeginPlace);
     this.game.events.off(KingdomEvents.CANCEL_PLACE, this.onCancelPlace);
+    this.game.events.off(KingdomEvents.BEGIN_RELOCATE, this.onBeginRelocate);
+    this.game.events.off(KingdomEvents.DEMOLISH_BUILDING, this.onDemolishBuilding);
+    this.game.events.off(KingdomEvents.GRANT_MARRIAGE, this.onGrantMarriage);
+    this.game.events.off(KingdomEvents.GRANT_CHILD, this.onGrantChild);
+    this.game.events.off(
+      KingdomEvents.AUTO_GRANT_FAMILY_WISH,
+      this.onAutoGrantFamilyWish
+    );
     this.game.events.off(KingdomEvents.ROYAL_CAPTURED, this.onRoyalCaptured);
     this.game.events.off(KingdomEvents.PAY_RANSOM, this.onPayRansom);
     this.game.events.off(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
@@ -1010,6 +1069,113 @@ export class KingdomScene extends Phaser.Scene {
     this.emitPlaceMode();
   };
 
+  private onBeginRelocate = (payload: BeginRelocatePayload) => {
+    const ok = this.buildings.beginRelocate(payload.buildingId);
+    if (ok) {
+      this.emitPlaceMode();
+    } else {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Cannot move this building',
+      });
+    }
+  };
+
+  private onDemolishBuilding = (payload: DemolishBuildingPayload) => {
+    const result = this.buildings.demolishBuilding(payload.buildingId);
+    if (result.ok) {
+      this.world.emitStats();
+      this.world.schedulePersist();
+      this.publishBuildingSelection(null);
+      this.game.events.emit(KingdomEvents.BUILDING_DEMOLISHED, {
+        buildingId: payload.buildingId,
+        refund: result.refund,
+      });
+    } else {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: result.reason ?? 'Cannot demolish',
+      });
+    }
+  };
+
+  private onAutoGrantFamilyWish = (payload: AutoGrantFamilyWishPayload) => {
+    if (payload.kind === 'marry') {
+      this.onGrantMarriage({ subjectId: payload.subjectId });
+      return;
+    }
+    this.onGrantChild({ subjectId: payload.subjectId });
+  };
+
+  private onGrantMarriage = (payload: GrantFamilyPayload) => {
+    const gold = (this.game.registry.get('goldBalance') as number) ?? 0;
+    const infiniteGold = Boolean(this.game.registry.get('infiniteGold'));
+    const result = this.family.tryGrantMarriage(
+      payload.subjectId,
+      gold,
+      infiniteGold,
+      this.weddingCeremony.isActive()
+    );
+    if (!result || 'error' in result) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message:
+          result && 'error' in result ? result.error : 'Cannot grant marriage',
+      });
+      return;
+    }
+    const bishop = this.subjects
+      .listManaged()
+      .find((s) => s.data.role === 'bishop');
+    const cathedral = this.buildings.list().find((b) => b.kind === 'cathedral');
+    if (!bishop || !cathedral) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Need a cathedral and bishop',
+      });
+      return;
+    }
+    this.family.setPendingMarriage(result);
+    const started = this.weddingCeremony.start(
+      result.maleId,
+      result.femaleId,
+      bishop.data.id,
+      { x: cathedral.x, y: cathedral.y }
+    );
+    if (!started) {
+      this.family.setPendingMarriage(null);
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Wedding already in progress',
+      });
+      return;
+    }
+    if (result.houseCost && !infiniteGold) {
+      this.game.events.emit(KingdomEvents.MARRIAGE_HOUSE_SPENT, {
+        cost: result.houseCost,
+      });
+    }
+    this.world.emitStats();
+    this.world.schedulePersist();
+  };
+
+  private onGrantChild = (payload: GrantFamilyPayload) => {
+    const gold = (this.game.registry.get('goldBalance') as number) ?? 0;
+    const infiniteGold = Boolean(this.game.registry.get('infiniteGold'));
+    const ok = this.family.tryGrantChild(
+      payload.subjectId,
+      gold,
+      infiniteGold,
+      this.weddingCeremony.isActive()
+    );
+    if (ok) {
+      this.world.emitStats();
+      this.world.schedulePersist();
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'A child is on the way!',
+      });
+    } else {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Cannot grant a child right now',
+      });
+    }
+  };
+
   private onCancelPlace = () => {
     this.buildings.cancelPlace();
     this.emitPlaceMode();
@@ -1090,6 +1256,8 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.emit(KingdomEvents.PLACE_MODE_CHANGED, {
       active: this.buildings.isPlacing(),
       kind: this.buildings.placingKind(),
+      mode: this.buildings.placementMode(),
+      buildingId: this.buildings.relocatingBuildingId(),
     });
   }
 
@@ -1209,6 +1377,7 @@ export class KingdomScene extends Phaser.Scene {
   private onDayRolled = () => {
     this.subjects?.applyBodyFromHunger();
     this.subjects?.ageOnDayRolled();
+    this.familyAspirations?.onDayRolled();
     this.family?.onDayRolled();
     // Funerals for old age deaths handled via toast; cemetery funerals when present
     if (this.buildings?.hasCemetery() && Math.random() < 0.15) {

@@ -7,12 +7,13 @@ import {
 } from './catalog';
 import { canPlaceBuilding, affordableWallCells, WALL_GOLD_PER_CELL } from './rules';
 import type { KingdomStats } from '../game/subjects/types';
+import type { PlaceModePayload } from '../game/subjects/events';
 
 interface MarketplacePanelProps {
   gold: number;
   infiniteGold?: boolean;
   stats: KingdomStats;
-  placeMode: { active: boolean; kind: BuildKind | null };
+  placeMode: PlaceModePayload;
   onBuyBuilding: (kind: BuildKind) => void;
   onBuyNaval: (kind: NavalKind) => void;
   onCancelPlace: () => void;

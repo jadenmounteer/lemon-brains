@@ -5,15 +5,24 @@ import { roleFromCareerGoal } from '../jobs/capacities';
 import { readSandboxFromRegistry } from '../../kingdom/sandboxSettings';
 import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
+import type { FamilySystem } from '../family/FamilySystem';
+import {
+  FAMILY_GOAL_HAVE_CHILD,
+  FAMILY_GOAL_MARRY,
+  isFamilyGoalKind,
+} from '../family/familyGoals';
 import type Phaser from 'phaser';
 
 export interface WishAutomationDeps {
   getGold: () => number;
   infiniteGold: () => boolean;
   kingdomGameMode: () => 'learning' | 'normal';
+  weddingActive: () => boolean;
 }
 
-/** FGM auto-grants career wishes when criteria are met and the toggle allows it. */
+type FamilyWishKind = 'marry' | 'have_child';
+
+/** FGM auto-grants career and family wishes when criteria are met. */
 export class WishAutomationService {
   private cooldownMs = 0;
   private granted = new Set<string>();
@@ -22,6 +31,7 @@ export class WishAutomationService {
     private readonly scene: Phaser.Scene,
     private readonly subjects: SubjectSystem,
     private readonly buildings: BuildingSystem,
+    private readonly family: FamilySystem,
     private readonly deps: WishAutomationDeps
   ) {}
 
@@ -36,38 +46,116 @@ export class WishAutomationService {
       .find((s) => s.data.role === 'fairy_godmother' && s.sprite.active);
     if (!fgm) return;
 
-    const candidate = this.subjects
+    const candidate = this.pickCandidate();
+    if (!candidate) return;
+
+    this.granted.add(candidate.subjectId);
+    this.subjects.nudgeToward(
+      fgm.data.id,
+      candidate.x,
+      candidate.y,
+      55
+    );
+    this.subjects.playPoofVfx(candidate.x, candidate.y);
+
+    if (candidate.kind === 'career') {
+      this.scene.game.events.emit(KingdomEvents.AUTO_GRANT_WISH, {
+        subjectId: candidate.subjectId,
+        targetRole: candidate.targetRole!,
+        cost: candidate.cost,
+      });
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `The Fairy Godmother granted ${candidate.name}'s wish!`,
+      });
+      return;
+    }
+
+    this.scene.game.events.emit(KingdomEvents.AUTO_GRANT_FAMILY_WISH, {
+      kind: candidate.kind,
+      subjectId: candidate.subjectId,
+    });
+    const verb =
+      candidate.kind === 'marry'
+        ? `united ${candidate.name} in marriage!`
+        : `blessed ${candidate.name} with a child!`;
+    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `The Fairy Godmother ${verb}`,
+    });
+  }
+
+  private pickCandidate():
+    | {
+        subjectId: string;
+        name: string;
+        x: number;
+        y: number;
+        kind: 'career';
+        targetRole: UnitRole;
+        cost: number;
+      }
+    | {
+        subjectId: string;
+        name: string;
+        x: number;
+        y: number;
+        kind: FamilyWishKind;
+      }
+    | null {
+    const managed = this.subjects
       .listManaged()
-      .find(
+      .filter(
         (s) =>
           s.sprite.active &&
           s.data.goal &&
-          s.data.role === 'peasant' &&
-          !this.granted.has(s.data.id)
+          !this.granted.has(s.data.id) &&
+          (s.data.role === 'peasant' || s.data.goal.kind.startsWith('become_'))
       );
-    if (!candidate) return;
 
-    const view = this.evaluateFor(candidate.data.id);
-    if (!view?.canPromote) return;
+    for (const s of managed) {
+      if (!s.data.goal || isFamilyGoalKind(s.data.goal.kind)) continue;
+      const view = this.evaluateCareerFor(s.data.id);
+      if (view?.canPromote) {
+        return {
+          subjectId: s.data.id,
+          name: s.data.name,
+          x: s.sprite.x,
+          y: s.sprite.y,
+          kind: 'career',
+          targetRole: view.targetRole,
+          cost: view.cost,
+        };
+      }
+    }
 
-    this.granted.add(candidate.data.id);
-    this.subjects.nudgeToward(
-      fgm.data.id,
-      candidate.sprite.x,
-      candidate.sprite.y,
-      55
-    );
-    this.subjects.playPoofVfx(candidate.sprite.x, candidate.sprite.y);
+    for (const s of managed) {
+      if (s.data.goal?.kind !== FAMILY_GOAL_MARRY) continue;
+      const view = this.evaluateFamilyFor(s.data.id);
+      if (view?.canGrant) {
+        return {
+          subjectId: s.data.id,
+          name: s.data.name,
+          x: s.sprite.x,
+          y: s.sprite.y,
+          kind: 'marry',
+        };
+      }
+    }
 
-    this.scene.game.events.emit(KingdomEvents.AUTO_GRANT_WISH, {
-      subjectId: candidate.data.id,
-      targetRole: view.targetRole,
-      cost: view.cost,
-    });
+    for (const s of managed) {
+      if (s.data.goal?.kind !== FAMILY_GOAL_HAVE_CHILD) continue;
+      const view = this.evaluateFamilyFor(s.data.id);
+      if (view?.canGrant) {
+        return {
+          subjectId: s.data.id,
+          name: s.data.name,
+          x: s.sprite.x,
+          y: s.sprite.y,
+          kind: 'have_child',
+        };
+      }
+    }
 
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `The Fairy Godmother granted ${candidate.data.name}'s wish!`,
-    });
+    return null;
   }
 
   shouldRun(): boolean {
@@ -81,7 +169,7 @@ export class WishAutomationService {
     this.granted.delete(id);
   }
 
-  private evaluateFor(subjectId: string) {
+  private evaluateCareerFor(subjectId: string) {
     const managed = this.subjects.getById(subjectId);
     if (!managed?.data.goal) return null;
 
@@ -104,6 +192,15 @@ export class WishAutomationService {
       { royaltyUnlocked: true },
       this.deps.getGold(),
       this.deps.infiniteGold()
+    );
+  }
+
+  private evaluateFamilyFor(subjectId: string) {
+    return this.family.evaluateFor(
+      subjectId,
+      this.deps.getGold(),
+      this.deps.infiniteGold(),
+      this.deps.weddingActive()
     );
   }
 }
