@@ -10,6 +10,7 @@ import {
   idleAnimKey,
   isMilitaryRole,
   isRoyalRole,
+  jesterJuggleAnimKey,
   livesAtKeep,
   walkAnimKey,
   type Direction,
@@ -2371,6 +2372,7 @@ export class SubjectSystem {
 
   /** Reset sleep/work pose before walking or leaving a slot. */
   clearActivityAnim(managed: ManagedSubject): void {
+    const wasJuggle = managed.presenceAnim === 'juggle';
     if (managed.presenceAnim) {
       this.scene.tweens.killTweensOf(managed.sprite);
       managed.presenceAnim = null;
@@ -2380,6 +2382,9 @@ export class SubjectSystem {
     managed.sprite.setAngle(0);
     managed.sprite.setAlpha(1);
     this.applyBodyScale(managed);
+    if (wasJuggle && managed.data.role === 'jester' && !managed.moving) {
+      managed.sprite.play(idleAnimKey('jester'));
+    }
   }
 
   playWorkAnim(id: string): void {
@@ -2393,6 +2398,29 @@ export class SubjectSystem {
       targets: managed.sprite,
       y: baseY - 2,
       duration: 220,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+  }
+
+  playJuggleAnim(id: string): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || managed.moving) return;
+    if (managed.presenceAnim === 'juggle') return;
+    this.clearActivityAnim(managed);
+    managed.presenceAnim = 'juggle';
+    const texKey = textureKeyForSubject(managed.data);
+    if (managed.data.role === 'jester') {
+      managed.sprite.play(jesterJuggleAnimKey(), true);
+    } else {
+      managed.sprite.play(idleAnimKey(texKey));
+    }
+    const baseX = managed.sprite.x;
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      x: baseX + 2,
+      duration: 550,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
@@ -3015,7 +3043,14 @@ export class SubjectSystem {
               ? 'Sleeping in chambers'
               : 'Sleeping at home';
         } else if (site.mode === 'work' || this.isStickyActivity(slot.activity)) {
-          this.playWorkAnim(managed.data.id);
+          if (
+            managed.data.role === 'jester' &&
+            slot.activity === 'juggle'
+          ) {
+            this.playJuggleAnim(managed.data.id);
+          } else {
+            this.playWorkAnim(managed.data.id);
+          }
           if (
             managed.data.role === 'peasant' &&
             (slot.activity === 'work' || slot.zone === 'field') &&

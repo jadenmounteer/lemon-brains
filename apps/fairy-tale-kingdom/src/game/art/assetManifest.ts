@@ -211,6 +211,22 @@ export const UnitFrame = {
 
 export const UNIT_FRAME_COUNT = 17;
 
+/** Jester sheets include extra perform frames after the standard walk set. */
+export const JESTER_FRAME_COUNT = 23;
+
+export const JesterPerformFrame = {
+  toss1: 17,
+  toss2: 18,
+  toss3: 19,
+  toss4: 20,
+  bow: 21,
+  flourish: 22,
+} as const;
+
+export function jesterJuggleAnimKey(): string {
+  return 'jester-juggle';
+}
+
 export function idleAnimKey(role: string): string {
   return `${role}-idle`;
 }

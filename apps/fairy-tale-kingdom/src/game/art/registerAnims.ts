@@ -3,9 +3,11 @@ import {
   DIRECTIONS,
   HEARTH_FIRE_ANIM,
   HEARTH_FIRE_FRAMES,
+  JesterPerformFrame,
   PROP_KEYS,
   UnitFrame,
   idleAnimKey,
+  jesterJuggleAnimKey,
   uniqueSheetRoles,
   walkAnimKey,
   walkFramesFor,
@@ -43,8 +45,47 @@ function registerRole(scene: Phaser.Scene, role: AnimRole) {
   }
 }
 
+function registerJesterAnims(scene: Phaser.Scene): void {
+  if (!scene.textures.exists('jester')) return;
+
+  ensureAnim(scene, idleAnimKey('jester'), {
+    key: idleAnimKey('jester'),
+    frames: [
+      { key: 'jester', frame: UnitFrame.idle },
+      { key: 'jester', frame: JesterPerformFrame.flourish },
+      { key: 'jester', frame: UnitFrame.idle },
+      { key: 'jester', frame: JesterPerformFrame.bow },
+    ],
+    frameRate: 4,
+    repeat: -1,
+  });
+
+  for (const dir of DIRECTIONS) {
+    const frames = walkFramesFor(dir).map((frame) => ({ key: 'jester', frame }));
+    ensureAnim(scene, walkAnimKey('jester', dir), {
+      key: walkAnimKey('jester', dir),
+      frames,
+      frameRate: 10,
+      repeat: -1,
+    });
+  }
+
+  ensureAnim(scene, jesterJuggleAnimKey(), {
+    key: jesterJuggleAnimKey(),
+    frames: [
+      { key: 'jester', frame: JesterPerformFrame.toss1 },
+      { key: 'jester', frame: JesterPerformFrame.toss2 },
+      { key: 'jester', frame: JesterPerformFrame.toss3 },
+      { key: 'jester', frame: JesterPerformFrame.toss4 },
+    ],
+    frameRate: 12,
+    repeat: -1,
+  });
+}
+
 export function registerAnims(scene: Phaser.Scene): void {
   for (const role of uniqueSheetRoles()) {
+    if (role === 'jester') continue;
     registerRole(scene, role);
   }
   for (const key of PEASANT_VISUAL_KEYS) {
@@ -52,6 +93,7 @@ export function registerAnims(scene: Phaser.Scene): void {
       registerRole(scene, key as AnimRole);
     }
   }
+  registerJesterAnims(scene);
 
   if (scene.textures.exists(PROP_KEYS.hearthFire)) {
     ensureAnim(scene, HEARTH_FIRE_ANIM, {

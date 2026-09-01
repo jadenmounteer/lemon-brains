@@ -6,6 +6,7 @@ import {
   UNIT_FRAME_COUNT,
   UNIT_HEIGHT,
   UNIT_WIDTH,
+  JESTER_FRAME_COUNT,
   uniqueSheetRoles,
   wallTextureKey,
   type AnimRole,
@@ -18,8 +19,15 @@ import {
 } from './wallArt';
 import { palette } from './palette';
 import {
+  drawHearth,
+  drawInteriorFloor,
+  drawInteriorRoomShell,
   drawInteriorWallH,
   drawInteriorWallV,
+  drawTable,
+  drawTimberFrame,
+  drawTiledRoof,
+  drawWindow,
 } from './buildingArt';
 import {
   drawSupplementaryInteriors,
@@ -327,6 +335,17 @@ function drawUnitFrame(
     return;
   }
 
+  if (role === 'jester') {
+    drawJesterFrame(
+      ctx,
+      originX,
+      facing,
+      walkStep,
+      walkStep === null ? 'idle' : 'walk'
+    );
+    return;
+  }
+
   const bob = walkStep === null ? 0 : walkStep % 2 === 0 ? 0 : 1;
   const leg = walkStep === null ? 0 : walkStep === 1 || walkStep === 2 ? 1 : 0;
   const baseY = bob;
@@ -366,10 +385,6 @@ function drawUnitFrame(
     if (role === 'elite_archer') {
       fillRect(ctx, originX + 5, 3 + baseY, 6, 1, palette.gold);
     }
-  } else if (role === 'jester') {
-    fillRect(ctx, originX + 4, 2 + baseY, 8, 2, palette.gold);
-    pixel(ctx, originX + 4, 2 + baseY, palette.clothJester);
-    pixel(ctx, originX + 11, 2 + baseY, palette.clothEliteArcher);
   } else if (role === 'executioner') {
     fillRect(ctx, originX + 4, 3 + baseY, 8, 2, palette.ink);
     fillRect(ctx, originX + 12, 10 + baseY, 2, 7, palette.metal);
@@ -1100,6 +1115,238 @@ function drawPeasantFrame(
   fillRect(ctx, originX + 5, 3 + y, 6, 1, palette.ink);
 }
 
+type JesterPose =
+  | 'idle'
+  | 'walk'
+  | 'toss1'
+  | 'toss2'
+  | 'toss3'
+  | 'toss4'
+  | 'bow'
+  | 'flourish';
+
+const JESTER_MOTLEY = [palette.clothJester, palette.gold, 0x3a5a9a] as const;
+
+function drawJesterCap(
+  ctx: Ctx,
+  originX: number,
+  y: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  tilt = 0
+) {
+  if (facing === 'up') {
+    fillRect(ctx, originX + 4, 1 + y, 8, 4, palette.gold);
+    fillRect(ctx, originX + 3, 2 + y, 2, 2, JESTER_MOTLEY[2]);
+    fillRect(ctx, originX + 7, 0 + y, 2, 2, JESTER_MOTLEY[0]);
+    fillRect(ctx, originX + 10, 2 + y, 2, 2, JESTER_MOTLEY[2]);
+    return;
+  }
+
+  fillRect(ctx, originX + 4 + tilt, 2 + y, 8, 2, palette.gold);
+  // left flop
+  fillRect(ctx, originX + 2 + tilt, 1 + y, 3, 3, JESTER_MOTLEY[2]);
+  pixel(ctx, originX + 2 + tilt, 0 + y, palette.gold);
+  // center flop
+  fillRect(ctx, originX + 6 + tilt, 0 + y, 3, 3, JESTER_MOTLEY[0]);
+  pixel(ctx, originX + 7 + tilt, 0 + y, palette.gold);
+  // right flop
+  fillRect(ctx, originX + 10 + tilt, 1 + y, 3, 3, JESTER_MOTLEY[2]);
+  pixel(ctx, originX + 12 + tilt, 0 + y, palette.gold);
+}
+
+function drawMotleyTunic(
+  ctx: Ctx,
+  originX: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  fillRect(ctx, originX, y, w, h, palette.cream);
+  for (let row = 0; row < h; row++) {
+    for (let col = 0; col < w; col++) {
+      if ((row + col) % 2 === 0) {
+        pixel(ctx, originX + col, y + row, JESTER_MOTLEY[(row + col) % 3]!);
+      }
+    }
+  }
+}
+
+function drawJesterShoes(
+  ctx: Ctx,
+  originX: number,
+  y: number,
+  leg: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  kick = false
+) {
+  const leftX = originX + 5 - (facing === 'right' ? 0 : leg);
+  const rightX = originX + 9 + (facing === 'left' ? 0 : leg);
+  fillRect(ctx, leftX, 18 + y, 3, 3, palette.ink);
+  fillRect(ctx, rightX, 18 + y, 3, 3, palette.ink);
+  pixel(ctx, leftX, 18 + y, palette.gold);
+  pixel(ctx, rightX + 2, 18 + y, palette.gold);
+  if (kick && facing === 'down') {
+    fillRect(ctx, rightX + 2, 16 + y, 3, 2, palette.ink);
+    pixel(ctx, rightX + 4, 15 + y, palette.gold);
+  }
+}
+
+function drawJesterArms(
+  ctx: Ctx,
+  originX: number,
+  y: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  pose: JesterPose,
+  walkStep: number | null
+) {
+  const skin = palette.skin;
+  if (pose === 'toss1' || pose === 'toss2' || pose === 'toss3' || pose === 'toss4') {
+    if (pose === 'toss1' || pose === 'toss3') {
+      fillRect(ctx, originX + 2, 6 + y, 2, 6, skin);
+      fillRect(ctx, originX + 1, 4 + y, 2, 3, skin);
+    }
+    if (pose === 'toss2' || pose === 'toss3') {
+      fillRect(ctx, originX + 12, 6 + y, 2, 6, skin);
+      fillRect(ctx, originX + 13, 4 + y, 2, 3, skin);
+    }
+    if (pose === 'toss4') {
+      fillRect(ctx, originX + 1, 7 + y, 3, 5, skin);
+      fillRect(ctx, originX + 12, 7 + y, 3, 5, skin);
+    }
+    return;
+  }
+  if (pose === 'flourish') {
+    fillRect(ctx, originX + 1, 9 + y, 3, 5, skin);
+    fillRect(ctx, originX + 12, 9 + y, 3, 5, skin);
+    return;
+  }
+  if (pose === 'idle') {
+    fillRect(ctx, originX + 12, 10 + y, 2, 5, skin);
+    fillRect(ctx, originX + 13, 8 + y, 2, 3, skin);
+    return;
+  }
+  if (facing === 'left') {
+    fillRect(ctx, originX + 2, 11 + y, 2, 5, skin);
+  } else if (facing === 'right') {
+    fillRect(ctx, originX + 12, 11 + y, 2, 5, skin);
+  } else if (facing === 'down' && walkStep !== null && walkStep % 2 === 0) {
+    fillRect(ctx, originX + 2, 11 + y, 2, 4, skin);
+    fillRect(ctx, originX + 12, 11 + y, 2, 4, skin);
+  }
+}
+
+function drawJesterFrame(
+  ctx: Ctx,
+  originX: number,
+  facing: 'down' | 'left' | 'right' | 'up',
+  walkStep: number | null,
+  pose: JesterPose
+) {
+  const bob =
+    pose === 'walk'
+      ? walkStep === null
+        ? 0
+        : walkStep % 2 === 0
+          ? 0
+          : 2
+      : pose === 'bow'
+        ? 2
+        : pose === 'flourish'
+          ? 0
+          : 1;
+  const leg =
+    pose === 'walk' && walkStep !== null
+      ? walkStep === 1 || walkStep === 2
+        ? 2
+        : 0
+      : 0;
+  const y = bob + (pose === 'bow' ? 1 : 0);
+  const capTilt = pose === 'flourish' ? 1 : pose === 'idle' ? -1 : 0;
+
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+  drawJesterShoes(ctx, originX, y, leg, facing, pose === 'flourish');
+
+  drawMotleyTunic(ctx, originX + 4, 10 + y, 8, 8);
+  fillRect(ctx, originX + 4, 10 + y, 1, 8, palette.ink);
+  fillRect(ctx, originX + 11, 10 + y, 1, 8, palette.ink);
+  fillRect(ctx, originX + 5, 14 + y, 6, 1, palette.gold);
+
+  drawJesterArms(ctx, originX, y, facing, pose, walkStep);
+
+  fillRect(ctx, originX + 5, 4 + y, 6, 5, palette.skin);
+  fillRect(ctx, originX + 4, 4 + y, 1, 5, palette.ink);
+  fillRect(ctx, originX + 11, 4 + y, 1, 5, palette.ink);
+  drawJesterCap(ctx, originX, y, facing, capTilt);
+
+  if (facing === 'up') {
+    fillRect(ctx, originX + 5, 4 + y, 6, 3, palette.gold);
+  } else if (facing === 'left') {
+    pixel(ctx, originX + 6, 6 + y, palette.ink);
+    if (pose !== 'bow') pixel(ctx, originX + 7, 7 + y, 0xd06070);
+  } else if (facing === 'right') {
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+    if (pose !== 'bow') pixel(ctx, originX + 8, 7 + y, 0xd06070);
+  } else {
+    if (pose === 'bow') {
+      fillRect(ctx, originX + 6, 7 + y, 4, 1, palette.ink);
+    } else {
+      pixel(ctx, originX + 7, 6 + y, palette.ink);
+      pixel(ctx, originX + 9, 6 + y, palette.ink);
+      pixel(ctx, originX + 8, 7 + y, 0xd06070);
+    }
+  }
+
+  fillRect(ctx, originX + 5, 3 + y, 6, 1, palette.ink);
+}
+
+function drawJesterSheet(scene: Phaser.Scene): void {
+  const width = UNIT_WIDTH * JESTER_FRAME_COUNT;
+  const height = UNIT_HEIGHT;
+  const tex = createCanvas(scene, 'jester', width, height);
+  const ctx = tex.getContext();
+  ctx.clearRect(0, 0, width, height);
+
+  const facings: Array<'down' | 'left' | 'right' | 'up'> = [
+    'down',
+    'left',
+    'right',
+    'up',
+  ];
+
+  drawJesterFrame(ctx, 0, 'down', null, 'idle');
+
+  let frame = 1;
+  for (const facing of facings) {
+    for (let step = 0; step < 4; step++) {
+      drawJesterFrame(ctx, frame * UNIT_WIDTH, facing, step, 'walk');
+      frame++;
+    }
+  }
+
+  const perform: JesterPose[] = [
+    'toss1',
+    'toss2',
+    'toss3',
+    'toss4',
+    'bow',
+    'flourish',
+  ];
+  for (const pose of perform) {
+    drawJesterFrame(ctx, frame * UNIT_WIDTH, 'down', null, pose);
+    frame++;
+  }
+
+  tex.refresh();
+
+  const sheet = scene.textures.get('jester');
+  for (let i = 0; i < JESTER_FRAME_COUNT; i++) {
+    const name = String(i);
+    if (!sheet.has(name)) {
+      sheet.add(name, 0, i * UNIT_WIDTH, 0, UNIT_WIDTH, UNIT_HEIGHT);
+    }
+  }
+}
+
 function drawPeasantUnitSheet(
   scene: Phaser.Scene,
   key: string,
@@ -1505,17 +1752,63 @@ function drawTavern(scene: Phaser.Scene) {
   const h = 44;
   const tex = createCanvas(scene, PROP_KEYS.tavern, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 16, 40, 24, palette.wood);
-  fillRect(ctx, 4, 16, 40, 1, palette.ink);
-  for (let row = 0; row < 10; row++) {
-    fillRect(ctx, 4 + row, 6 + row, 40 - row * 2, 1, palette.roof);
-  }
-  fillRect(ctx, 18, 28, 12, 12, palette.woodDark);
-  fillRect(ctx, 10, 22, 5, 5, palette.cream);
-  fillRect(ctx, 33, 22, 5, 5, palette.cream);
-  fillRect(ctx, 36, 10, 4, 8, palette.stoneDark);
-  // hanging sign
-  fillRect(ctx, 20, 14, 8, 5, palette.gold);
+
+  // Stone foundation
+  fillRect(ctx, 3, 34, 42, 6, palette.stoneDark);
+  fillStoneBricks(ctx, 4, 34, 40, 5, 6, 3);
+
+  // Half-timbered inn body
+  drawTimberFrame(ctx, 4, 16, 40, 18, 0xd8c8a8);
+
+  // Clay tile roof — steep coaching-inn pitch
+  drawTiledRoof(ctx, 2, 8, 44, 10, palette.roof);
+  fillRect(ctx, 6, 6, 36, 3, 0x8a3535);
+  fillRect(ctx, 10, 4, 28, 3, palette.roof);
+  fillRect(ctx, 14, 2, 20, 3, 0x8a3535);
+
+  // Chimney with warm smoke
+  fillRect(ctx, 36, 4, 6, 14, palette.stoneDark);
+  fillStoneBricks(ctx, 37, 3, 4, 12, 4, 3);
+  pixel(ctx, 38, 1, palette.stoneDark);
+  pixel(ctx, 40, 0, palette.stone);
+  pixel(ctx, 39, 1, palette.stone);
+
+  // Leaded windows — lit from within
+  drawWindow(ctx, 8, 20, 8, 7);
+  drawWindow(ctx, 32, 20, 8, 7);
+  fillRect(ctx, 9, 21, 6, 5, 0xffe8a0);
+  fillRect(ctx, 33, 21, 6, 5, 0xffe8a0);
+  pixel(ctx, 12, 23, 0xffcc66);
+  pixel(ctx, 36, 23, 0xffcc66);
+
+  // Heavy arched door
+  fillRect(ctx, 18, 26, 12, 12, palette.woodDark);
+  fillRect(ctx, 19, 27, 10, 11, palette.wood);
+  fillRect(ctx, 20, 26, 8, 3, palette.woodDark);
+  fillRect(ctx, 27, 31, 2, 2, palette.metal);
+  pixel(ctx, 28, 32, palette.gold);
+
+  // Swinging inn sign on iron bracket
+  fillRect(ctx, 22, 12, 4, 2, palette.metal);
+  fillRect(ctx, 20, 14, 8, 6, palette.wood);
+  fillRect(ctx, 20, 14, 8, 1, palette.ink);
+  // painted ale mug on sign
+  fillRect(ctx, 22, 16, 4, 3, palette.gold);
+  fillRect(ctx, 23, 15, 2, 2, palette.cream);
+  pixel(ctx, 24, 18, palette.gold);
+
+  // Barrel by the door
+  fillRect(ctx, 6, 30, 6, 8, palette.woodDark);
+  fillRect(ctx, 7, 31, 4, 6, palette.wood);
+  fillRect(ctx, 7, 33, 4, 1, palette.ink);
+  fillRect(ctx, 7, 35, 4, 1, palette.ink);
+
+  // Bench outside
+  fillRect(ctx, 34, 32, 10, 3, palette.wood);
+  fillRect(ctx, 35, 35, 2, 3, palette.woodDark);
+  fillRect(ctx, 41, 35, 2, 3, palette.woodDark);
+
+  strokeRectInk(ctx, 4, 16, 40, 18);
   tex.refresh();
 }
 
@@ -1524,25 +1817,61 @@ function drawTavernInterior(scene: Phaser.Scene) {
   const h = 44;
   const int = createCanvas(scene, PROP_KEYS.tavernInterior, w, h);
   const ic = int.getContext();
-  fillRect(ic, 4, 16, 40, 24, palette.wood);
-  fillRect(ic, 6, 18, 36, 20, 0x5a4030);
-  // bar
-  fillRect(ic, 8, 22, 6, 16, palette.woodDark);
-  fillRect(ic, 8, 22, 6, 3, palette.wood);
-  // kegs
-  fillRect(ic, 10, 28, 4, 6, palette.dirtDark);
-  // tables
-  fillRect(ic, 20, 28, 10, 5, palette.wood);
-  fillRect(ic, 34, 30, 8, 5, palette.wood);
-  fillRect(ic, 22, 32, 2, 4, palette.woodDark);
-  fillRect(ic, 28, 32, 2, 4, palette.woodDark);
-  // hearth
-  fillRect(ic, 28, 36, 12, 8, palette.stoneDark);
-  fillRect(ic, 30, 38, 8, 5, palette.ink);
-  fillRect(ic, 32, 40, 4, 2, 0xff8844);
-  // mugs
-  pixel(ic, 22, 27, palette.cream);
-  pixel(ic, 36, 29, palette.cream);
+
+  drawInteriorRoomShell(ic, 4, 14, 40, 26, 19);
+  // plank floor
+  for (let py = 18; py < 38; py += 3) {
+    fillRect(ic, 6, py, 36, 1, palette.woodDark);
+  }
+
+  // Long bar along the left wall
+  fillRect(ic, 6, 20, 8, 16, palette.woodDark);
+  fillRect(ic, 7, 21, 6, 14, palette.wood);
+  fillRect(ic, 7, 21, 6, 2, palette.cream);
+  // bottles on shelf
+  fillRect(ic, 8, 22, 2, 4, 0x4a7a3a);
+  fillRect(ic, 11, 22, 2, 4, 0x8b3030);
+  fillRect(ic, 9, 23, 2, 3, 0xc09040);
+  // mugs on bar top
+  pixel(ic, 8, 20, palette.cream);
+  pixel(ic, 10, 20, palette.cream);
+  pixel(ic, 12, 20, palette.cream);
+
+  // Barrel stack in corner
+  fillRect(ic, 6, 30, 5, 6, palette.woodDark);
+  fillRect(ic, 7, 31, 3, 4, palette.wood);
+  fillRect(ic, 8, 28, 4, 4, palette.woodDark);
+  fillRect(ic, 9, 29, 2, 2, palette.wood);
+
+  // Round tables + benches
+  drawTable(ic, 18, 26, 10, 4);
+  drawTable(ic, 32, 28, 10, 4);
+  fillRect(ic, 17, 30, 12, 2, palette.wood);
+  fillRect(ic, 31, 32, 12, 2, palette.wood);
+  fillRect(ic, 18, 31, 2, 3, palette.woodDark);
+  fillRect(ic, 26, 31, 2, 3, palette.woodDark);
+  fillRect(ic, 32, 33, 2, 3, palette.woodDark);
+  fillRect(ic, 40, 33, 2, 3, palette.woodDark);
+  // tankards on tables
+  pixel(ic, 21, 25, palette.cream);
+  pixel(ic, 35, 27, palette.cream);
+  pixel(ic, 38, 27, palette.cream);
+
+  // Stone hearth on back wall
+  drawHearth(ic, 28, 32, 14, 8);
+  fillRect(ic, 30, 30, 10, 3, palette.stoneDark);
+  pixel(ic, 33, 29, 0xffaa44);
+  pixel(ic, 35, 28, 0xff8844);
+
+  // Antlers above hearth
+  fillRect(ic, 32, 28, 2, 3, palette.wood);
+  fillRect(ic, 36, 28, 2, 3, palette.wood);
+  fillRect(ic, 30, 27, 10, 2, palette.woodDark);
+
+  // Candle sconce on right wall
+  fillRect(ic, 40, 18, 2, 4, palette.metal);
+  pixel(ic, 41, 17, 0xffe8a0);
+
   int.refresh();
 }
 
@@ -1991,33 +2320,126 @@ function drawMarket(scene: Phaser.Scene) {
   const h = 32;
   const tex = createCanvas(scene, PROP_KEYS.market, w, h);
   const ctx = tex.getContext();
-  fillRect(ctx, 4, 16, 36, 14, palette.dirt);
-  fillRect(ctx, 8, 6, 28, 14, palette.clothPeasant);
-  fillRect(ctx, 8, 6, 28, 1, palette.ink);
-  fillRect(ctx, 20, 2, 2, 10, palette.wood);
-  fillRect(ctx, 10, 18, 10, 6, palette.wood);
-  fillRect(ctx, 24, 18, 10, 6, palette.woodDark);
-  pixel(ctx, 14, 16, palette.gold);
-  pixel(ctx, 28, 16, palette.wheat);
+
+  // Cobbled market square
+  fillRect(ctx, 2, 18, 40, 12, palette.dirt);
+  for (let px = 4; px < 40; px += 5) {
+    for (let py = 20; py < 28; py += 4) {
+      fillRect(ctx, px + ((py / 4) % 2) * 2, py, 3, 2, palette.stoneDark);
+    }
+  }
+
+  // Central market pole with pennant
+  fillRect(ctx, 21, 2, 2, 18, palette.woodDark);
+  fillRect(ctx, 14, 2, 16, 6, 0xc04545);
+  fillRect(ctx, 14, 2, 16, 1, palette.ink);
+  fillRect(ctx, 14, 6, 16, 1, palette.gold);
+  pixel(ctx, 21, 4, palette.gold);
+
+  // Three timber stall frames with striped awnings
+  const stallAwnings: Array<[number, number, number, number]> = [
+    [4, 8, 0xc04545, palette.cream],
+    [16, 8, 0x3a5a8a, palette.cream],
+    [28, 8, 0x5a7a3a, 0xf0e4c8],
+  ];
+  for (const [sx, awningY, stripeA, stripeB] of stallAwnings) {
+    // posts
+    fillRect(ctx, sx, 10, 2, 12, palette.woodDark);
+    fillRect(ctx, sx + 10, 10, 2, 12, palette.woodDark);
+    // counter
+    fillRect(ctx, sx, 18, 12, 4, palette.wood);
+    fillRect(ctx, sx, 18, 12, 1, palette.ink);
+    // striped awning
+    for (let i = 0; i < 6; i++) {
+      fillRect(ctx, sx - 1 + i * 2, awningY, 2, 4, i % 2 === 0 ? stripeA : stripeB);
+    }
+    fillRect(ctx, sx - 1, awningY + 3, 12, 1, palette.ink);
+  }
+
+  // Goods on stalls
+  // Stall 1 — apples & vegetables
+  fillRect(ctx, 6, 15, 3, 3, 0xc04040);
+  fillRect(ctx, 10, 16, 3, 2, 0x4a8a3a);
+  fillRect(ctx, 7, 14, 2, 2, 0xd05050);
+  // Stall 2 — bread & grain
+  fillRect(ctx, 18, 15, 4, 3, 0xe8c070);
+  fillRect(ctx, 23, 16, 3, 3, palette.wheat);
+  pixel(ctx, 20, 14, 0xe0b060);
+  // Stall 3 — cloth & goods
+  fillRect(ctx, 30, 15, 4, 3, 0x8b4a6a);
+  fillRect(ctx, 35, 16, 3, 2, palette.clothPeasant);
+  pixel(ctx, 32, 14, palette.gold);
+
+  // Crates on the ground
+  fillRect(ctx, 6, 24, 6, 5, palette.woodDark);
+  fillRect(ctx, 7, 25, 4, 3, palette.wood);
+  fillRect(ctx, 32, 24, 6, 5, palette.woodDark);
+  fillRect(ctx, 33, 25, 4, 3, palette.wood);
+  fillRect(ctx, 34, 24, 2, 2, palette.wheat);
+
+  // Hanging scale between stalls
+  fillRect(ctx, 20, 10, 4, 1, palette.metal);
+  fillRect(ctx, 21, 11, 2, 4, palette.ink);
+  fillRect(ctx, 19, 14, 2, 2, palette.metal);
+  fillRect(ctx, 23, 14, 2, 2, palette.metal);
+
+  // Woven basket
+  fillRect(ctx, 38, 22, 4, 4, 0xc09040);
+  fillRect(ctx, 39, 21, 2, 2, palette.wheat);
+
   tex.refresh();
 
   const int = createCanvas(scene, PROP_KEYS.marketInterior, w, h);
   const ic = int.getContext();
-  drawInteriorWallH(ic, 4, 8, 36);
-  drawInteriorWallV(ic, 4, 8, 20);
-  drawInteriorWallV(ic, 37, 8, 20);
-  fillRect(ic, 4, 16, 36, 14, palette.dirt);
-  fillRect(ic, 6, 14, 32, 12, 0xe8dcc8);
-  // stalls
-  fillRect(ic, 8, 18, 12, 8, palette.wood);
-  fillRect(ic, 10, 16, 3, 3, palette.gold);
-  fillRect(ic, 14, 17, 3, 2, 0xe8c070);
-  fillRect(ic, 24, 18, 12, 8, palette.woodDark);
-  fillRect(ic, 26, 16, 3, 3, palette.wheat);
-  fillRect(ic, 30, 17, 3, 2, palette.cream);
-  // center scale
-  fillRect(ic, 20, 20, 4, 4, palette.metal);
-  fillRect(ic, 21, 18, 2, 2, palette.gold);
+
+  drawInteriorRoomShell(ic, 2, 6, 40, 22, 17);
+  drawInteriorFloor(ic, 4, 10, 36, 16, 0xe8dcc8);
+
+  // Timber roof beams overhead
+  fillRect(ic, 4, 8, 36, 2, palette.woodDark);
+  for (let px = 8; px < 40; px += 12) {
+    fillRect(ic, px, 8, 2, 18, palette.wood);
+  }
+
+  // Left stall — produce
+  fillRect(ic, 6, 16, 14, 8, palette.wood);
+  fillRect(ic, 6, 14, 14, 3, 0xc04545);
+  fillRect(ic, 8, 14, 3, 3, 0xc04545);
+  fillRect(ic, 14, 14, 3, 3, palette.cream);
+  fillRect(ic, 8, 17, 3, 2, 0xc04040);
+  fillRect(ic, 12, 18, 3, 2, 0x4a8a3a);
+  fillRect(ic, 15, 17, 3, 3, palette.wheat);
+
+  // Right stall — goods & coins
+  fillRect(ic, 24, 16, 14, 8, palette.wood);
+  fillRect(ic, 24, 14, 14, 3, 0x3a5a8a);
+  fillRect(ic, 26, 14, 3, 3, 0x3a5a8a);
+  fillRect(ic, 32, 14, 3, 3, palette.cream);
+  fillRect(ic, 26, 17, 4, 3, 0xe8c070);
+  fillRect(ic, 32, 18, 3, 2, palette.clothPeasant);
+  pixel(ic, 30, 17, palette.gold);
+  pixel(ic, 34, 17, palette.gold);
+
+  // Center weighing scale
+  fillRect(ic, 20, 18, 4, 1, palette.metal);
+  fillRect(ic, 21, 14, 2, 5, palette.woodDark);
+  fillRect(ic, 19, 16, 2, 2, palette.metal);
+  fillRect(ic, 23, 16, 2, 2, palette.metal);
+  pixel(ic, 20, 15, palette.gold);
+  pixel(ic, 24, 15, palette.wheat);
+
+  // Sacks & baskets along back wall
+  fillRect(ic, 8, 10, 5, 5, palette.cream);
+  fillRect(ic, 9, 9, 3, 2, palette.wheatDark);
+  fillRect(ic, 30, 10, 5, 5, 0xc09040);
+  fillRect(ic, 31, 9, 3, 2, palette.wheat);
+
+  // Pennant bunting across the hall
+  for (let i = 0; i < 5; i++) {
+    const bx = 6 + i * 8;
+    fillRect(ic, bx, 9, 4, 3, i % 2 === 0 ? 0xc04545 : palette.gold);
+  }
+
   int.refresh();
 }
 
@@ -2314,7 +2736,9 @@ function drawJuggleBall(scene: Phaser.Scene) {
   const tex = createCanvas(scene, PROP_KEYS.juggleBall, w, h);
   const ctx = tex.getContext();
   fillRect(ctx, 1, 1, 4, 4, palette.clothJester);
-  pixel(ctx, 2, 2, palette.gold);
+  fillRect(ctx, 2, 1, 2, 4, palette.gold);
+  fillRect(ctx, 1, 2, 4, 2, 0x3a5a9a);
+  pixel(ctx, 2, 2, palette.cream);
   tex.refresh();
 }
 
@@ -2519,6 +2943,10 @@ export function generateTextures(scene: Phaser.Scene): void {
 
   drawTerrain(scene);
   for (const role of uniqueSheetRoles()) {
+    if (role === 'jester') {
+      drawJesterSheet(scene);
+      continue;
+    }
     drawUnitSheet(scene, role);
   }
   drawPeasantVariantSheets(scene);
