@@ -13,6 +13,7 @@ import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { roomPoint } from '../keep/KeepLayout';
+import type { CelebrationVfx } from './CelebrationVfx';
 
 type Stage = 'gather' | 'aisle' | 'rite' | 'cheer' | 'banquet' | 'done';
 
@@ -38,6 +39,7 @@ export class WeddingCeremonySystem {
   private guestIds: string[] = [];
   private props: Phaser.GameObjects.Image[] = [];
   private onRiteComplete: (() => void) | null = null;
+  private vfx: CelebrationVfx | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -45,6 +47,10 @@ export class WeddingCeremonySystem {
     private readonly buildings: BuildingSystem,
     private readonly bubbles: SpeechBubbleSystem
   ) {}
+
+  setVfx(vfx: CelebrationVfx): void {
+    this.vfx = vfx;
+  }
 
   isActive(): boolean {
     return this.active;
@@ -230,15 +236,19 @@ export class WeddingCeremonySystem {
       m.data.activityLabel = 'Exchanging vows';
       this.bubbles.say(m.sprite, 'I do!');
       m.data.thought = 'I do!';
+      this.subjects.playCelebrateAnim(id, 'bow');
     }
   }
 
   private applyCheer(): void {
+    this.vfx?.petalDrift(this.cathedral.x, this.cathedral.y - 20);
+    this.vfx?.confettiBurst(this.cathedral.x, this.cathedral.y - 16);
     for (const id of this.guestIds) {
       const m = this.subjects.getById(id);
       if (!m) continue;
       m.data.activityLabel = 'Cheering the newlyweds';
       m.data.happiness = Math.min(100, m.data.happiness + 8);
+      this.subjects.playCelebrateAnim(id, 'cheer');
       if (Math.random() < 0.5) {
         this.bubbles.say(m.sprite, 'Huzzah!');
       }

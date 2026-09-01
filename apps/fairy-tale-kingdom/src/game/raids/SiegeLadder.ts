@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import { PROP_KEYS } from '../art/assetManifest';
 import type { BuildingSystem } from '../buildings/BuildingSystem';
 import { FORT_TILE, fortSnap } from '../buildings/buildingShared';
 import { SiegeBalance } from '../siege/balance';
+import type { SiegeVfx } from '../siege/SiegeVfx';
 import type { SiegeLadderPortal } from '../path/WallPathGrid';
 import type { KeepPoint } from './raidTypes';
 
@@ -14,7 +16,7 @@ export interface SiegeLadderRecord {
   wallY: number;
   hp: number;
   maxHp: number;
-  sprite: Phaser.GameObjects.Rectangle;
+  sprite: Phaser.GameObjects.Image;
 }
 
 /** Deployable siege ladders at a breach — ground portal to wall-top. */
@@ -25,6 +27,12 @@ export class SiegeLadderSystem {
   private deployed = false;
 
   constructor(private readonly scene: Phaser.Scene) {}
+
+  setVfx(vfx: SiegeVfx): void {
+    this.vfx = vfx;
+  }
+
+  private vfx: SiegeVfx | null = null;
 
   reset(): void {
     for (const l of this.ladders) l.sprite.destroy();
@@ -70,8 +78,11 @@ export class SiegeLadderSystem {
     const groundY = fortSnap(fort.y - (dy / len) * FORT_TILE);
 
     const id = `ladder-${this.nextId++}`;
+    const tex = this.scene.textures.exists(PROP_KEYS.wallLadder)
+      ? PROP_KEYS.wallLadder
+      : PROP_KEYS.wall;
     const sprite = this.scene.add
-      .rectangle(groundX, groundY - 6, 6, 22, 0x6b4a2e, 0.95)
+      .image(groundX, groundY - 6, tex)
       .setDepth(18)
       .setOrigin(0.5, 1);
     const maxHp = SiegeBalance.ladderHp;
@@ -110,6 +121,7 @@ export class SiegeLadderSystem {
     l.hp = Math.max(0, l.hp - amount);
     l.sprite.setAlpha(l.hp / l.maxHp);
     if (l.hp <= 0) {
+      this.vfx?.breachDust(l.groundX, l.groundY);
       l.sprite.destroy();
       return true;
     }

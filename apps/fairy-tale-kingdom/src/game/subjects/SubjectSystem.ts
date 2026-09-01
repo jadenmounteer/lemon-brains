@@ -7,10 +7,14 @@ import type { FamilyAspirationView } from '../family/evaluateFamilyAspiration';
 import {
   UNIT_HEIGHT,
   UNIT_WIDTH,
+  celebrateCheerAnimKey,
+  celebrateDanceAnimKey,
+  celebrateVisualKey,
   idleAnimKey,
   isMilitaryRole,
   isRoyalRole,
   jesterJuggleAnimKey,
+  roleSlashAnimKey,
   livesAtKeep,
   walkAnimKey,
   type Direction,
@@ -59,6 +63,7 @@ import type { RaidSystem } from '../raids/RaidSystem';
 import type { SecuritySystem } from '../security/SecuritySystem';
 import { appendLifeLog as appendLifeLogEntry, backstoryFromLifeLog } from '../thoughts/lifeLog';
 import type { EncampmentSystem } from '../war/EncampmentSystem';
+import type { SiegeVfx } from '../siege/SiegeVfx';
 import { DayClock } from './DayClock';
 import { KingdomEvents } from './events';
 import { genderLabel } from './gender';
@@ -146,6 +151,7 @@ export class SubjectSystem {
   private encampments: EncampmentSystem | null = null;
   private bubbles: SpeechBubbleSystem | null = null;
   private monsters: MonsterSystem | null = null;
+  private vfx: SiegeVfx | null = null;
   private raidMode = false;
   private inspired = false;
   private fgmCanTransform = false;
@@ -247,6 +253,10 @@ export class SubjectSystem {
 
   setMonsters(monsters: MonsterSystem): void {
     this.monsters = monsters;
+  }
+
+  setVfx(vfx: SiegeVfx): void {
+    this.vfx = vfx;
   }
 
   setOnChanged(cb: () => void): void {
@@ -1989,11 +1999,12 @@ export class SubjectSystem {
     if (!managed) return false;
     managed.data.hp = Math.max(0, managed.data.hp - amount);
     this.applyHpTint(managed);
+    this.vfx?.hitFlash(managed.sprite);
     if (managed.data.hp <= 0) {
       const name = managed.data.name;
       const role = managed.data.role;
       const houseId = managed.data.houseId;
-      this.removeSubject(managed);
+      this.removeSubject(managed, { poof: true });
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `${name} was slain`,
       });
@@ -2373,6 +2384,8 @@ export class SubjectSystem {
   /** Reset sleep/work pose before walking or leaving a slot. */
   clearActivityAnim(managed: ManagedSubject): void {
     const wasJuggle = managed.presenceAnim === 'juggle';
+    const wasCelebrate = managed.presenceAnim === 'celebrate';
+    const wasPray = managed.presenceAnim === 'pray';
     if (managed.presenceAnim) {
       this.scene.tweens.killTweensOf(managed.sprite);
       managed.presenceAnim = null;
@@ -2384,6 +2397,11 @@ export class SubjectSystem {
     this.applyBodyScale(managed);
     if (wasJuggle && managed.data.role === 'jester' && !managed.moving) {
       managed.sprite.play(idleAnimKey('jester'));
+    }
+    if ((wasCelebrate || wasPray) && !managed.moving) {
+      const texKey = textureKeyForSubject(managed.data);
+      managed.sprite.setTexture(texKey);
+      managed.sprite.play(idleAnimKey(texKey));
     }
   }
 
@@ -2427,6 +2445,47 @@ export class SubjectSystem {
     });
   }
 
+  playCelebrateAnim(
+    id: string,
+    mode: 'dance' | 'cheer' | 'bow' = 'dance'
+  ): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || managed.moving) return;
+    if (managed.presenceAnim === 'celebrate') return;
+    this.clearActivityAnim(managed);
+    managed.presenceAnim = 'celebrate';
+    const cKey = celebrateVisualKey(managed.data.gender);
+    const texKey = textureKeyForSubject(managed.data);
+    if (this.scene.textures.exists(cKey)) {
+      if (mode === 'cheer' || mode === 'bow') {
+        const cheerKey = celebrateCheerAnimKey(cKey);
+        if (this.scene.anims.exists(cheerKey)) {
+          managed.sprite.play(cheerKey, true);
+        }
+      } else {
+        const danceKey = celebrateDanceAnimKey(cKey);
+        if (this.scene.anims.exists(danceKey)) {
+          managed.sprite.play(danceKey, true);
+        }
+      }
+    } else {
+      managed.sprite.play(idleAnimKey(texKey));
+    }
+    const baseY = managed.sprite.y;
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      y: baseY - (mode === 'dance' ? 3 : 2),
+      angle: mode === 'bow' ? 12 : mode === 'dance' ? 6 : 0,
+      duration: mode === 'bow' ? 400 : 180,
+      yoyo: true,
+      repeat: mode === 'bow' ? 1 : 3,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        if (managed.sprite.active) managed.sprite.setAngle(0);
+      },
+    });
+  }
+
   playKneadAnim(id: string): void {
     const managed = this.getById(id);
     if (!managed || !managed.sprite.active || managed.moving) return;
@@ -2434,6 +2493,7 @@ export class SubjectSystem {
     this.clearActivityAnim(managed);
     managed.presenceAnim = 'knead';
     const baseX = managed.sprite.x;
+    const baseScaleY = managed.sprite.scaleY;
     this.scene.tweens.add({
       targets: managed.sprite,
       x: baseX + 2,
@@ -2441,6 +2501,14 @@ export class SubjectSystem {
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+    });
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      scaleY: baseScaleY * 1.04,
+      duration: 200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Quad.easeInOut',
     });
   }
 
@@ -2475,15 +2543,55 @@ export class SubjectSystem {
     if (managed.presenceAnim === 'pray') return;
     this.clearActivityAnim(managed);
     managed.presenceAnim = 'pray';
-    managed.sprite.setRotation(0.15);
+    const cKey = celebrateVisualKey(managed.data.gender);
+    if (this.scene.textures.exists(cKey)) {
+      const cheerKey = celebrateCheerAnimKey(cKey);
+      if (this.scene.anims.exists(cheerKey)) {
+        managed.sprite.setTexture(cKey);
+        managed.sprite.play(cheerKey, true);
+      }
+    } else {
+      managed.sprite.setRotation(0.15);
+    }
     const baseY = managed.sprite.y;
     this.scene.tweens.add({
       targets: managed.sprite,
-      y: baseY + 1,
-      duration: 1200,
+      y: baseY - 1,
+      duration: 600,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut',
+    });
+  }
+
+  playChildPlayAnim(id: string): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active || managed.moving) return;
+    if (managed.presenceAnim === 'play') return;
+    this.clearActivityAnim(managed);
+    managed.presenceAnim = 'play';
+    const baseY = managed.sprite.y;
+    this.scene.tweens.add({
+      targets: managed.sprite,
+      y: baseY - 5,
+      duration: 300,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Quad.easeOut',
+    });
+  }
+
+  playSlashAnim(id: string): void {
+    const managed = this.getById(id);
+    if (!managed || !managed.sprite.active) return;
+    const slashKey = roleSlashAnimKey(managed.data.role);
+    if (!this.scene.anims.exists(slashKey)) return;
+    const texKey = textureKeyForSubject(managed.data);
+    managed.sprite.play(slashKey);
+    managed.sprite.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      if (managed.sprite.active && !managed.moving) {
+        managed.sprite.play(idleAnimKey(texKey));
+      }
     });
   }
 
@@ -2913,15 +3021,31 @@ export class SubjectSystem {
     managed.sprite.setScale(scaleX * childScale, childScale);
   }
 
-  private removeSubject(managed: ManagedSubject): void {
+  private removeSubject(
+    managed: ManagedSubject,
+    opts?: { poof?: boolean }
+  ): void {
     if (this.selectedId === managed.data.id) {
       this.select(null);
       this.scene.game.events.emit(KingdomEvents.SUBJECT_SELECTED, null);
     }
     this.clearActivityAnim(managed);
-    managed.sprite.destroy();
+    const sprite = managed.sprite;
+    const x = sprite.x;
+    const y = sprite.y;
     this.registry.remove(managed);
-    // Always refresh Pop / persist — camp deaths used to skip onChanged
+    if (opts?.poof) {
+      this.playPoofVfx(x, y);
+      this.vfx?.breachDust(x, y - 8);
+    }
+    this.scene.tweens.add({
+      targets: sprite,
+      alpha: 0,
+      duration: 300,
+      onComplete: () => {
+        if (sprite.active) sprite.destroy();
+      },
+    });
     this.onChanged?.();
   }
 
@@ -3048,6 +3172,13 @@ export class SubjectSystem {
             slot.activity === 'juggle'
           ) {
             this.playJuggleAnim(managed.data.id);
+          } else if (slot.activity === 'juggle') {
+            this.playCelebrateAnim(managed.data.id, 'dance');
+          } else if (
+            managed.data.role === 'child' &&
+            slot.activity === 'play'
+          ) {
+            this.playChildPlayAnim(managed.data.id);
           } else {
             this.playWorkAnim(managed.data.id);
           }

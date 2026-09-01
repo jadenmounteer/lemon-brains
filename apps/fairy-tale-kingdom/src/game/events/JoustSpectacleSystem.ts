@@ -1,8 +1,11 @@
 import Phaser from 'phaser';
-import { isMilitaryRole, PROP_KEYS } from '../art/assetManifest';
+import { isMilitaryRole } from '../art/assetManifest';
 import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+import type { CelebrationVfx } from './CelebrationVfx';
+import type { SiegeVfx } from '../siege/SiegeVfx';
+import type { HorseMountSystem } from '../war/HorseMountSystem';
 import { ringOffset } from '../subjects/zones';
 
 type Stage = 'mount' | 'charge' | 'clash' | 'cheer' | 'idle';
@@ -16,13 +19,15 @@ export class JoustSpectacleSystem {
   private stage: Stage = 'idle';
   private stageMs = 0;
   private knightIds: string[] = [];
-  private horses = new Map<string, Phaser.GameObjects.Image>();
-  private clashFlash: Phaser.GameObjects.Rectangle | null = null;
+  private loserId: string | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly subjects: SubjectSystem,
-    private readonly bubbles: SpeechBubbleSystem
+    private readonly bubbles: SpeechBubbleSystem,
+    private readonly mounts: HorseMountSystem,
+    private readonly celebrationVfx: CelebrationVfx | null = null,
+    private readonly siegeVfx: SiegeVfx | null = null
   ) {}
 
   start(x: number, y: number): void {
@@ -41,7 +46,8 @@ export class JoustSpectacleSystem {
       return;
     }
     for (const id of this.knightIds) {
-      this.attachHorse(id);
+      this.mounts.reserve(id);
+      this.mounts.attach(id, 'trot');
       const m = this.subjects.getById(id);
       if (!m) continue;
       m.data.activity = 'joust';
@@ -54,20 +60,21 @@ export class JoustSpectacleSystem {
   }
 
   stop(): void {
+    if (!this.active && this.knightIds.length === 0) return;
     this.active = false;
     this.stage = 'idle';
-    for (const h of this.horses.values()) h.destroy();
-    this.horses.clear();
-    this.clashFlash?.destroy();
-    this.clashFlash = null;
-    // Restore knight + spectator schedules (festival / joust leftovers)
+    for (const id of this.knightIds) {
+      this.mounts.unreserve(id);
+      this.mounts.detach(id);
+    }
     this.subjects.clearGatherActivities(['festival', 'joust']);
     this.knightIds = [];
+    this.loserId = null;
   }
 
   update(deltaMs: number): void {
     if (!this.active) return;
-    this.syncHorses();
+    this.mounts.syncAll();
     this.stageMs -= deltaMs;
     if (this.stageMs > 0) return;
 
@@ -88,27 +95,13 @@ export class JoustSpectacleSystem {
         this.cheerWinner();
         break;
       case 'cheer':
-        // Loop another pass while the festival lasts
         this.stage = 'mount';
         this.stageMs = 2200;
+        this.loserId = null;
         break;
       default:
         break;
     }
-  }
-
-  /** Optional mounted trot while knights patrol outside combat. */
-  updateMountedPatrol(): void {
-    for (const s of this.subjects.listManaged()) {
-      if (s.data.role !== 'knight') continue;
-      if (s.data.activity !== 'patrol') {
-        this.detachHorse(s.data.id);
-        continue;
-      }
-      if (this.knightIds.includes(s.data.id)) continue; // joust owns them
-      if (!this.horses.has(s.data.id)) this.attachHorse(s.data.id);
-    }
-    this.syncHorses();
   }
 
   private gatherCrowd(): void {
@@ -131,6 +124,9 @@ export class JoustSpectacleSystem {
         this.venue.y + 40 + off.y * 0.4
       );
       this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 45);
+      if (!s.moving) {
+        this.subjects.playCelebrateAnim(s.data.id, 'cheer');
+      }
     });
   }
 
@@ -138,13 +134,17 @@ export class JoustSpectacleSystem {
     const [aId, bId] = this.knightIds;
     const a = aId ? this.subjects.getById(aId) : null;
     const b = bId ? this.subjects.getById(bId) : null;
+    for (const id of this.knightIds) {
+      this.mounts.setGallop(id, true);
+      this.mounts.setLance(id, true);
+    }
     if (a) {
       a.data.activityLabel = 'Charging down the lists';
       this.subjects.nudgeToward(
         a.data.id,
         this.venue.x - 50,
         this.venue.y,
-        70
+        90
       );
     }
     if (b) {
@@ -153,35 +153,43 @@ export class JoustSpectacleSystem {
         b.data.id,
         this.venue.x + 50,
         this.venue.y,
-        70
+        90
       );
     }
   }
 
   private doClash(): void {
-    this.clashFlash?.destroy();
-    this.clashFlash = this.scene.add
-      .rectangle(this.venue.x, this.venue.y, 24, 16, 0xfff2a8, 0.85)
-      .setDepth(12);
-    this.scene.tweens.add({
-      targets: this.clashFlash,
-      alpha: 0,
-      scaleX: 2,
-      scaleY: 2,
-      duration: 400,
-      onComplete: () => {
-        this.clashFlash?.destroy();
-        this.clashFlash = null;
-      },
-    });
-    for (const id of this.knightIds) {
-      const m = this.subjects.getById(id);
-      if (m) m.data.activityLabel = 'Lances clash!';
+    this.celebrationVfx?.cheerPulse(this.venue.x, this.venue.y);
+    this.siegeVfx?.breachDust(this.venue.x, this.venue.y);
+    this.celebrationVfx?.confettiBurst(this.venue.x, this.venue.y - 8);
+
+    const loserIdx = Math.random() < 0.5 ? 0 : 1;
+    const loserId = this.knightIds[loserIdx] ?? null;
+    const winnerId = this.knightIds[1 - loserIdx] ?? null;
+    this.loserId = loserId;
+
+    if (loserId) {
+      const loser = this.subjects.getById(loserId);
+      if (loser) {
+        loser.data.activityLabel = 'Unhorsed in the lists!';
+        this.siegeVfx?.hitFlash(loser.sprite);
+        this.mounts.setLance(loserId, false);
+        this.mounts.knockOff(loserId);
+      }
     }
+    if (winnerId) {
+      const winner = this.subjects.getById(winnerId);
+      if (winner) {
+        winner.data.activityLabel = 'Lances clash!';
+        this.siegeVfx?.hitFlash(winner.sprite);
+      }
+    }
+    this.celebrationVfx?.fireworkPop(this.venue.x, this.venue.y - 16);
   }
 
   private cheerWinner(): void {
     const winnerId =
+      this.knightIds.find((id) => id !== this.loserId) ??
       this.knightIds[Math.floor(Math.random() * this.knightIds.length)];
     const winner = winnerId ? this.subjects.getById(winnerId) : null;
     if (winner) {
@@ -195,41 +203,16 @@ export class JoustSpectacleSystem {
     for (const s of this.subjects.listManaged()) {
       if (s.data.activityLabel === 'Watching the joust') {
         s.data.happiness = Math.min(100, s.data.happiness + 3);
-        if (Math.random() < 0.35) this.bubbles.say(s.sprite, 'Huzzah!');
+        if (Math.random() < 0.35) {
+          this.bubbles.say(s.sprite, 'Huzzah!');
+          this.subjects.playCelebrateAnim(s.data.id, 'cheer');
+        }
       }
     }
-  }
-
-  private attachHorse(knightId: string): void {
-    if (this.horses.has(knightId)) return;
-    if (!this.scene.textures.exists(PROP_KEYS.horse)) return;
-    const m = this.subjects.getById(knightId);
-    if (!m) return;
-    const horse = this.scene.add
-      .image(m.sprite.x, m.sprite.y + 2, PROP_KEYS.horse)
-      .setDepth(m.sprite.depth - 1)
-      .setOrigin(0.5, 0.85);
-    this.horses.set(knightId, horse);
-  }
-
-  private detachHorse(knightId: string): void {
-    const h = this.horses.get(knightId);
-    if (!h) return;
-    h.destroy();
-    this.horses.delete(knightId);
-  }
-
-  private syncHorses(): void {
-    for (const [id, horse] of this.horses) {
-      const m = this.subjects.getById(id);
-      if (!m || !m.sprite.active) {
-        horse.destroy();
-        this.horses.delete(id);
-        continue;
-      }
-      horse.setPosition(m.sprite.x - 2, m.sprite.y + 4);
-      horse.setDepth(m.sprite.depth - 1);
-      horse.setFlipX(m.sprite.flipX);
+    for (const id of this.knightIds) {
+      if (id === this.loserId) continue;
+      this.mounts.setGallop(id, false);
+      this.mounts.setLance(id, false);
     }
   }
 }

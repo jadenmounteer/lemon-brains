@@ -111,7 +111,10 @@ export class BuildingCombat {
     const b = this.host.buildings.find((x) => x.id === id);
     if (!b) return false;
     b.hp = Math.max(0, b.hp - amount);
-    if (opts?.fire) this.host.burningIds.add(id);
+    if (opts?.fire) {
+      this.host.burningIds.add(id);
+      this.host.vfx?.startBurn(id, b.x, b.y);
+    }
     this.host.tintByHp(b);
     this.host.vfx?.hitFlash(b.sprite);
     if (b.hp <= 0) {
@@ -127,6 +130,9 @@ export class BuildingCombat {
     this.host.keepHp = Math.max(0, this.host.keepHp - amount);
     this.host.applyKeepTint();
     this.host.vfx?.hitFlash(this.host.keepSprite);
+    if (this.host.keepSprite) {
+      this.host.vfx?.impactShake(this.host.keepSprite);
+    }
     if (this.host.keepHp <= 0) {
       this.host.keepSprite?.setVisible(false);
       this.host.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {

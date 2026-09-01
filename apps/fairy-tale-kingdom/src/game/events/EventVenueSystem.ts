@@ -9,6 +9,21 @@ import type { FestivalKind } from './festivalRequirements';
 
 export type VenueKind = 'festival' | 'wedding' | 'joust' | 'funeral';
 
+function festivalVenueTexture(kind: FestivalKind | null): string {
+  switch (kind) {
+    case 'harvest':
+      return PROP_KEYS.venueFestivalHarvest;
+    case 'harbor':
+      return PROP_KEYS.venueFestivalHarbor;
+    case 'cathedral':
+      return PROP_KEYS.venueFestivalCathedral;
+    case 'market':
+      return PROP_KEYS.venueFestivalMarket;
+    default:
+      return PROP_KEYS.venueFestival;
+  }
+}
+
 interface ActiveVenue {
   kind: VenueKind;
   sprite: Phaser.GameObjects.Image;
@@ -107,7 +122,10 @@ export class EventVenueSystem {
     if (!anchor && x == null) return;
     const px = x ?? anchor!.x + 28;
     const py = y ?? anchor!.y + 10;
-    const tex = VENUE_TEX[kind];
+    const tex =
+      kind === 'festival'
+        ? festivalVenueTexture(this.festivalAnchor?.kind ?? null)
+        : VENUE_TEX[kind];
     if (!this.scene.textures.exists(tex)) return;
     const sprite = this.scene.add
       .image(px, py, tex)

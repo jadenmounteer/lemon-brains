@@ -16,6 +16,7 @@ export class ParadeSystem {
   private path: { x: number; y: number }[] = [];
   private pathIndex = 0;
   private linedIds = new Set<string>();
+  private cheeredIds = new Set<string>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -70,6 +71,7 @@ export class ParadeSystem {
       .setOrigin(0.5, 0.85);
 
     this.linedIds.clear();
+    this.cheeredIds.clear();
     for (const s of this.subjects.listManaged()) {
       if (s.data.role !== 'peasant' || s.data.sick) continue;
       if (s.interrupt) continue;
@@ -122,6 +124,21 @@ export class ParadeSystem {
       if (king?.interrupt?.kind === 'parade') {
         king.sprite.setPosition(this.carriage.x, this.carriage.y - 4);
       }
+      for (const id of this.linedIds) {
+        if (this.cheeredIds.has(id)) continue;
+        const s = this.subjects.getById(id);
+        if (!s) continue;
+        const d = Phaser.Math.Distance.Between(
+          s.sprite.x,
+          s.sprite.y,
+          this.carriage.x,
+          this.carriage.y
+        );
+        if (d < 55) {
+          this.cheeredIds.add(id);
+          this.subjects.playCelebrateAnim(id, 'cheer');
+        }
+      }
     }
 
     if (this.remainingMs <= 0) {
@@ -143,6 +160,7 @@ export class ParadeSystem {
       }
     }
     this.linedIds.clear();
+    this.cheeredIds.clear();
 
     const king = this.subjects.firstByRole('king');
     if (king?.interrupt?.kind === 'parade') {

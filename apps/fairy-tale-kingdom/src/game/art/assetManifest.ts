@@ -128,12 +128,17 @@ export const PROP_KEYS = {
   gallows: 'prop-gallows',
   carriage: 'prop-carriage',
   venueFestival: 'prop-venue-festival',
+  venueFestivalHarvest: 'prop-venue-festival-harvest',
+  venueFestivalHarbor: 'prop-venue-festival-harbor',
+  venueFestivalCathedral: 'prop-venue-festival-cathedral',
+  venueFestivalMarket: 'prop-venue-festival-market',
   venueWedding: 'prop-venue-wedding',
   venueJoust: 'prop-venue-joust',
   venueFuneral: 'prop-venue-funeral',
   venueBall: 'prop-venue-ball',
   ballTable: 'prop-ball-table',
   horse: 'prop-horse',
+  lance: 'prop-lance',
   juggleBall: 'prop-juggle-ball',
   road: 'prop-road',
   bridge: 'prop-bridge',
@@ -225,6 +230,59 @@ export const JesterPerformFrame = {
 
 export function jesterJuggleAnimKey(): string {
   return 'jester-juggle';
+}
+
+export const CELEBRATE_VISUAL_KEYS = ['celebrate_m', 'celebrate_f'] as const;
+export const CELEBRATE_FRAME_COUNT = 5;
+
+export const CelebrateFrame = {
+  idle: 0,
+  dance1: 1,
+  dance2: 2,
+  cheer: 3,
+  bow: 4,
+} as const;
+
+export function celebrateVisualKey(gender: 'male' | 'female'): string {
+  return gender === 'male' ? 'celebrate_m' : 'celebrate_f';
+}
+
+export function celebrateDanceAnimKey(key: string): string {
+  return `${key}-dance`;
+}
+
+export function celebrateCheerAnimKey(key: string): string {
+  return `${key}-cheer`;
+}
+
+export const HORSE_FRAME_COUNT = 8;
+export const HORSE_TROT_FRAMES = [0, 1, 2, 3] as const;
+export const HORSE_GALLOP_FRAMES = [4, 5, 6, 7] as const;
+
+export function horseTrotAnimKey(): string {
+  return 'horse-trot';
+}
+
+export function horseGallopAnimKey(): string {
+  return 'horse-gallop';
+}
+
+export const MILITARY_SLASH_ROLES = [
+  'guard',
+  'soldier',
+  'archer',
+  'knight',
+] as const;
+
+export const MilitaryPerformFrame = {
+  slash: 17,
+  recover: 18,
+} as const;
+
+export const MILITARY_FRAME_COUNT = 19;
+
+export function roleSlashAnimKey(role: string): string {
+  return `${role}-slash`;
 }
 
 export function idleAnimKey(role: string): string {

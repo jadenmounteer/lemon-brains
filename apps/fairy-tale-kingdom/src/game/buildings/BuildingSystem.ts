@@ -1588,6 +1588,7 @@ export class BuildingSystem {
     if (this.selectedId === b.id) return;
     if (this.burningIds.has(b.id)) {
       b.sprite.setTint(0xff6622);
+      this.vfx?.startBurn(b.id, b.x, b.y);
       return;
     }
     const ratio = b.hp / b.maxHp;

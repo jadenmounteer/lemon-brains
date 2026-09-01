@@ -523,6 +523,7 @@ export class CombatSystem {
             : CombatBalance.guardMelee;
       this.vfx?.meleeLunge(fighter.sprite, hostile.sprite.x, hostile.sprite.y);
       this.vfx?.hitFlash(hostile.sprite);
+      this.subjects.playSlashAnim(fighter.data.id);
       this.subjects.damageSubject(hostile.data.id, base * dmgMult);
     }
   }

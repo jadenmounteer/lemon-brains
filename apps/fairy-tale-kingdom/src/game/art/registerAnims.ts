@@ -1,13 +1,24 @@
 import Phaser from 'phaser';
 import {
+  CELEBRATE_VISUAL_KEYS,
+  CelebrateFrame,
   DIRECTIONS,
   HEARTH_FIRE_ANIM,
   HEARTH_FIRE_FRAMES,
+  HORSE_GALLOP_FRAMES,
+  HORSE_TROT_FRAMES,
   JesterPerformFrame,
+  MILITARY_SLASH_ROLES,
+  MilitaryPerformFrame,
   PROP_KEYS,
   UnitFrame,
+  celebrateCheerAnimKey,
+  celebrateDanceAnimKey,
+  horseGallopAnimKey,
+  horseTrotAnimKey,
   idleAnimKey,
   jesterJuggleAnimKey,
+  roleSlashAnimKey,
   uniqueSheetRoles,
   walkAnimKey,
   walkFramesFor,
@@ -83,6 +94,67 @@ function registerJesterAnims(scene: Phaser.Scene): void {
   });
 }
 
+function registerCelebrateAnims(scene: Phaser.Scene): void {
+  for (const key of CELEBRATE_VISUAL_KEYS) {
+    if (!scene.textures.exists(key)) continue;
+    ensureAnim(scene, celebrateDanceAnimKey(key), {
+      key: celebrateDanceAnimKey(key),
+      frames: [
+        { key, frame: CelebrateFrame.dance1 },
+        { key, frame: CelebrateFrame.dance2 },
+      ],
+      frameRate: 6,
+      repeat: -1,
+    });
+    ensureAnim(scene, celebrateCheerAnimKey(key), {
+      key: celebrateCheerAnimKey(key),
+      frames: [
+        { key, frame: CelebrateFrame.cheer },
+        { key, frame: CelebrateFrame.bow },
+      ],
+      frameRate: 4,
+      repeat: -1,
+    });
+  }
+}
+
+function registerHorseAnims(scene: Phaser.Scene): void {
+  if (!scene.textures.exists(PROP_KEYS.horse)) return;
+  ensureAnim(scene, horseTrotAnimKey(), {
+    key: horseTrotAnimKey(),
+    frames: HORSE_TROT_FRAMES.map((frame) => ({
+      key: PROP_KEYS.horse,
+      frame,
+    })),
+    frameRate: 8,
+    repeat: -1,
+  });
+  ensureAnim(scene, horseGallopAnimKey(), {
+    key: horseGallopAnimKey(),
+    frames: HORSE_GALLOP_FRAMES.map((frame) => ({
+      key: PROP_KEYS.horse,
+      frame,
+    })),
+    frameRate: 12,
+    repeat: -1,
+  });
+}
+
+function registerMilitarySlashAnims(scene: Phaser.Scene): void {
+  for (const role of MILITARY_SLASH_ROLES) {
+    if (!scene.textures.exists(role)) continue;
+    ensureAnim(scene, roleSlashAnimKey(role), {
+      key: roleSlashAnimKey(role),
+      frames: [
+        { key: role, frame: MilitaryPerformFrame.slash },
+        { key: role, frame: MilitaryPerformFrame.recover },
+      ],
+      frameRate: 10,
+      repeat: 0,
+    });
+  }
+}
+
 export function registerAnims(scene: Phaser.Scene): void {
   for (const role of uniqueSheetRoles()) {
     if (role === 'jester') continue;
@@ -94,6 +166,9 @@ export function registerAnims(scene: Phaser.Scene): void {
     }
   }
   registerJesterAnims(scene);
+  registerCelebrateAnims(scene);
+  registerHorseAnims(scene);
+  registerMilitarySlashAnims(scene);
 
   if (scene.textures.exists(PROP_KEYS.hearthFire)) {
     ensureAnim(scene, HEARTH_FIRE_ANIM, {

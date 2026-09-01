@@ -59,6 +59,8 @@ import { FestivalFunSystem } from '../events/FestivalFunSystem';
 import { BallFunSystem } from '../events/BallFunSystem';
 import { WeddingCeremonySystem } from '../events/WeddingCeremonySystem';
 import { JoustSpectacleSystem } from '../events/JoustSpectacleSystem';
+import { CelebrationVfx } from '../events/CelebrationVfx';
+import { HorseMountSystem } from '../war/HorseMountSystem';
 import { KeepLifeSystem } from '../keep/KeepLifeSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
 import { DungeonLifeSystem } from '../dungeon/DungeonLifeSystem';
@@ -109,6 +111,8 @@ export class KingdomScene extends Phaser.Scene {
   private pathGrid!: PathGrid;
   private siegeEngines!: SiegeEngineSystem;
   private siegeVfx!: SiegeVfx;
+  private celebrationVfx!: CelebrationVfx;
+  private horseMounts!: HorseMountSystem;
   private monsters!: MonsterSystem;
   private thieves!: ThiefSystem;
   private encampments!: EncampmentSystem;
@@ -205,6 +209,7 @@ export class KingdomScene extends Phaser.Scene {
     this.pathGrid.applyTerrainFromMap(this.mapData, isTerrainBlocked);
 
     this.siegeVfx = new SiegeVfx(this);
+    this.celebrationVfx = new CelebrationVfx(this);
     this.siegeEngines = new SiegeEngineSystem(this);
     this.siegeEngines.setPathGrid(this.pathGrid);
     this.siegeEngines.setVfx(this.siegeVfx);
@@ -228,6 +233,7 @@ export class KingdomScene extends Phaser.Scene {
     this.buildings.setMapData(this.mapData);
     this.buildings.setVfx(this.siegeVfx);
     this.subjects.setBuildings(this.buildings);
+    this.subjects.setVfx(this.siegeVfx);
     this.subjects.setPathGrid(this.pathGrid);
     this.subjects.setOnChanged(() => {
       this.world.emitStats();
@@ -329,7 +335,12 @@ export class KingdomScene extends Phaser.Scene {
     this.bubbles = new SpeechBubbleSystem(this);
     this.subjects.setBubbles(this.bubbles);
     this.festivalFun = new FestivalFunSystem(this.subjects, this.bubbles);
+    this.festivalFun.setVfx(this.celebrationVfx);
+    this.festivalFun.setFestivalKindProvider(() =>
+      this.royalty.getActiveFestivalKind()
+    );
     this.ballFun = new BallFunSystem(this, this.subjects, this.bubbles);
+    this.ballFun.setVfx(this.celebrationVfx);
     this.weddingCeremony = new WeddingCeremonySystem(
       this,
       this.subjects,
@@ -340,6 +351,7 @@ export class KingdomScene extends Phaser.Scene {
       const pending = this.family.consumePendingMarriage();
       if (pending) this.family.applyMarriageHome(pending);
     });
+    this.weddingCeremony.setVfx(this.celebrationVfx);
     this.dungeonLife = new DungeonLifeSystem(this, this.subjects, this.buildings, {
       getCaptives: () => this.captives,
       addCaptive: (c) => {
@@ -396,10 +408,18 @@ export class KingdomScene extends Phaser.Scene {
         this.weddingCeremony.isActive()
       );
     });
+    this.horseMounts = new HorseMountSystem(
+      this,
+      this.subjects,
+      this.siegeVfx
+    );
     this.joustSpectacle = new JoustSpectacleSystem(
       this,
       this.subjects,
-      this.bubbles
+      this.bubbles,
+      this.horseMounts,
+      this.celebrationVfx,
+      this.siegeVfx
     );
     this.keepLife = new KeepLifeSystem(
       this.subjects,
@@ -925,7 +945,7 @@ export class KingdomScene extends Phaser.Scene {
     }
     this.weddingCeremony?.update(delta);
     this.joustSpectacle?.update(delta);
-    this.joustSpectacle?.updateMountedPatrol();
+    this.horseMounts?.updateKnightMounts();
     this.world.update(delta);
     this.updateJuggleProps();
     this.security?.update(delta);

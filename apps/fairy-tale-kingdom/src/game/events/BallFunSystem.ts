@@ -3,6 +3,7 @@ import { PROP_KEYS } from '../art/assetManifest';
 import type { SubjectSystem, ManagedSubject } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import { ringOffset } from '../subjects/zones';
+import type { CelebrationVfx } from './CelebrationVfx';
 
 type Beat = 'dance' | 'talk' | 'music' | 'toast' | 'bow';
 
@@ -24,12 +25,17 @@ export class BallFunSystem {
   private venue = { x: 0, y: 0 };
   private beatMs = 0;
   private props: Phaser.GameObjects.Image[] = [];
+  private vfx: CelebrationVfx | null = null;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly subjects: SubjectSystem,
     private readonly bubbles: SpeechBubbleSystem
   ) {}
+
+  setVfx(vfx: CelebrationVfx): void {
+    this.vfx = vfx;
+  }
 
   start(x: number, y: number): void {
     this.stop();
@@ -88,6 +94,7 @@ export class BallFunSystem {
       const line = TOASTS[Math.floor(Math.random() * TOASTS.length)]!;
       this.bubbles.say(s.sprite, line);
       s.data.thought = line;
+      this.vfx?.confettiBurst(s.sprite.x, s.sprite.y - 14);
     } else if (beat === 'music') {
       const s = guests[Math.floor(Math.random() * guests.length)]!;
       const line = MUSIC[Math.floor(Math.random() * MUSIC.length)]!;
@@ -111,17 +118,7 @@ export class BallFunSystem {
       case 'dance':
         s.data.activityLabel = 'Dancing at the royal ball';
         if (!s.moving) {
-          s.sprite.scene.tweens.add({
-            targets: s.sprite,
-            y: s.sprite.y - 3,
-            angle: s.sprite.angle + (Math.random() < 0.5 ? 8 : -8),
-            duration: 160,
-            yoyo: true,
-            repeat: 4,
-            onComplete: () => {
-              if (s.sprite.active) s.sprite.setAngle(0);
-            },
-          });
+          this.subjects.playCelebrateAnim(s.data.id, 'dance');
         }
         break;
       case 'talk':
@@ -133,27 +130,13 @@ export class BallFunSystem {
       case 'toast':
         s.data.activityLabel = 'Toasting the crown';
         if (!s.moving) {
-          s.sprite.scene.tweens.add({
-            targets: s.sprite,
-            y: s.sprite.y - 4,
-            duration: 200,
-            yoyo: true,
-            repeat: 1,
-          });
+          this.subjects.playCelebrateAnim(s.data.id, 'cheer');
         }
         break;
       case 'bow':
         s.data.activityLabel = 'Paying respects';
         if (!s.moving) {
-          s.sprite.scene.tweens.add({
-            targets: s.sprite,
-            angle: 25,
-            duration: 280,
-            yoyo: true,
-            onComplete: () => {
-              if (s.sprite.active) s.sprite.setAngle(0);
-            },
-          });
+          this.subjects.playCelebrateAnim(s.data.id, 'bow');
         }
         break;
     }

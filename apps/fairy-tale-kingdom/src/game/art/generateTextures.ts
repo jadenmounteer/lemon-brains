@@ -7,6 +7,8 @@ import {
   UNIT_HEIGHT,
   UNIT_WIDTH,
   JESTER_FRAME_COUNT,
+  MILITARY_FRAME_COUNT,
+  MILITARY_SLASH_ROLES,
   uniqueSheetRoles,
   wallTextureKey,
   type AnimRole,
@@ -2715,19 +2717,178 @@ function drawBallTable(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawHorseFrame(ctx: Ctx, originX: number, leg: number, gallop: boolean) {
+  const bodyY = gallop ? (leg % 2 === 0 ? 0 : 1) : 0;
+  const caparison = 0x8b3030;
+  fillRect(ctx, originX + 6, 8 + bodyY, 16, 8, 0x6b4a2a);
+  fillRect(ctx, originX + 6, 9 + bodyY, 16, 4, caparison);
+  fillRect(ctx, originX + 18, 4 + bodyY, 8, 8, 0x5a3a1a);
+  fillRect(ctx, originX + 22, 6 + bodyY, 4, 3, palette.cream);
+  fillRect(ctx, originX + 20, 3 + bodyY, 4, 3, 0x4a2a1a);
+  const frontLeg = gallop ? (leg % 2 === 0 ? -2 : 2) : leg;
+  const backLeg = gallop ? (leg % 2 === 0 ? 2 : -2) : 1 - leg;
+  fillRect(ctx, originX + 8 + frontLeg, 14 + bodyY, 3, 6, 0x4a2a1a);
+  fillRect(ctx, originX + 16 + backLeg, 14 + bodyY, 3, 6, 0x4a2a1a);
+  fillRect(ctx, originX + 4, 10 + bodyY, 4, 3, palette.ink);
+  pixel(ctx, originX + 24, 7 + bodyY, palette.ink);
+}
+
 function drawHorse(scene: Phaser.Scene) {
-  const w = 28;
-  const h = 22;
-  const tex = createCanvas(scene, PROP_KEYS.horse, w, h);
+  const fw = 28;
+  const fh = 22;
+  const width = fw * 8;
+  const tex = createCanvas(scene, PROP_KEYS.horse, width, fh);
   const ctx = tex.getContext();
-  fillRect(ctx, 6, 8, 16, 8, palette.wood);
-  fillRect(ctx, 18, 4, 8, 8, palette.woodDark);
-  fillRect(ctx, 22, 6, 4, 3, palette.cream);
-  fillRect(ctx, 8, 14, 3, 6, palette.woodDark);
-  fillRect(ctx, 16, 14, 3, 6, palette.woodDark);
-  fillRect(ctx, 4, 10, 4, 3, palette.ink);
-  pixel(ctx, 24, 7, palette.ink);
+  for (let i = 0; i < 4; i++) {
+    drawHorseFrame(ctx, i * fw, i, false);
+  }
+  for (let i = 0; i < 4; i++) {
+    drawHorseFrame(ctx, (i + 4) * fw, i, true);
+  }
   tex.refresh();
+  const sheet = scene.textures.get(PROP_KEYS.horse);
+  for (let i = 0; i < 8; i++) {
+    const name = String(i);
+    if (!sheet.has(name)) {
+      sheet.add(name, 0, i * fw, 0, fw, fh);
+    }
+  }
+}
+
+function drawLance(scene: Phaser.Scene) {
+  const w = 18;
+  const h = 4;
+  const tex = createCanvas(scene, PROP_KEYS.lance, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 0, 1, 14, 2, palette.wood);
+  fillRect(ctx, 14, 0, 4, 4, palette.metal);
+  pixel(ctx, 16, 1, palette.ink);
+  tex.refresh();
+}
+
+type CelebratePose = 'idle' | 'dance1' | 'dance2' | 'cheer' | 'bow';
+
+function drawCelebrateFrame(
+  ctx: Ctx,
+  originX: number,
+  gender: 'male' | 'female',
+  pose: CelebratePose
+) {
+  const cloth = gender === 'female' ? palette.clothPrincess : palette.clothPeasant;
+  const y = pose === 'bow' ? 2 : 0;
+  fillRect(ctx, originX + 4, 21, 8, 2, palette.ink);
+  fillRect(ctx, originX + 5, 18 + y, 3, 3, palette.ink);
+  fillRect(ctx, originX + 9, 18 + y, 3, 3, palette.ink);
+  if (gender === 'female' && pose !== 'bow') {
+    fillRect(ctx, originX + 3, 14 + y, 10, 5, cloth);
+    fillRect(ctx, originX + 5, 10 + y, 6, 5, cloth);
+  } else {
+    fillRect(ctx, originX + 5, 10 + y, 6, 8, cloth);
+  }
+  fillRect(ctx, originX + 5, 4 + y, 6, 5, palette.skin);
+  if (pose === 'cheer') {
+    fillRect(ctx, originX + 2, 8 + y, 2, 6, palette.skin);
+    fillRect(ctx, originX + 12, 8 + y, 2, 6, palette.skin);
+  } else if (pose === 'dance1') {
+    fillRect(ctx, originX + 2, 10 + y, 2, 5, palette.skin);
+    fillRect(ctx, originX + 12, 11 + y, 2, 4, palette.skin);
+  } else if (pose === 'dance2') {
+    fillRect(ctx, originX + 12, 10 + y, 2, 5, palette.skin);
+    fillRect(ctx, originX + 2, 11 + y, 2, 4, palette.skin);
+  } else if (pose === 'bow') {
+    fillRect(ctx, originX + 5, 6 + y, 6, 2, palette.ink);
+  } else {
+    fillRect(ctx, originX + 12, 10 + y, 2, 5, palette.skin);
+  }
+  if (gender === 'female') {
+    fillRect(ctx, originX + 4, 2 + y, 8, 3, 0xd4a8a8);
+  } else {
+    fillRect(ctx, originX + 4, 2 + y, 8, 2, palette.woodDark);
+  }
+  if (pose !== 'bow') {
+    pixel(ctx, originX + 7, 6 + y, palette.ink);
+    pixel(ctx, originX + 9, 6 + y, palette.ink);
+  }
+}
+
+function drawCelebrateSheets(scene: Phaser.Scene) {
+  for (const [key, gender] of [
+    ['celebrate_m', 'male'],
+    ['celebrate_f', 'female'],
+  ] as const) {
+    const width = UNIT_WIDTH * 5;
+    const tex = createCanvas(scene, key, width, UNIT_HEIGHT);
+    const ctx = tex.getContext();
+    const poses: CelebratePose[] = ['idle', 'dance1', 'dance2', 'cheer', 'bow'];
+    poses.forEach((pose, i) => {
+      drawCelebrateFrame(ctx, i * UNIT_WIDTH, gender, pose);
+    });
+    tex.refresh();
+    const sheet = scene.textures.get(key);
+    for (let i = 0; i < 5; i++) {
+      const name = String(i);
+      if (!sheet.has(name)) {
+        sheet.add(name, 0, i * UNIT_WIDTH, 0, UNIT_WIDTH, UNIT_HEIGHT);
+      }
+    }
+  }
+}
+
+function drawMilitarySlashOverlay(
+  ctx: Ctx,
+  originX: number,
+  role: AnimRole,
+  phase: 0 | 1
+) {
+  drawUnitFrame(ctx, originX, role, 'down', null);
+  const reach = phase === 0 ? 7 : 4;
+  if (role === 'archer') {
+    fillRect(ctx, originX + 11, 9, reach, 2, palette.wood);
+    fillRect(ctx, originX + 11 + reach - 1, 8, 1, 4, palette.woodDark);
+  } else if (role === 'knight') {
+    fillRect(ctx, originX + 11, 7, reach + 3, 2, palette.metal);
+    fillRect(ctx, originX + 11 + reach + 2, 5, 2, 6, palette.metal);
+  } else {
+    fillRect(ctx, originX + 12, 10, reach, 2, palette.metal);
+  }
+}
+
+function drawMilitaryUnitSheet(scene: Phaser.Scene, role: AnimRole) {
+  const key = role;
+  const width = UNIT_WIDTH * MILITARY_FRAME_COUNT;
+  const height = UNIT_HEIGHT;
+  const tex = createCanvas(scene, key, width, height);
+  const ctx = tex.getContext();
+
+  const facings: Array<'down' | 'left' | 'right' | 'up'> = [
+    'down',
+    'left',
+    'right',
+    'up',
+  ];
+
+  drawUnitFrame(ctx, 0, role, 'down', null);
+
+  let frame = 1;
+  for (const facing of facings) {
+    for (let step = 0; step < 4; step++) {
+      drawUnitFrame(ctx, frame * UNIT_WIDTH, role, facing, step);
+      frame++;
+    }
+  }
+
+  drawMilitarySlashOverlay(ctx, 17 * UNIT_WIDTH, role, 0);
+  drawMilitarySlashOverlay(ctx, 18 * UNIT_WIDTH, role, 1);
+
+  tex.refresh();
+
+  const sheet = scene.textures.get(key);
+  for (let i = 0; i < MILITARY_FRAME_COUNT; i++) {
+    const name = String(i);
+    if (!sheet.has(name)) {
+      sheet.add(name, 0, i * UNIT_WIDTH, 0, UNIT_WIDTH, UNIT_HEIGHT);
+    }
+  }
 }
 
 function drawJuggleBall(scene: Phaser.Scene) {
@@ -2744,11 +2905,17 @@ function drawJuggleBall(scene: Phaser.Scene) {
 
 function drawVenueProps(scene: Phaser.Scene) {
   drawVenueBanner(scene, PROP_KEYS.venueFestival, palette.clothPeasant, true);
+  drawVenueBanner(scene, PROP_KEYS.venueFestivalHarvest, 0xc8a050, true);
+  drawVenueBanner(scene, PROP_KEYS.venueFestivalHarbor, 0x3a6a9a, true);
+  drawVenueBanner(scene, PROP_KEYS.venueFestivalCathedral, palette.clothPrincess, true);
+  drawVenueBanner(scene, PROP_KEYS.venueFestivalMarket, 0x8b6914, true);
   drawVenueBanner(scene, PROP_KEYS.venueWedding, palette.clothPrincess, true);
   drawVenueBanner(scene, PROP_KEYS.venueJoust, palette.clothKnight, false);
   drawVenueBanner(scene, PROP_KEYS.venueFuneral, palette.stoneDark, false);
   drawVenueBanner(scene, PROP_KEYS.venueBall, palette.clothKing, true);
   drawHorse(scene);
+  drawLance(scene);
+  drawCelebrateSheets(scene);
   drawJuggleBall(scene);
   drawBallTable(scene);
 }
@@ -2892,12 +3059,17 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.gypsyCamp,
     PROP_KEYS.covenCamp,
     PROP_KEYS.venueFestival,
+    PROP_KEYS.venueFestivalHarvest,
+    PROP_KEYS.venueFestivalHarbor,
+    PROP_KEYS.venueFestivalCathedral,
+    PROP_KEYS.venueFestivalMarket,
     PROP_KEYS.venueWedding,
     PROP_KEYS.venueJoust,
     PROP_KEYS.venueFuneral,
     PROP_KEYS.venueBall,
     PROP_KEYS.ballTable,
     PROP_KEYS.horse,
+    PROP_KEYS.lance,
     PROP_KEYS.juggleBall,
     PROP_KEYS.houseInterior,
     PROP_KEYS.keepInterior,
@@ -2934,6 +3106,8 @@ export function generateTextures(scene: Phaser.Scene): void {
     'peasant_merchant_f',
     'peasant_fisher_m',
     'peasant_fisher_f',
+    'celebrate_m',
+    'celebrate_f',
     ...propKeys,
   ]) {
     if (scene.textures.exists(key)) {
@@ -2945,6 +3119,10 @@ export function generateTextures(scene: Phaser.Scene): void {
   for (const role of uniqueSheetRoles()) {
     if (role === 'jester') {
       drawJesterSheet(scene);
+      continue;
+    }
+    if ((MILITARY_SLASH_ROLES as readonly string[]).includes(role)) {
+      drawMilitaryUnitSheet(scene, role);
       continue;
     }
     drawUnitSheet(scene, role);

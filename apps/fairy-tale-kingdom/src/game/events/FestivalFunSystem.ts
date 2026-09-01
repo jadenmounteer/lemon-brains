@@ -1,6 +1,8 @@
 import type { SubjectSystem, ManagedSubject } from '../subjects/SubjectSystem';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+import type { FestivalKind } from './festivalRequirements';
 import { ringOffset } from '../subjects/zones';
+import type { CelebrationVfx } from './CelebrationVfx';
 
 type Beat = 'dance' | 'talk' | 'music' | 'awe' | 'eat';
 
@@ -19,11 +21,21 @@ export class FestivalFunSystem {
   private active = false;
   private venue = { x: 0, y: 0 };
   private beatMs = 0;
+  private vfx: CelebrationVfx | null = null;
+  private kindProvider: (() => FestivalKind | null) | null = null;
 
   constructor(
     private readonly subjects: SubjectSystem,
     private readonly bubbles: SpeechBubbleSystem
   ) {}
+
+  setVfx(vfx: CelebrationVfx): void {
+    this.vfx = vfx;
+  }
+
+  setFestivalKindProvider(fn: () => FestivalKind | null): void {
+    this.kindProvider = fn;
+  }
 
   start(x: number, y: number): void {
     this.active = true;
@@ -46,9 +58,16 @@ export class FestivalFunSystem {
       .filter((s) => s.data.activity === 'festival' && s.sprite.active);
     if (celebrants.length === 0) return;
 
+    const kind = this.kindProvider?.() ?? 'peasant';
     const beat: Beat = (['dance', 'talk', 'music', 'awe', 'eat'] as Beat[])[
       Math.floor(Math.random() * 5)
     ]!;
+
+    if (beat === 'awe' && kind === 'joust') {
+      this.vfx?.fireworkPop(this.venue.x, this.venue.y);
+    } else if (beat === 'awe') {
+      this.vfx?.cheerPulse(this.venue.x, this.venue.y);
+    }
 
     celebrants.forEach((s, i) => {
       const off = ringOffset(i, celebrants.length, 64);
@@ -58,7 +77,7 @@ export class FestivalFunSystem {
         this.venue.y + off.y + ((i * 13) % 9) - 4
       );
       this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 36);
-      this.applyBeat(s, beat);
+      this.applyBeat(s, beat, kind);
     });
 
     if (beat === 'talk' && celebrants.length >= 2) {
@@ -74,6 +93,7 @@ export class FestivalFunSystem {
       const line = CHEERS[Math.floor(Math.random() * CHEERS.length)]!;
       this.bubbles.say(s.sprite, line);
       s.data.thought = line;
+      this.vfx?.confettiBurst(s.sprite.x, s.sprite.y - 12);
     } else if (beat === 'music') {
       const s = celebrants[0]!;
       this.bubbles.say(s.sprite, 'That tune lifts the heart');
@@ -91,17 +111,19 @@ export class FestivalFunSystem {
     }
   }
 
-  private applyBeat(s: ManagedSubject, beat: Beat): void {
+  private applyBeat(
+    s: ManagedSubject,
+    beat: Beat,
+    kind: FestivalKind
+  ): void {
     switch (beat) {
       case 'dance':
         s.data.activityLabel = 'Dancing at the festival';
-        s.sprite.scene.tweens.add({
-          targets: s.sprite,
-          y: s.sprite.y - 2,
-          duration: 180,
-          yoyo: true,
-          repeat: 3,
-        });
+        if (kind === 'tavern' && s.data.role === 'jester') {
+          this.subjects.playJuggleAnim(s.data.id);
+        } else if (!s.moving) {
+          this.subjects.playCelebrateAnim(s.data.id, 'dance');
+        }
         break;
       case 'talk':
         s.data.activityLabel = 'Chatting at the festival';
@@ -111,6 +133,9 @@ export class FestivalFunSystem {
         break;
       case 'awe':
         s.data.activityLabel = 'Cheering the festival';
+        if (!s.moving) {
+          this.subjects.playCelebrateAnim(s.data.id, 'cheer');
+        }
         break;
       case 'eat':
         s.data.activityLabel = 'Sharing a feast';

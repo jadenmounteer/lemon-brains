@@ -8,7 +8,7 @@ export type ManagedSubject = {
   fleeCooldownMs: number;
   interrupt: SubjectInterrupt | null;
   /** Active on-site pose: work bob, sleep tilt, or jester juggle loop. */
-  presenceAnim: 'work' | 'sleep' | 'knead' | 'merchant' | 'pray' | 'juggle' | null;
+  presenceAnim: 'work' | 'sleep' | 'knead' | 'merchant' | 'pray' | 'juggle' | 'celebrate' | 'play' | null;
   /** Cooldown before another presence speech blurb. */
   presenceBlurbMs: number;
   /** Saved celebration state when threat/duty preempts a guest. */

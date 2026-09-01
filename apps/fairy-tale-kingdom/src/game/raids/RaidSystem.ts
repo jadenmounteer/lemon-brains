@@ -116,6 +116,7 @@ export class RaidSystem {
 
   setVfx(vfx: SiegeVfx): void {
     this.vfx = vfx;
+    this.ladders.setVfx(vfx);
   }
 
   setEncampments(encampments: EncampmentSystem): void {
@@ -1093,6 +1094,9 @@ export class RaidSystem {
     // Path around mountains/water — never bee-line into blocked terrain
     this.followPathTo(raider, edge.x, edge.y, deltaMs * 1.45);
     raider.sprite.setTint(0xaaaaaa);
+    if (Math.random() < 0.08) {
+      this.vfx?.breachDust(raider.sprite.x, raider.sprite.y);
+    }
   }
 
   private tickRetreat(raider: ActiveRaider, deltaMs: number): void {
