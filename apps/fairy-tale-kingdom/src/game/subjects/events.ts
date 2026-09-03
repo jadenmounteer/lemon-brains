@@ -48,6 +48,9 @@ export const KingdomEvents = {
   BUY_NAVAL: 'kingdom:buy-naval',
   SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
   CAMERA_ZOOM: 'kingdom:camera-zoom',
+  CAMERA_PAN: 'kingdom:camera-pan',
+  FOCUS_SUBJECT: 'kingdom:focus-subject',
+  KINGDOM_EVENT: 'kingdom:event',
   TRAIN_AT_BUILDING: 'kingdom:train-at-building',
   GRANT_MARRIAGE: 'kingdom:grant-marriage',
   GRANT_CHILD: 'kingdom:grant-child',
@@ -78,6 +81,8 @@ export interface GameOverPayload {
 export interface RaidWarningPayload {
   kind: string;
   label: string;
+  x?: number;
+  y?: number;
 }
 
 export interface HireSubjectPayload {
@@ -188,6 +193,32 @@ export type SandboxSpawnPayload = SandboxSpawnAction;
 export interface CameraZoomPayload {
   /** +1 zoom in, -1 zoom out */
   direction: 1 | -1;
+}
+
+export interface CameraPanPayload {
+  x: number;
+  y: number;
+}
+
+export interface FocusSubjectPayload {
+  subjectId: string;
+}
+
+export type KingdomEventSeverity = 'critical' | 'warn' | 'joy' | 'info';
+
+export interface KingdomEventPayload {
+  id: string;
+  severity: KingdomEventSeverity;
+  title: string;
+  detail?: string;
+  x?: number;
+  y?: number;
+  /** Auto-expire for non-pinned events (ms). Critical often omit and clear explicitly. */
+  ttlMs?: number;
+  /** When true, stays until an event with the same id and clear:true arrives, or severity clears. */
+  pin?: boolean;
+  /** Clear a previously pinned event with this id. */
+  clear?: boolean;
 }
 
 export interface TrainAtBuildingPayload {

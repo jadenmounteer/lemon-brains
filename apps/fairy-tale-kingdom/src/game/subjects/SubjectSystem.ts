@@ -2127,6 +2127,28 @@ export class SubjectSystem {
     speed = 40,
     onArrive?: () => void
   ): void {
+    const depth = (this.nudgeDepth ?? 0) + 1;
+    this.nudgeDepth = depth;
+    try {
+      if (depth > 8) {
+        onArrive?.();
+        return;
+      }
+      this.nudgeTowardInner(id, targetX, targetY, speed, onArrive);
+    } finally {
+      this.nudgeDepth = depth - 1;
+    }
+  }
+
+  private nudgeDepth = 0;
+
+  private nudgeTowardInner(
+    id: string,
+    targetX: number,
+    targetY: number,
+    speed = 40,
+    onArrive?: () => void
+  ): void {
     const managed = this.getById(id);
     if (!managed || !managed.sprite.active) return;
     if (managed.data.onWall) return;

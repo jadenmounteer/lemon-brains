@@ -162,6 +162,19 @@ export class JoustSpectacleSystem {
     this.celebrationVfx?.cheerPulse(this.venue.x, this.venue.y);
     this.siegeVfx?.breachDust(this.venue.x, this.venue.y);
     this.celebrationVfx?.confettiBurst(this.venue.x, this.venue.y - 8);
+    this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+      id: `joust-clash-${Date.now()}`,
+      severity: 'joy',
+      title: 'Lances clash!',
+      detail: 'The tilt erupts in the lists',
+      x: this.venue.x,
+      y: this.venue.y,
+      ttlMs: 8000,
+    });
+    this.scene.game.events.emit(KingdomEvents.CAMERA_PAN, {
+      x: this.venue.x,
+      y: this.venue.y,
+    });
 
     const loserIdx = Math.random() < 0.5 ? 0 : 1;
     const loserId = this.knightIds[loserIdx] ?? null;

@@ -37,6 +37,8 @@ import {
   type GrantFamilyPayload,
   type FocusCampPayload,
   type CameraZoomPayload,
+  type CameraPanPayload,
+  type FocusSubjectPayload,
   type HireSubjectPayload,
   type PayRansomPayload,
   type SandboxSpawnPayload,
@@ -150,6 +152,7 @@ export class KingdomScene extends Phaser.Scene {
   private pinchLastDist = 0;
   private juggleProps = new Map<string, Phaser.GameObjects.Image[]>();
   private jugglePhase = 0;
+  private lastSpectaclePanMs = 0;
 
   constructor() {
     super('KingdomScene');
@@ -857,6 +860,8 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.on(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
     this.game.events.on(KingdomEvents.CAMERA_ZOOM, this.onCameraZoom);
+    this.game.events.on(KingdomEvents.CAMERA_PAN, this.onCameraPan);
+    this.game.events.on(KingdomEvents.FOCUS_SUBJECT, this.onFocusSubject);
 
     this.game.events.emit(KingdomEvents.DAY_TICK, {
       dayPhase: this.subjects.clock.phase,
@@ -1011,6 +1016,8 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.off(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
     this.game.events.off(KingdomEvents.CAMERA_ZOOM, this.onCameraZoom);
+    this.game.events.off(KingdomEvents.CAMERA_PAN, this.onCameraPan);
+    this.game.events.off(KingdomEvents.FOCUS_SUBJECT, this.onFocusSubject);
   }
 
   private onCameraZoom = (payload: CameraZoomPayload) => {
@@ -1019,6 +1026,35 @@ export class KingdomScene extends Phaser.Scene {
       payload.direction >= 0 ? ZOOM_KEY_FACTOR : 1 / ZOOM_KEY_FACTOR;
     this.applyZoomAt(cam.width / 2, cam.height / 2, factor);
   };
+
+  private onCameraPan = (payload: CameraPanPayload) => {
+    this.panCameraTo(payload.x, payload.y, false);
+  };
+
+  private onFocusSubject = (payload: FocusSubjectPayload) => {
+    const managed = this.subjects.getById(payload.subjectId);
+    if (!managed?.sprite.active) return;
+    this.monsters?.select(null);
+    this.publishBuildingSelection(this.buildings.select(null));
+    this.publishCampSelection(this.encampments?.select(null) ?? null);
+    this.publishSelection(this.subjects.select(payload.subjectId));
+    this.beginFollowSubject(payload.subjectId);
+  };
+
+  /** Soft pan for spectacle / events — rate-limited; skips while follow-cam is locked. */
+  panCameraTo(x: number, y: number, spectacle = true): void {
+    if (this.followSubjectId) return;
+    const now = this.time.now;
+    if (spectacle && now - this.lastSpectaclePanMs < 4500) return;
+    if (spectacle) this.lastSpectaclePanMs = now;
+    const cam = this.cameras.main;
+    cam.pan(x, y, 500, 'Sine.easeInOut');
+  }
+
+  panToKeepSpectacle(): void {
+    const keep = this.buildings.getActiveKeepPoint();
+    this.panCameraTo(keep.x, keep.y, true);
+  }
 
   private onSandboxSpawn = (payload: SandboxSpawnPayload) => {
     switch (payload.type) {

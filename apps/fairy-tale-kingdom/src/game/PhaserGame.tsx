@@ -11,6 +11,7 @@ import {
   type FoodChangedPayload,
   type GameOverPayload,
   type GoldStolenPayload,
+  type KingdomEventPayload,
   type MarketToastPayload,
   type PlaceModePayload,
   type RaidWarningPayload,
@@ -48,6 +49,7 @@ interface PhaserGameProps {
   onGoldRecovered?: (payload: { amount: number; kind: string }) => void;
   onGameOver: (payload: GameOverPayload) => void;
   onRaidWarning: (payload: RaidWarningPayload) => void;
+  onKingdomEvent?: (payload: KingdomEventPayload) => void;
   onKingdomStats: (stats: KingdomStats) => void;
   onPlaceMode: (mode: PlaceModePayload) => void;
   onWallPlaced?: (payload: WallPlacedPayload) => void;
@@ -77,6 +79,7 @@ export function PhaserGame({
   onGoldRecovered,
   onGameOver,
   onRaidWarning,
+  onKingdomEvent,
   onKingdomStats,
   onPlaceMode,
   onWallPlaced,
@@ -100,6 +103,7 @@ export function PhaserGame({
   const onRecoveredRef = useRef(onGoldRecovered);
   const onOverRef = useRef(onGameOver);
   const onWarnRef = useRef(onRaidWarning);
+  const onKingdomEventRef = useRef(onKingdomEvent);
   const onStatsRef = useRef(onKingdomStats);
   const onPlaceRef = useRef(onPlaceMode);
   const onWallPlacedRef = useRef(onWallPlaced);
@@ -119,6 +123,7 @@ export function PhaserGame({
   onRecoveredRef.current = onGoldRecovered;
   onOverRef.current = onGameOver;
   onWarnRef.current = onRaidWarning;
+  onKingdomEventRef.current = onKingdomEvent;
   onStatsRef.current = onKingdomStats;
   onPlaceRef.current = onPlaceMode;
   onWallPlacedRef.current = onWallPlaced;
@@ -172,6 +177,26 @@ export function PhaserGame({
     };
     const handleWarn = (payload: RaidWarningPayload) => {
       onWarnRef.current(payload);
+      const scene = game.scene.getScene('KingdomScene') as
+        | { panToKeepSpectacle?: () => void }
+        | null;
+      scene?.panToKeepSpectacle?.();
+    };
+    const handleKingdomEvent = (payload: KingdomEventPayload) => {
+      onKingdomEventRef.current?.(payload);
+      if (payload.x != null && payload.y != null && !payload.clear) {
+        const scene = game.scene.getScene('KingdomScene') as
+          | { panCameraTo?: (x: number, y: number, spectacle?: boolean) => void }
+          | null;
+        if (
+          scene?.panCameraTo &&
+          (payload.severity === 'critical' ||
+            payload.severity === 'joy' ||
+            payload.severity === 'warn')
+        ) {
+          scene.panCameraTo(payload.x, payload.y, true);
+        }
+      }
     };
     const handleStats = (stats: KingdomStats) => {
       onStatsRef.current(stats);
@@ -210,6 +235,7 @@ export function PhaserGame({
     game.events.on(KingdomEvents.GOLD_RECOVERED, handleRecovered);
     game.events.on(KingdomEvents.GAME_OVER, handleOver);
     game.events.on(KingdomEvents.RAID_WARNING, handleWarn);
+    game.events.on(KingdomEvents.KINGDOM_EVENT, handleKingdomEvent);
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
     game.events.on(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
     game.events.on(KingdomEvents.WALL_PLACED, handleWallPlaced);
@@ -230,6 +256,7 @@ export function PhaserGame({
       game.events.off(KingdomEvents.GOLD_RECOVERED, handleRecovered);
       game.events.off(KingdomEvents.GAME_OVER, handleOver);
       game.events.off(KingdomEvents.RAID_WARNING, handleWarn);
+      game.events.off(KingdomEvents.KINGDOM_EVENT, handleKingdomEvent);
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
       game.events.off(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
       game.events.off(KingdomEvents.WALL_PLACED, handleWallPlaced);

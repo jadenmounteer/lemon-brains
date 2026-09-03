@@ -81,6 +81,38 @@ describe('interiorPathRouter', () => {
     );
   });
 
+  it('leaving keep ends outside footprint at door approach (no indoor re-entry)', () => {
+    const inside = { x: origin.x, y: origin.y };
+    const outdoor = { x: origin.x, y: origin.y + 280 };
+    const points = interiorWaypoints(
+      'keep',
+      origin,
+      inside.x,
+      inside.y,
+      outdoor.x,
+      outdoor.y,
+      'leave-a'
+    );
+    const pointsB = interiorWaypoints(
+      'keep',
+      origin,
+      inside.x + 8,
+      inside.y + 4,
+      outdoor.x + 12,
+      outdoor.y,
+      'leave-b'
+    );
+    expect(points.length).toBeGreaterThan(0);
+    expect(pointsB.length).toBeGreaterThan(0);
+    const last = points[points.length - 1]!;
+    const approach = buildingDoorApproach('keep', origin);
+    expect(pointInsideFootprint('keep', origin, last.x, last.y)).toBe(false);
+    expect(Math.hypot(last.x - approach.x, last.y - approach.y)).toBeLessThan(16);
+    // Concurrent exit paths share the same outdoor approach (no conflicting interiors).
+    const lastB = pointsB[pointsB.length - 1]!;
+    expect(pointInsideFootprint('keep', origin, lastB.x, lastB.y)).toBe(false);
+  });
+
   it('all hasInterior kinds resolve door positions', () => {
     const kinds = [
       'house',

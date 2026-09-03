@@ -40,6 +40,8 @@ export type GameCommand =
   | { type: 'BUY_NAVAL'; seq: number; kind: NavalKind }
   | { type: 'SANDBOX_SPAWN'; seq: number; action: SandboxSpawnAction }
   | { type: 'CAMERA_ZOOM'; seq: number; direction: 1 | -1 }
+  | { type: 'CAMERA_PAN'; seq: number; x: number; y: number }
+  | { type: 'FOCUS_SUBJECT'; seq: number; subjectId: string }
   | { type: 'SET_DAYS_PLAYED'; seq: number; daysPlayed: number }
   | { type: 'CLEAR_SELECTION'; seq: number };
 

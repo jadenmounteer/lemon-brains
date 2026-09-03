@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { config } from './config';
 import type { UnitRole } from './game/art/assetManifest';
 import { nextCommandSeq, type GameCommand } from './game/GameCommand';
@@ -7,6 +7,7 @@ import { PhaserGame } from './game/PhaserGame';
 import type {
   GameOverPayload,
   GoldStolenPayload,
+  KingdomEventPayload,
   PlaceModePayload,
   RaidWarningPayload,
   RoyalCapturedPayload,
@@ -26,9 +27,18 @@ import {
   type CaptiveRecord,
 } from './kingdom/CaptivesRepository';
 import { GameOverModal } from './kingdom/GameOverModal';
+import { KingdomEventsRail } from './kingdom/KingdomEventsRail';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
+import { NextForRealmStrip } from './kingdom/NextForRealmStrip';
+import { OpeningGuideCard } from './kingdom/OpeningGuideCard';
 import { RansomPanel } from './kingdom/RansomPanel';
+import {
+  loadOpeningGuideSeen,
+  resetOpeningGuideSeen,
+  saveOpeningGuideSeen,
+} from './kingdom/sessionPrefs';
+import { suggestRealmGoal, type RealmGoal } from './kingdom/realmGoals';
 import { useKingdom } from './kingdom/useKingdom';
 import { useSandboxSettings } from './kingdom/useSandboxSettings';
 import { LearningPanel } from './learning/LearningPanel';
@@ -45,6 +55,7 @@ import { canTrain, hireCost, affordableWallCells, wallPlacementCost } from './ma
 import { MarketplacePanel } from './marketplace/MarketplacePanel';
 import { InspectorPanel } from './subjects/InspectorPanel';
 import { formatClock } from './utils/formatClock';
+import { useKingdomEventFeed } from './kingdom/useKingdomEventFeed';
 
 const layoutRepo = new LayoutRepository();
 const captivesRepo = new CaptivesRepository();
@@ -125,11 +136,27 @@ export default function App() {
     hour: 0,
   });
   const [kingdomGameMode, setKingdomGameMode] =
-    useState<KingdomGameMode>('normal');
+    useState<KingdomGameMode>(() => {
+      const saved = layoutRepo.loadSync();
+      return saved?.gameMode === 'learning' || saved?.gameMode === 'normal'
+        ? saved.gameMode
+        : 'normal';
+    });
   const [remountKey, setRemountKey] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
   const [namingAfterLoss, setNamingAfterLoss] = useState(false);
   const [stats, setStats] = useState<KingdomStats>(DEFAULT_STATS);
+  const [showOpeningGuide, setShowOpeningGuide] = useState(false);
+  const {
+    pinned: eventPinned,
+    recent: eventRecent,
+    ingest: ingestKingdomEvent,
+    dismissPinned,
+    mobileOpen: eventsMobileOpen,
+    setMobileOpen: setEventsMobileOpen,
+    criticalCount,
+    warnCount,
+  } = useKingdomEventFeed();
   const [captives, setCaptives] = useState<CaptiveRecord[]>(() =>
     captivesRepo.loadSync()
   );
@@ -149,6 +176,17 @@ export default function App() {
   const modeProfile = useMemo(
     () => resolveGameModeProfile(settings.gameDifficulty, kingdomGameMode),
     [settings.gameDifficulty, kingdomGameMode]
+  );
+
+  const realmGoal = useMemo(
+    () =>
+      suggestRealmGoal({
+        stats,
+        gold,
+        food,
+        infiniteGold,
+      }),
+    [stats, gold, food, infiniteGold]
   );
 
   const sendCommand = useCallback((command: GameCommand) => {
@@ -181,6 +219,8 @@ export default function App() {
       await captivesRepo.reset();
       setCaptives([]);
       setKingdomGameMode(mode);
+      resetOpeningGuideSeen();
+      setShowOpeningGuide(true);
       if (mode === 'learning') {
         await applyReadingQuickStart();
       }
@@ -450,6 +490,107 @@ export default function App() {
     setShowQuestions((v) => !v);
   }, []);
 
+  const dismissOpeningGuide = useCallback(() => {
+    saveOpeningGuideSeen(true);
+    setShowOpeningGuide(false);
+    flash('Your treasury is empty — answer a question to begin.');
+  }, [flash]);
+
+  const openingEarnGold = useCallback(() => {
+    saveOpeningGuideSeen(true);
+    setShowOpeningGuide(false);
+    setShowQuestions(true);
+    flash('Your treasury is empty — answer a question to begin.');
+  }, [flash]);
+
+  const handleRealmGoal = useCallback(
+    (goal: RealmGoal) => {
+      if (goal.action === 'questions') {
+        setShowMarket(false);
+        setShowRansom(false);
+        setShowQuestions(true);
+        return;
+      }
+      if (goal.action === 'select-subject' && goal.subjectId) {
+        sendCommand({
+          type: 'FOCUS_SUBJECT',
+          seq: nextCommandSeq(),
+          subjectId: goal.subjectId,
+        });
+        return;
+      }
+      setShowQuestions(false);
+      setShowRansom(false);
+      setShowMarket(true);
+      const placeKind: BuildKind | null =
+        goal.action === 'market-granary'
+          ? 'granary'
+          : goal.action === 'market-field'
+            ? 'field'
+            : goal.action === 'market-wall'
+              ? 'wall'
+              : null;
+      if (placeKind) {
+        const item = BUILD_CATALOG.find((b) => b.kind === placeKind);
+        if (item && (infiniteGold || gold >= item.cost)) {
+          void (async () => {
+            if (!infiniteGold) {
+              const ok = await spend(item.cost);
+              if (!ok) return;
+              setPendingPlaceCost(item.cost);
+            }
+            sendCommand({
+              type: 'BEGIN_PLACE',
+              seq: nextCommandSeq(),
+              kind: placeKind,
+            });
+            flash(
+              placeKind === 'wall'
+                ? 'Drag on the map to draw walls (3g per cell)'
+                : `Place your ${item.name.toLowerCase()} on empty ground`
+            );
+          })();
+        }
+      }
+    },
+    [flash, gold, infiniteGold, sendCommand, spend]
+  );
+
+  const handleKingdomEvent = useCallback(
+    (payload: KingdomEventPayload) => {
+      ingestKingdomEvent(payload);
+      if (
+        payload.severity === 'critical' ||
+        payload.severity === 'warn' ||
+        payload.severity === 'joy'
+      ) {
+        if (!payload.clear) flash(payload.title);
+      }
+    },
+    [flash, ingestKingdomEvent]
+  );
+
+  const focusFeedEvent = useCallback(
+    (item: { x?: number; y?: number }) => {
+      if (item.x == null || item.y == null) return;
+      sendCommand({
+        type: 'CAMERA_PAN',
+        seq: nextCommandSeq(),
+        x: item.x,
+        y: item.y,
+      });
+      setEventsMobileOpen(false);
+    },
+    [sendCommand, setEventsMobileOpen]
+  );
+
+  useEffect(() => {
+    if (!kingdomReady || needsSetup || namingAfterLoss) return;
+    if (!loadOpeningGuideSeen() && gold === 0) {
+      setShowOpeningGuide(true);
+    }
+  }, [kingdomReady, needsSetup, namingAfterLoss, gold, remountKey]);
+
   const followingPeek = Boolean(selected && !inspectorExpanded);
   const sheetNeedsScrim =
     showMarket ||
@@ -539,11 +680,18 @@ export default function App() {
             <>
               <button
                 type="button"
-                className="hud-icon-btn touch-btn hud-desktop-only"
+                className="hud-icon-btn touch-btn"
                 onClick={openQuestions}
                 aria-pressed={showQuestions}
+                aria-label={showQuestions ? 'Hide questions' : 'Questions'}
+                title="Questions"
               >
-                {showQuestions ? 'Hide questions' : 'Questions'}
+                <span className="hud-btn-full">
+                  {showQuestions ? 'Hide questions' : 'Questions'}
+                </span>
+                <span className="hud-btn-short" aria-hidden="true">
+                  Q
+                </span>
               </button>
               <button
                 type="button"
@@ -625,6 +773,10 @@ export default function App() {
         </div>
       </header>
 
+      {showSidePanels && (
+        <NextForRealmStrip goal={realmGoal} onAction={handleRealmGoal} />
+      )}
+
       <main className="stage">
         {kingdomReady && !needsSetup && (
           <PhaserGame
@@ -641,11 +793,11 @@ export default function App() {
 
               if (s) {
                 setShowMarket(false);
-                setShowQuestions(false);
                 setShowRansom(false);
                 setMenuOpen(false);
                 setSelectedBuilding(null);
                 setSelectedCamp(null);
+                // Keep Questions open while inspecting — answer-first loop.
                 // Only when switching people — refresh ticks must not collapse Details.
                 if (idChanged) {
                   const narrow =
@@ -661,7 +813,6 @@ export default function App() {
             onBuildingSelected={(b) => {
               if (b) {
                 setShowMarket(false);
-                setShowQuestions(false);
                 setMenuOpen(false);
                 setSelected(null);
                 selectedSubjectIdRef.current = null;
@@ -672,7 +823,6 @@ export default function App() {
             onCampSelected={(c) => {
               if (c) {
                 setShowMarket(false);
-                setShowQuestions(false);
                 setMenuOpen(false);
                 setSelected(null);
                 selectedSubjectIdRef.current = null;
@@ -702,12 +852,21 @@ export default function App() {
               setGameOver(payload);
             }}
             onRaidWarning={(payload: RaidWarningPayload) => {
-              flash(
+              const title =
                 payload.kind === 'enemy_army'
                   ? `Warning: ${payload.label} approaches!`
-                  : `${payload.label} are raiding!`
-              );
+                  : `${payload.label} are raiding!`;
+              handleKingdomEvent({
+                id: 'raid-active',
+                severity: 'critical',
+                title,
+                detail: 'Defend the keep and walls',
+                pin: true,
+                x: payload.x,
+                y: payload.y,
+              });
             }}
+            onKingdomEvent={handleKingdomEvent}
             onKingdomStats={setStats}
             onPlaceMode={setPlaceMode}
             onBuildingDemolished={handleBuildingDemolished}
@@ -756,8 +915,41 @@ export default function App() {
                 flash(message);
                 return;
               }
+              if (
+                /routing|raiders driven|attackers are routing|siege broken/i.test(
+                  message
+                )
+              ) {
+                handleKingdomEvent({
+                  id: 'raid-active',
+                  severity: 'critical',
+                  title: message,
+                  clear: true,
+                });
+              }
               flash(message);
             }}
+          />
+        )}
+
+        {showSidePanels && (
+          <KingdomEventsRail
+            pinned={eventPinned}
+            recent={eventRecent}
+            criticalCount={criticalCount}
+            warnCount={warnCount}
+            mobileOpen={eventsMobileOpen}
+            onMobileOpenChange={setEventsMobileOpen}
+            onFocusEvent={focusFeedEvent}
+            onDismissPinned={dismissPinned}
+          />
+        )}
+
+        {showOpeningGuide && showSidePanels && (
+          <OpeningGuideCard
+            kingdomName={kingdom.name}
+            onEarnGold={openingEarnGold}
+            onDismiss={dismissOpeningGuide}
           />
         )}
 

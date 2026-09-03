@@ -1,4 +1,5 @@
 import { FoodRepository } from '../../learning/FoodRepository';
+import { EconomyBalance } from './economy';
 import { Phase12Balance } from './phase12Balance';
 import { getSandboxRuntime } from '../sandboxRuntime';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
@@ -9,6 +10,7 @@ import type Phaser from 'phaser';
 export class HungerSystem {
   private lastHourFloor = -1;
   private readonly foodRepo = new FoodRepository();
+  private foodWarnActive = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -59,5 +61,25 @@ export class HungerSystem {
 
   private emitFood(food: number): void {
     this.scene.game.events.emit(KingdomEvents.FOOD_CHANGED, { food });
+    const pop = Math.max(0, this.subjects.count());
+    const low = pop > 0 && food < pop * EconomyBalance.lowFoodMult;
+    if (low && !this.foodWarnActive) {
+      this.foodWarnActive = true;
+      this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+        id: 'food-low',
+        severity: 'warn',
+        title: 'Food is low',
+        detail: 'Plant fields or assign farmers before hunger rises',
+        pin: true,
+      });
+    } else if (!low && this.foodWarnActive) {
+      this.foodWarnActive = false;
+      this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+        id: 'food-low',
+        severity: 'warn',
+        title: 'Food stores recover',
+        clear: true,
+      });
+    }
   }
 }

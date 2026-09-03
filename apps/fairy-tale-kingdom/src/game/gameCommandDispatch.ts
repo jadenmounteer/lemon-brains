@@ -93,6 +93,17 @@ export function dispatchGameCommand(
         direction: command.direction,
       });
       break;
+    case 'CAMERA_PAN':
+      game.events.emit(KingdomEvents.CAMERA_PAN, {
+        x: command.x,
+        y: command.y,
+      });
+      break;
+    case 'FOCUS_SUBJECT':
+      game.events.emit(KingdomEvents.FOCUS_SUBJECT, {
+        subjectId: command.subjectId,
+      });
+      break;
     case 'SET_DAYS_PLAYED':
       game.events.emit(KingdomEvents.SET_DAYS_PLAYED, {
         daysPlayed: command.daysPlayed,

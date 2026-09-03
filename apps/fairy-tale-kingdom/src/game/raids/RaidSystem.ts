@@ -140,9 +140,12 @@ export class RaidSystem {
       this.siegeToastShown = false;
       this.siegePhase = 'none';
       this.buildings?.setRaidActive(true);
+      const keep = this.buildings?.getActiveKeepPoint?.() ?? this.keep;
       this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
         kind: opts.stealKind ?? opts.kind,
         label: opts.label ?? RAID_LABELS[opts.kind],
+        x: keep?.x,
+        y: keep?.y,
       });
     }
 
@@ -266,6 +269,8 @@ export class RaidSystem {
     this.scene.game.events.emit(KingdomEvents.RAID_WARNING, {
       kind: 'enemy_army',
       label,
+      x: this.keep.x,
+      y: this.keep.y,
     });
 
     const fieldDetach =

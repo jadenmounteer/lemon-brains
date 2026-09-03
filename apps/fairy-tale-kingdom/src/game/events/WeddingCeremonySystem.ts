@@ -243,6 +243,19 @@ export class WeddingCeremonySystem {
   private applyCheer(): void {
     this.vfx?.petalDrift(this.cathedral.x, this.cathedral.y - 20);
     this.vfx?.confettiBurst(this.cathedral.x, this.cathedral.y - 16);
+    this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+      id: `wedding-cheer-${Date.now()}`,
+      severity: 'joy',
+      title: 'Wedding cheer!',
+      detail: 'The realm celebrates the newlyweds',
+      x: this.cathedral.x,
+      y: this.cathedral.y,
+      ttlMs: 10000,
+    });
+    this.scene.game.events.emit(KingdomEvents.CAMERA_PAN, {
+      x: this.cathedral.x,
+      y: this.cathedral.y,
+    });
     for (const id of this.guestIds) {
       const m = this.subjects.getById(id);
       if (!m) continue;

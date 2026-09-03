@@ -50,6 +50,7 @@ export function LearningPanel({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [progress, setProgress] = useState<ProgressSave | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const questionKey = useRef(0);
 
   const configured = useMemo(
@@ -271,9 +272,9 @@ export function LearningPanel({
   }
 
   return (
-    <section className="panel question-panel learning-panel">
+    <section className="panel question-panel learning-panel learning-answer-first">
       <div className="sheet-header">
-        <h2>Learning</h2>
+        <h2>Questions</h2>
         <div className="question-tools">
           {canReplay && (
             <button
@@ -291,6 +292,14 @@ export function LearningPanel({
           >
             Next
           </button>
+          <button
+            type="button"
+            className="inspector-close touch-btn"
+            aria-expanded={showSettings}
+            onClick={() => setShowSettings((v) => !v)}
+          >
+            {showSettings ? 'Hide settings' : 'Settings'}
+          </button>
           {onClose && (
             <button
               type="button"
@@ -302,7 +311,19 @@ export function LearningPanel({
           )}
         </div>
       </div>
-      {settingsStrip}
+
+      {progress && (
+        <div className="learning-reward-chip" aria-live="polite">
+          <span>+{goldPerCorrect}g each</span>
+          <span>
+            Streak {progress.currentStreak}
+            {progress.bestStreak > 0 ? ` · Best ${progress.bestStreak}` : ''}
+          </span>
+        </div>
+      )}
+
+      {showSettings && settingsStrip}
+
       {question && (
         <>
           <p className="question-prompt" key={questionKey.current}>
@@ -317,14 +338,13 @@ export function LearningPanel({
         </>
       )}
       {feedback && <p className="question-feedback">{feedback}</p>}
-      <p className="muted curriculum-hint">
-        Curriculum: {settings.curriculumId}
-        {settings.readQuestionsAloud ? ' · read aloud on' : ''}
-        {' · '}
-        <a href={configureUrl} target="_blank" rel="noreferrer">
-          Configure
-        </a>
-      </p>
+      {!showSettings && (
+        <p className="muted curriculum-hint">
+          <a href={configureUrl} target="_blank" rel="noreferrer">
+            More curricula
+          </a>
+        </p>
+      )}
     </section>
   );
 }
