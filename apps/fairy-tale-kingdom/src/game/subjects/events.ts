@@ -42,6 +42,7 @@ export const KingdomEvents = {
   SET_DAYS_PLAYED: 'kingdom:set-days-played',
   CAREER_HIRE: 'kingdom:career-hire',
   EXECUTE_CAPTIVE: 'kingdom:execute-captive',
+  RELEASE_SUBJECT: 'kingdom:release-subject',
   AUTO_GRANT_WISH: 'kingdom:auto-grant-wish',
   CAMP_SELECTED: 'kingdom:camp-selected',
   DESTROY_CAMP: 'kingdom:destroy-camp',
@@ -200,6 +201,10 @@ export interface ArrestCampPayload {
 }
 
 export interface ArrestSubjectPayload {
+  subjectId: string;
+}
+
+export interface ReleaseSubjectPayload {
   subjectId: string;
 }
 

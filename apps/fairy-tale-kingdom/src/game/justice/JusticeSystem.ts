@@ -35,7 +35,7 @@ export class JusticeSystem {
       });
       return false;
     }
-    if (this.dungeonLife?.beginHang(captive)) {
+    if (this.dungeonLife?.beginHang(captive.id)) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: `The executioner leads ${captive.name} to the gallows`,
       });

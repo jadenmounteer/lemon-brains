@@ -44,6 +44,7 @@ export type GameCommand =
       targetRole: UnitRole;
     }
   | { type: 'EXECUTE_CAPTIVE'; seq: number; id: string }
+  | { type: 'RELEASE_SUBJECT'; seq: number; subjectId: string }
   | { type: 'DESTROY_CAMP'; seq: number; campId: string }
   | { type: 'ARREST_CAMP'; seq: number; campId: string }
   | { type: 'ARREST_SUBJECT'; seq: number; subjectId: string }

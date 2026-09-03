@@ -381,6 +381,7 @@ export class KingdomScene extends Phaser.Scene {
         this.world.emitStats();
       },
     });
+    this.dungeonLife.setBubbles(this.bubbles);
     this.justice = new JusticeSystem(
       this,
       this.subjects,
@@ -867,6 +868,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.on(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.on(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
+    this.game.events.on(KingdomEvents.RELEASE_SUBJECT, this.onReleaseSubject);
     this.game.events.on(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.on(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
@@ -1025,6 +1027,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.off(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.off(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
+    this.game.events.off(KingdomEvents.RELEASE_SUBJECT, this.onReleaseSubject);
     this.game.events.off(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.off(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
@@ -1289,12 +1292,29 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private onPayRansom = (payload: PayRansomPayload) => {
+    if (this.dungeonLife.release(payload.id)) {
+      const keep = this.keepPoint;
+      const living = this.subjects.getById(payload.id);
+      if (living) {
+        this.subjects.nudgeToward(
+          living.data.id,
+          keep.x + Phaser.Math.Between(-30, 30),
+          keep.y + 40,
+          52
+        );
+      }
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: `${living?.data.name ?? 'A captive'} has been ransomed home!`,
+      });
+      this.world.emitStats();
+      this.world.schedulePersist();
+      return;
+    }
     const idx = this.captives.findIndex((c) => c.id === payload.id);
     if (idx < 0) return;
     const [captive] = this.captives.splice(idx, 1);
     if (!captive) return;
     this.captivesRepo.saveSync(this.captives);
-    this.dungeonLife.syncCaptives();
     this.subjects.restoreCaptive(
       {
         id: captive.id,
@@ -1379,10 +1399,29 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private onExecuteCaptive = (payload: { id: string }) => {
-    const captive = this.captives.find((c) => c.id === payload.id);
+    const fromList = this.captives.find((c) => c.id === payload.id);
+    const living = this.subjects.getById(payload.id);
+    const captive = fromList ??
+      (living
+        ? {
+            id: living.data.id,
+            name: living.data.name,
+            role: living.data.role,
+            houseId: living.data.houseId,
+            maxHp: living.data.maxHp,
+          }
+        : null);
     if (!captive) return;
     if (this.justice.execute(captive)) {
       this.dungeonLife.syncCaptives();
+      this.world.emitStats();
+      this.world.schedulePersist();
+    }
+  };
+
+  private onReleaseSubject = (payload: { subjectId: string }) => {
+    if (this.dungeonLife.release(payload.subjectId)) {
+      this.publishSelection(this.subjects.refreshSelectedSnapshot());
       this.world.emitStats();
       this.world.schedulePersist();
     }
@@ -1570,6 +1609,7 @@ export class KingdomScene extends Phaser.Scene {
   private onArrestSubject = (payload: ArrestSubjectPayload) => {
     const target = this.subjects.getById(payload.subjectId);
     if (!target || !target.sprite.active) return;
+    if (this.dungeonLife.isJailed(target.data.id)) return;
 
     if (!this.buildings.hasDungeon()) {
       this.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -1598,26 +1638,18 @@ export class KingdomScene extends Phaser.Scene {
 
     const fromX = target.sprite.x;
     const fromY = target.sprite.y;
-    const saved = this.subjects.extractCaptive(target.data.id);
-    if (!saved) return;
-
     const ok = this.dungeonLife.requestIntake(
       {
-        id: saved.id,
-        name: saved.name,
-        role: saved.role,
-        houseId: saved.houseId,
-        maxHp: saved.maxHp,
+        id: target.data.id,
+        name: target.data.name,
+        role: target.data.role,
+        houseId: target.data.houseId,
+        maxHp: target.data.maxHp,
       },
       { guardId: guard.data.id, fromX, fromY }
     );
-    if (!ok) {
-      this.subjects.restoreCaptive(saved, { x: fromX, y: fromY });
-      return;
-    }
+    if (!ok) return;
 
-    this.clearFollowCam();
-    this.publishSelection(this.subjects.select(null));
     this.world.emitStats();
     this.world.schedulePersist();
   };

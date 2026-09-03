@@ -77,6 +77,11 @@ export function dispatchGameCommand(
     case 'EXECUTE_CAPTIVE':
       game.events.emit(KingdomEvents.EXECUTE_CAPTIVE, { id: command.id });
       break;
+    case 'RELEASE_SUBJECT':
+      game.events.emit(KingdomEvents.RELEASE_SUBJECT, {
+        subjectId: command.subjectId,
+      });
+      break;
     case 'DESTROY_CAMP':
       game.events.emit(KingdomEvents.DESTROY_CAMP, { campId: command.campId });
       break;

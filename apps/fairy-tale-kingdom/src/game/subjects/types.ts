@@ -175,6 +175,9 @@ export type InterruptKind =
   | 'defect'
   | 'abducted'
   | 'escort_captive'
+  | 'imprisoned'
+  | 'under_arrest'
+  | 'spectate_hanging'
   | 'hunt_monster';
 
 export interface SubjectInterrupt {
@@ -182,6 +185,8 @@ export interface SubjectInterrupt {
   targetId?: string;
   partnerId?: string;
   remainingMs?: number;
+  /** Dungeon cell index while imprisoned. */
+  cellIndex?: number;
   /** 'defect' — camp the subject is walking toward */
   campId?: string;
   targetX?: number;
@@ -292,6 +297,8 @@ export interface SubjectSnapshot {
   familyAspiration?: FamilyAspirationSnapshot | null;
   /** Keep / liege this subject is loyal to. */
   loyaltyLabel?: string;
+  imprisoned?: boolean;
+  underArrest?: boolean;
 }
 
 export interface FamilyAspirationSnapshot {

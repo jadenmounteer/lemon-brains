@@ -862,7 +862,7 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:dungeon_keeper',
           title: 'Your Arrest button',
           body: [
-            'Inspector → Arrest. Needs dungeon, a free cell, a free guard who is not the guest of honor. Watch the escort. Hang later from the dungeon if you have gallows and an executioner. Monsters are hunted, not arrested. I have standards.',
+            'Inspector → Arrest. Needs dungeon, a free cell, a free guard who is not the guest of honor. They stay themselves in the cell — click them, read their thoughts, Release them out the gate, or Execute if you have a gallows and an executioner. Hangings draw a crowd. Monsters are hunted, not arrested. I have standards.',
           ],
         },
         {

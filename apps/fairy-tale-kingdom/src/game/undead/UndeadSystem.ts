@@ -275,20 +275,17 @@ export class UndeadSystem {
         CombatBalance.necromancerArrestRange
       );
       if (guard && this.buildings.hasDungeon()) {
-        const saved = this.subjects.extractCaptive(n.id);
         this.necromancers = this.necromancers.filter((x) => x !== n);
-        if (saved) {
-          this.scene.game.events.emit(KingdomEvents.ROYAL_CAPTURED, {
-            id: saved.id,
-            name: saved.name,
-            role: saved.role,
-            houseId: saved.houseId,
-            maxHp: saved.maxHp,
-          });
-          this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-            message: `${saved.name} the necromancer was arrested!`,
-          });
-        }
+        this.scene.game.events.emit(KingdomEvents.ROYAL_CAPTURED, {
+          id: managed.data.id,
+          name: managed.data.name,
+          role: managed.data.role,
+          houseId: managed.data.houseId,
+          maxHp: managed.data.maxHp,
+        });
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${managed.data.name} the necromancer was arrested!`,
+        });
         continue;
       }
 

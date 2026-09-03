@@ -158,6 +158,19 @@ describe('dispatchGameCommand', () => {
     );
   });
 
+  it('maps RELEASE_SUBJECT', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'RELEASE_SUBJECT',
+      seq: 14,
+      subjectId: 'nec-1',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(
+      KingdomEvents.RELEASE_SUBJECT,
+      { subjectId: 'nec-1' }
+    );
+  });
+
   it('maps DESTROY_CAMP', () => {
     const game = mockGame();
     dispatchGameCommand(game as never, {

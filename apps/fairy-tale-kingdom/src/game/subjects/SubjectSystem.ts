@@ -390,6 +390,8 @@ export class SubjectSystem {
       if (managed.interrupt?.kind === 'hunt_monster') continue;
       if (managed.interrupt?.kind === 'escort_captive') continue;
       if (managed.interrupt?.kind === 'execute') continue;
+      if (managed.interrupt?.kind === 'imprisoned') continue;
+      if (managed.interrupt?.kind === 'under_arrest') continue;
 
       const keepId =
         managed.data.loyaltyKeepId ??
@@ -1016,6 +1018,9 @@ export class SubjectSystem {
       if (s.data.sick || !s.sprite.active) continue;
       if (s.data.onWall) continue;
       if (s.interrupt && busy.has(s.interrupt.kind)) continue;
+      if (s.interrupt?.kind === 'imprisoned' || s.interrupt?.kind === 'under_arrest') {
+        continue;
+      }
       const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
       if (d < bestD) {
         bestD = d;
@@ -1683,6 +1688,11 @@ export class SubjectSystem {
     return saved;
   }
 
+  despawnSubject(id: string): void {
+    const managed = this.getById(id);
+    if (managed) this.removeSubject(managed);
+  }
+
   restoreCaptive(saved: SavedSubject, at: { x: number; y: number }): void {
     this.createSubject(saved.role, saved.houseId, saved.id, saved.name, {
       hp: saved.maxHp,
@@ -2066,6 +2076,13 @@ export class SubjectSystem {
             threatDist,
             CombatBalance.fleeRadius
           )
+        ) {
+          continue;
+        }
+        if (
+          managed.interrupt?.kind === 'imprisoned' ||
+          managed.interrupt?.kind === 'under_arrest' ||
+          managed.interrupt?.kind === 'spectate_hanging'
         ) {
           continue;
         }
@@ -3736,6 +3753,10 @@ export class SubjectSystem {
       familyAspiration: this.familyEvaluator
         ? mapFamilyAspiration(this.familyEvaluator(managed.data.id))
         : null,
+      imprisoned: managed.interrupt?.kind === 'imprisoned',
+      underArrest:
+        managed.interrupt?.kind === 'under_arrest' ||
+        managed.interrupt?.kind === 'imprisoned',
     };
   }
 

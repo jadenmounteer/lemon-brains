@@ -582,14 +582,14 @@ export class EncampmentSystem {
       null;
     const homeUnit = camp.roster.find((u) => u.status === 'home');
     if (homeUnit && isLivingCampKind(camp.kind) && this.subjects) {
-      const saved = this.subjects.extractCaptive(homeUnit.id);
-      if (saved) {
+      const living = this.subjects.getById(homeUnit.id);
+      if (living) {
         captive = {
-          id: saved.id,
-          name: saved.name,
-          role: saved.role,
-          houseId: saved.houseId,
-          maxHp: saved.maxHp,
+          id: living.data.id,
+          name: living.data.name,
+          role: living.data.role,
+          houseId: living.data.houseId,
+          maxHp: living.data.maxHp,
         };
         const idx = camp.roster.indexOf(homeUnit);
         if (idx >= 0) camp.roster.splice(idx, 1);

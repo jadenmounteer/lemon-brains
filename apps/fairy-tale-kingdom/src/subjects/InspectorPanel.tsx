@@ -27,6 +27,8 @@ interface InspectorPanelProps {
   onGrantMarriage?: () => void;
   onGrantChild?: () => void;
   onArrest?: () => void;
+  onRelease?: () => void;
+  onExecutePrisoner?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
   onCollapse?: () => void;
@@ -148,6 +150,8 @@ export function InspectorPanel({
   onGrantMarriage,
   onGrantChild,
   onArrest,
+  onRelease,
+  onExecutePrisoner,
   collapsed = false,
   onExpand,
   onCollapse,
@@ -405,7 +409,10 @@ export function InspectorPanel({
           Send nearest knight
         </button>
       )}
-      {onArrest && subject.subjectKind !== 'monster' && (
+      {onArrest &&
+        subject.subjectKind !== 'monster' &&
+        !subject.imprisoned &&
+        !subject.underArrest && (
         <div style={{ marginBottom: '0.75rem' }}>
           <button
             type="button"
@@ -417,8 +424,44 @@ export function InspectorPanel({
             Arrest
           </button>
           <p className="muted">
-            A guard marches them to a free dungeon cell. Execute later from the
-            dungeon when you have a gallows and executioner.
+            A guard marches them to a free dungeon cell. Click them in the cell
+            to release or execute.
+          </p>
+        </div>
+      )}
+      {subject.underArrest && !subject.imprisoned && (
+        <p className="muted">A guard is escorting them to a cell.</p>
+      )}
+      {subject.imprisoned && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          {onRelease && (
+            <button
+              type="button"
+              className="market-buy"
+              style={{ marginBottom: '0.5rem' }}
+              onClick={onRelease}
+            >
+              Release
+            </button>
+          )}
+          {onExecutePrisoner && (
+            <button
+              type="button"
+              className="market-buy"
+              disabled={!stats.hasGallows || !stats.hasExecutioner}
+              title={
+                stats.hasGallows && stats.hasExecutioner
+                  ? 'The executioner leads them to the gallows'
+                  : 'Need a gallows and an executioner'
+              }
+              onClick={onExecutePrisoner}
+            >
+              Execute
+            </button>
+          )}
+          <p className="muted">
+            Release walks them out the dungeon gate. Execute is a hanging — nearby
+            folk come to watch.
           </p>
         </div>
       )}

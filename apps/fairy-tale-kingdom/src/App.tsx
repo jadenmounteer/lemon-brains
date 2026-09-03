@@ -1311,6 +1311,20 @@ export default function App() {
                       subjectId: selected.id,
                     });
                   }}
+                  onRelease={() => {
+                    sendCommand({
+                      type: 'RELEASE_SUBJECT',
+                      seq: nextCommandSeq(),
+                      subjectId: selected.id,
+                    });
+                  }}
+                  onExecutePrisoner={() => {
+                    sendCommand({
+                      type: 'EXECUTE_CAPTIVE',
+                      seq: nextCommandSeq(),
+                      id: selected.id,
+                    });
+                  }}
                 />
               )}
               {selectedBuilding && (

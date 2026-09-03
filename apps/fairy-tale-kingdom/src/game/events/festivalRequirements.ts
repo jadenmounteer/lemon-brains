@@ -72,7 +72,7 @@ export const FESTIVAL_REQUIREMENTS: FestivalRequirement[] = [
     kind: 'joust',
     title: 'Royal joust',
     blurb:
-      'Two knights, both crowns, a barracks lawn, and peasants to gasp on cue. Glory now, happier barracks district after.'
+      'Two knights, both crowns, a barracks lawn, and peasants to gasp on cue. Glory now, happier barracks district after.',
     buildings: '≥1 barracks',
     units: 'King and queen, ≥2 knights, ≥5 peasants',
   },

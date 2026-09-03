@@ -1644,17 +1644,17 @@ export class RaidSystem {
   }
 
   private captureRoyal(subjectId: string): void {
-    const saved = this.subjects?.extractCaptive(subjectId);
-    if (!saved) return;
+    const managed = this.subjects?.getById(subjectId);
+    if (!managed) return;
     this.scene.game.events.emit(KingdomEvents.ROYAL_CAPTURED, {
-      id: saved.id,
-      name: saved.name,
-      role: saved.role,
-      houseId: saved.houseId,
-      maxHp: saved.maxHp,
+      id: managed.data.id,
+      name: managed.data.name,
+      role: managed.data.role,
+      houseId: managed.data.houseId,
+      maxHp: managed.data.maxHp,
     });
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${saved.name} was captured for ransom!`,
+      message: `${managed.data.name} was captured for ransom!`,
     });
   }
 

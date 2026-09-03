@@ -31,9 +31,18 @@ const DUTY_INTERRUPTS = new Set<InterruptKind>([
   'crew',
 ]);
 
-const THREAT_INTERRUPTS = new Set<InterruptKind>(['flee', 'abducted']);
+const THREAT_INTERRUPTS = new Set<InterruptKind>([
+  'flee',
+  'abducted',
+  'imprisoned',
+  'under_arrest',
+]);
 
-const CELEBRATION_INTERRUPTS = new Set<InterruptKind>(['wedding', 'line_street']);
+const CELEBRATION_INTERRUPTS = new Set<InterruptKind>([
+  'wedding',
+  'line_street',
+  'spectate_hanging',
+]);
 
 export function isCelebrationActivity(activity: ActivityId): boolean {
   return CELEBRATION_ACTIVITIES.has(activity);
