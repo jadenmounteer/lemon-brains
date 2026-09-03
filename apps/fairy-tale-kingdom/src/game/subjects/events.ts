@@ -37,6 +37,8 @@ export const KingdomEvents = {
   TRANSFORM_PEASANT: 'kingdom:transform-peasant',
   CAPTIVES_CHANGED: 'kingdom:captives-changed',
   COMMAND_DETACHMENT: 'kingdom:command-detachment',
+  COMMAND_KNIGHT_HUNT: 'kingdom:command-knight-hunt',
+  MONSTER_SLAIN: 'kingdom:monster-slain',
   SET_DAYS_PLAYED: 'kingdom:set-days-played',
   CAREER_HIRE: 'kingdom:career-hire',
   EXECUTE_CAPTIVE: 'kingdom:execute-captive',
@@ -153,6 +155,24 @@ export interface CommandDetachmentPayload {
   troopCount: number;
   /** camp id, or `monster:<id>`, or omit for nearest camp */
   targetId?: string;
+}
+
+export interface CommandKnightHuntPayload {
+  /** Omit to send the nearest free knight. */
+  knightId?: string;
+  /** Omit to hunt the nearest monster to the knight. */
+  monsterId?: string;
+}
+
+export interface MonsterSlainPayload {
+  monsterId: string;
+  kind: 'troll' | 'ogre' | 'dragon';
+  name: string;
+  x: number;
+  y: number;
+  slayerId?: string;
+  slayerRole?: string;
+  slayerName?: string;
 }
 
 export interface SetDaysPlayedPayload {

@@ -329,6 +329,15 @@ export class WeddingCeremonySystem {
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${a.data.name} and ${b.data.name} are wed!`,
     });
+    this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+      id: 'challenge-royal-wedding',
+      severity: 'joy',
+      title: 'A royal wedding!',
+      detail: `${a.data.name} and ${b.data.name} are wed`,
+      x: this.cathedral?.x,
+      y: this.cathedral?.y,
+      ttlMs: 12000,
+    });
   }
 
   private finish(): void {

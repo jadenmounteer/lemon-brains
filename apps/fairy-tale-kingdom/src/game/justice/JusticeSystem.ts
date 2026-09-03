@@ -5,7 +5,7 @@ import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import type Phaser from 'phaser';
 
-/** Gallows executions by the executioner — hang VFX, no funeral mix-up. */
+/** Gallows executions by the executioner — march + hang VFX. */
 export class JusticeSystem {
   constructor(
     private readonly scene: Phaser.Scene,
@@ -16,20 +16,28 @@ export class JusticeSystem {
 
   canExecute(): boolean {
     return (
-      this.buildings.hasGallows() && this.subjects.hasRole('executioner')
+      this.buildings.hasGallows() &&
+      this.subjects.hasRole('executioner') &&
+      (this.dungeonLife?.prisonerCount() ?? 0) > 0
     );
   }
 
   execute(captive: CaptiveRecord): boolean {
-    if (!this.canExecute()) {
+    if (!this.buildings.hasGallows() || !this.subjects.hasRole('executioner')) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
         message: 'Need a gallows and an executioner',
       });
       return false;
     }
+    if ((this.dungeonLife?.prisonerCount() ?? 0) <= 0) {
+      this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No prisoners to execute',
+      });
+      return false;
+    }
     if (this.dungeonLife?.beginHang(captive)) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: `${captive.name} was executed at the gallows`,
+        message: `The executioner leads ${captive.name} to the gallows`,
       });
       return true;
     }

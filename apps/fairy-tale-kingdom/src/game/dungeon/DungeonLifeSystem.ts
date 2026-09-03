@@ -19,11 +19,17 @@ interface EscortState {
   cellIndex: number;
 }
 
+type HangStage = 'march' | 'hang';
+
 interface HangState {
   captiveId: string;
+  captiveName: string;
   sprite: Phaser.GameObjects.Sprite;
   execId: string;
+  stage: HangStage;
   remainingMs: number;
+  gallowsX: number;
+  gallowsY: number;
 }
 
 export interface DungeonLifeDeps {
@@ -52,11 +58,17 @@ export class DungeonLifeSystem {
     return DUNGEON_CELL_COUNT;
   }
 
+  prisonerCount(): number {
+    return this.deps.getCaptives().length;
+  }
+
+  /** Occupied cells including escorts still en route. */
+  occupiedCells(): number {
+    return this.deps.getCaptives().length + this.escorts.length;
+  }
+
   freeCells(): number {
-    return Math.max(
-      0,
-      DUNGEON_CELL_COUNT - this.deps.getCaptives().length - this.escorts.length
-    );
+    return Math.max(0, DUNGEON_CELL_COUNT - this.occupiedCells());
   }
 
   hasFreeCell(): boolean {
@@ -89,7 +101,7 @@ export class DungeonLifeSystem {
       this.subjects.nearestMilitary(
         opts?.fromX ?? dungeon.x,
         opts?.fromY ?? dungeon.y,
-        220
+        280
       );
     if (!guard) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -99,14 +111,12 @@ export class DungeonLifeSystem {
     }
 
     const cellIndex = this.nextOpenCell();
+    const startX = opts?.fromX ?? guard.sprite.x;
+    const startY = opts?.fromY ?? guard.sprite.y;
     const tex = captiveTextureKey(captive.role);
     const sprite = this.scene.add
-      .sprite(
-        opts?.fromX ?? guard.sprite.x,
-        opts?.fromY ?? guard.sprite.y,
-        tex
-      )
-      .setDepth(12 + guard.sprite.y * 0.01)
+      .sprite(startX, startY, tex)
+      .setDepth(12 + startY * 0.01)
       .setOrigin(0.5, 1)
       .setAlpha(0.88)
       .setTint(0xcccccc);
@@ -115,7 +125,7 @@ export class DungeonLifeSystem {
     guard.interrupt = {
       kind: 'escort_captive',
       targetId: captive.id,
-      remainingMs: 30_000,
+      remainingMs: 45_000,
     };
     guard.data.activity = 'patrol';
     guard.data.activityLabel = `Escorting ${captive.name} to the dungeon`;
@@ -128,13 +138,20 @@ export class DungeonLifeSystem {
       cellIndex,
     });
 
+    // First path request — tickEscorts only re-nudges when idle.
+    const gate = dungeonGatePoint(dungeon);
+    this.subjects.nudgeToward(guard.data.id, gate.x, gate.y, 52);
+
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${guard.data.name} escorts ${captive.name} to the dungeon`,
     });
     return true;
   }
 
-  /** Executioner-led hang — frees a cell when done. */
+  /**
+   * Executioner leads the condemned from the dungeon to the gallows,
+   * then plays a hang bob VFX.
+   */
   beginHang(captive: CaptiveRecord): boolean {
     const gallows = this.buildings.serialize().find((b) => b.kind === 'gallows');
     const exec = this.subjects.firstByRole('executioner');
@@ -145,30 +162,43 @@ export class DungeonLifeSystem {
       this.cellSprites.delete(captive.id);
       this.cellByCaptive.delete(captive.id);
     } else {
+      const dungeon = this.nearestDungeon();
+      const gate = dungeon
+        ? dungeonGatePoint(dungeon)
+        : { x: gallows.x, y: gallows.y + 24 };
       const tex = captiveTextureKey(captive.role);
       sprite = this.scene.add
-        .sprite(gallows.x, gallows.y + 8, tex)
+        .sprite(gate.x, gate.y, tex)
         .setDepth(14)
         .setOrigin(0.5, 1)
-        .setAlpha(0.88);
+        .setAlpha(0.88)
+        .setTint(0xcccccc);
       sprite.play(idleAnimKey(tex), true);
     }
 
+    const gx = gallows.x;
+    const gy = gallows.y + 18;
+
     this.hangs.push({
       captiveId: captive.id,
+      captiveName: captive.name,
       sprite,
       execId: exec.data.id,
-      remainingMs: 3200,
+      stage: 'march',
+      remainingMs: 20_000,
+      gallowsX: gx,
+      gallowsY: gy,
     });
 
-    exec.interrupt = { kind: 'execute', remainingMs: 4000 };
-    this.subjects.nudgeToward(exec.data.id, gallows.x, gallows.y - 4, 45);
-    this.subjects.appendLifeLog(
-      exec.data.id,
-      `Executed ${captive.name}`,
-      'execute'
-    );
+    exec.interrupt = {
+      kind: 'execute',
+      targetId: captive.id,
+      remainingMs: 20_000,
+    };
+    exec.data.activityLabel = `Leading ${captive.name} to the gallows`;
+    this.subjects.nudgeToward(exec.data.id, gx, gy, 48);
 
+    // Remove from roster immediately so they can't be ransomed mid-march.
     this.deps.removeCaptive(captive.id);
     return true;
   }
@@ -192,7 +222,8 @@ export class DungeonLifeSystem {
     captives.forEach((c, i) => {
       if (
         this.cellSprites.has(c.id) ||
-        this.escorts.some((e) => e.captive.id === c.id)
+        this.escorts.some((e) => e.captive.id === c.id) ||
+        this.hangs.some((h) => h.captiveId === c.id)
       ) {
         return;
       }
@@ -232,7 +263,13 @@ export class DungeonLifeSystem {
       const guard = this.subjects.getById(escort.guardId);
       const dungeon = this.buildings.getById(escort.dungeonId);
       if (!guard || !dungeon || !guard.sprite.active) {
-        escort.sprite.destroy();
+        // Guard lost — still imprison if we can, else drop the escort sprite.
+        if (dungeon && this.hasFreeCell()) {
+          this.deps.addCaptive(escort.captive);
+          this.parkInCell(escort.captive, dungeon, escort.cellIndex, escort.sprite);
+        } else {
+          escort.sprite.destroy();
+        }
         this.escorts = this.escorts.filter((e) => e !== escort);
         continue;
       }
@@ -245,41 +282,117 @@ export class DungeonLifeSystem {
         gate.y
       );
 
-      if (dist > 18) {
-        this.subjects.nudgeToward(guard.data.id, gate.x, gate.y, 52);
-        escort.sprite.setPosition(guard.sprite.x + 10, guard.sprite.y + 2);
-        escort.sprite.setDepth(12 + escort.sprite.y * 0.01);
+      // Trail behind the guard (starts at arrest site, then follows).
+      const trailX = guard.sprite.x - 12;
+      const trailY = guard.sprite.y + 4;
+      escort.sprite.x = Phaser.Math.Linear(escort.sprite.x, trailX, 0.22);
+      escort.sprite.y = Phaser.Math.Linear(escort.sprite.y, trailY, 0.22);
+      escort.sprite.setDepth(12 + escort.sprite.y * 0.01);
+
+      if (dist > 22) {
+        if (!guard.moving) {
+          this.subjects.nudgeToward(guard.data.id, gate.x, gate.y, 52);
+        }
+        guard.data.activityLabel = `Escorting ${escort.captive.name} to the dungeon`;
       } else {
         this.deps.addCaptive(escort.captive);
-        this.cellByCaptive.set(escort.captive.id, escort.cellIndex);
-        const cell = dungeonCellPoint(dungeon, escort.cellIndex, escort.captive.id);
-        escort.sprite.setPosition(cell.x, cell.y);
-        escort.sprite.setDepth(10 + cell.y * 0.01);
-        this.cellSprites.set(escort.captive.id, escort.sprite);
-        guard.interrupt = null;
+        this.parkInCell(escort.captive, dungeon, escort.cellIndex, escort.sprite);
         this.subjects.clearInterrupt(guard.data.id);
         guard.data.activityLabel = 'Prisoner secured in the dungeon';
         this.escorts = this.escorts.filter((e) => e !== escort);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${escort.captive.name} is locked in a cell`,
         });
+        this.scene.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
+          count: this.deps.getCaptives().length,
+        });
       }
     }
+  }
+
+  private parkInCell(
+    captive: CaptiveRecord,
+    dungeon: { x: number; y: number },
+    cellIndex: number,
+    sprite: Phaser.GameObjects.Sprite
+  ): void {
+    this.cellByCaptive.set(captive.id, cellIndex);
+    const cell = dungeonCellPoint(dungeon, cellIndex, captive.id);
+    sprite.setPosition(cell.x, cell.y);
+    sprite.setDepth(10 + cell.y * 0.01);
+    this.cellSprites.set(captive.id, sprite);
   }
 
   private tickHangs(deltaMs: number): void {
     for (const hang of [...this.hangs]) {
       hang.remainingMs -= deltaMs;
-      const gallows = this.buildings.serialize().find((b) => b.kind === 'gallows');
-      if (gallows) {
-        hang.sprite.setPosition(
-          gallows.x,
-          gallows.y + 4 - Math.sin(hang.remainingMs / 200) * 2
+      const exec = this.subjects.getById(hang.execId);
+
+      if (hang.stage === 'march') {
+        if (!exec || !exec.sprite.active) {
+          hang.sprite.destroy();
+          this.hangs = this.hangs.filter((h) => h !== hang);
+          continue;
+        }
+
+        const dist = Phaser.Math.Distance.Between(
+          exec.sprite.x,
+          exec.sprite.y,
+          hang.gallowsX,
+          hang.gallowsY
         );
-        hang.sprite.setAngle(Math.sin(hang.remainingMs / 150) * 8);
+        if (dist > 28 && !exec.moving) {
+          this.subjects.nudgeToward(
+            exec.data.id,
+            hang.gallowsX,
+            hang.gallowsY,
+            48
+          );
+        }
+
+        // Prisoner marches behind the executioner toward the gallows.
+        const trailX = exec.sprite.x - 10;
+        const trailY = exec.sprite.y + 4;
+        hang.sprite.x = Phaser.Math.Linear(hang.sprite.x, trailX, 0.2);
+        hang.sprite.y = Phaser.Math.Linear(hang.sprite.y, trailY, 0.2);
+        hang.sprite.setDepth(14 + hang.sprite.y * 0.01);
+        exec.data.activityLabel = `Leading ${hang.captiveName} to the gallows`;
+
+        if (dist <= 28) {
+          hang.stage = 'hang';
+          hang.remainingMs = 3400;
+          hang.sprite.setPosition(hang.gallowsX, hang.gallowsY - 10);
+          hang.sprite.setAngle(0);
+          this.subjects.appendLifeLog(
+            exec.data.id,
+            `Executed ${hang.captiveName}`,
+            'execute'
+          );
+          this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+            message: `${hang.captiveName} hangs at the gallows`,
+          });
+        } else if (hang.remainingMs <= 0) {
+          // Timed out — snap to hang
+          hang.stage = 'hang';
+          hang.remainingMs = 2800;
+          hang.sprite.setPosition(hang.gallowsX, hang.gallowsY - 10);
+        }
+        continue;
       }
+
+      // Hang VFX
+      hang.sprite.setPosition(
+        hang.gallowsX,
+        hang.gallowsY - 10 - Math.sin(hang.remainingMs / 200) * 2
+      );
+      hang.sprite.setAngle(Math.sin(hang.remainingMs / 150) * 8);
+
       if (hang.remainingMs <= 0) {
         hang.sprite.destroy();
+        if (exec) {
+          this.subjects.clearInterrupt(exec.data.id);
+          exec.data.activityLabel = 'Justice is done';
+        }
         this.hangs = this.hangs.filter((h) => h !== hang);
       }
     }
@@ -345,5 +458,6 @@ export class DungeonLifeSystem {
 }
 
 function captiveTextureKey(role: UnitRole): UnitRole {
-  return role === 'thief' ? 'bandit' : role;
+  if (role === 'thief' || role === 'gypsy') return 'bandit';
+  return role === 'bandit' ? 'bandit' : role;
 }

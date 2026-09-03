@@ -15,9 +15,13 @@ interface InspectorPanelProps {
   gold: number;
   infiniteGold?: boolean;
   militaryAvailable?: number;
+  /** Selected world monster id, when one is selected. */
+  selectedMonsterId?: string | null;
   onClose: () => void;
   onTransformPeasant?: () => void;
   onCommandTroops?: (troopCount: number) => void;
+  onKnightHunt?: () => void;
+  onSendNearestKnight?: () => void;
   onPromoteCareer?: (targetRole: UnitRole, cost: number) => void;
   onGrantMarriage?: () => void;
   onGrantChild?: () => void;
@@ -132,9 +136,12 @@ export function InspectorPanel({
   gold,
   infiniteGold = false,
   militaryAvailable = 0,
+  selectedMonsterId = null,
   onClose,
   onTransformPeasant,
   onCommandTroops,
+  onKnightHunt,
+  onSendNearestKnight,
   onPromoteCareer,
   onGrantMarriage,
   onGrantChild,
@@ -361,9 +368,33 @@ export function InspectorPanel({
             disabled={militaryAvailable <= 0}
             onClick={() => onCommandTroops(troopCount)}
           >
-            Attack nearest encampment
+            {selectedMonsterId
+              ? 'Attack selected monster'
+              : 'Attack nearest encampment'}
           </button>
         </div>
+      )}
+      {subject.canHuntMonster && onKnightHunt && (
+        <button
+          type="button"
+          className="market-buy"
+          style={{ marginBottom: '0.75rem' }}
+          onClick={onKnightHunt}
+        >
+          {selectedMonsterId
+            ? 'Hunt selected monster'
+            : 'Hunt nearest monster'}
+        </button>
+      )}
+      {subject.subjectKind === 'monster' && onSendNearestKnight && (
+        <button
+          type="button"
+          className="market-buy"
+          style={{ marginBottom: '0.75rem' }}
+          onClick={onSendNearestKnight}
+        >
+          Send nearest knight
+        </button>
       )}
       {subject.lifeLog && subject.lifeLog.length > 0 && (
         <>

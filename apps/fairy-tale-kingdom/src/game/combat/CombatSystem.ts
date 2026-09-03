@@ -73,6 +73,7 @@ export class CombatSystem {
     this.accumMs = 0;
 
     this.tickAssaultOrders();
+    this.tickKnightHunts();
     this.friendlyFire(raidActive);
     if (raidActive) this.tickBallistae();
     this.tickMonsterCombat();
@@ -125,7 +126,12 @@ export class CombatSystem {
               ? CombatBalance.archerRanged
               : CombatBalance.guardMelee;
         this.vfx?.meleeLunge(fighter.sprite, m.sprite.x, m.sprite.y);
-        const dead = this.monsters?.damageMonster(m.id, base * dmgMult);
+        const slayer = {
+          id: fighter.data.id,
+          role: fighter.data.role,
+          name: fighter.data.name,
+        };
+        const dead = this.monsters?.damageMonster(m.id, base * dmgMult, slayer);
         if (dead) {
           this.subjects.clearAssault(targetId);
           this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -163,6 +169,63 @@ export class CombatSystem {
       );
       if (destroyed) {
         this.subjects.clearAssault(targetId);
+      }
+    }
+  }
+
+  /** Player-ordered knight quests against a specific monster. */
+  private tickKnightHunts(): void {
+    if (!this.monsters) return;
+    const dmgMult = this.dmgMult();
+    for (const fighter of this.subjects.withInterrupt('hunt_monster')) {
+      const monsterId = fighter.interrupt?.targetId;
+      if (!monsterId) {
+        this.subjects.clearInterrupt(fighter.data.id);
+        continue;
+      }
+      const m = this.monsters.getById(monsterId);
+      if (!m || !m.sprite.active) {
+        this.subjects.clearInterrupt(fighter.data.id);
+        continue;
+      }
+      const dist = Phaser.Math.Distance.Between(
+        fighter.sprite.x,
+        fighter.sprite.y,
+        m.sprite.x,
+        m.sprite.y
+      );
+      if (dist > CombatBalance.guardRange + 8) {
+        this.subjects.nudgeToward(
+          fighter.data.id,
+          m.sprite.x,
+          m.sprite.y,
+          60
+        );
+        fighter.data.activity = 'hunt';
+        fighter.data.activityLabel = `Hunting ${m.name}`;
+        continue;
+      }
+      const sleepingDragon = m.kind === 'dragon' && m.activity === 'sleep';
+      const base =
+        CombatBalance.knightMelee +
+        (sleepingDragon ? CombatBalance.knightDragonBonus : 0);
+      this.vfx?.meleeLunge(fighter.sprite, m.sprite.x, m.sprite.y);
+      const slayer = {
+        id: fighter.data.id,
+        role: fighter.data.role,
+        name: fighter.data.name,
+      };
+      const dead = this.monsters.damageMonster(m.id, base * dmgMult, slayer);
+      if (dead) {
+        this.subjects.clearInterrupt(fighter.data.id);
+        this.subjects.appendLifeLog(
+          fighter.data.id,
+          `Slew ${m.name}`,
+          'hunt'
+        );
+        this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
+          message: `${fighter.data.name} slew ${m.name}!`,
+        });
       }
     }
   }
@@ -350,6 +413,9 @@ export class CombatSystem {
     const dmgMult = this.dmgMult();
 
     for (const fighter of this.subjects.combatants()) {
+      if (fighter.interrupt?.kind === 'hunt_monster') continue;
+      if (fighter.interrupt?.kind === 'assault') continue;
+
       const isKnight = isKnightRole(fighter.data.role);
       const isArcher =
         fighter.data.role === 'archer' || fighter.data.role === 'elite_archer';
@@ -387,8 +453,18 @@ export class CombatSystem {
           const dmg =
             (CombatBalance.knightMelee + CombatBalance.knightDragonBonus) *
             dmgMult;
-          const dead = this.monsters.damageMonster(best.id, dmg);
+          const slayer = {
+            id: fighter.data.id,
+            role: fighter.data.role,
+            name: fighter.data.name,
+          };
+          const dead = this.monsters.damageMonster(best.id, dmg, slayer);
           if (dead) {
+            this.subjects.appendLifeLog(
+              fighter.data.id,
+              `Slew the dragon ${best.name}`,
+              'hunt'
+            );
             this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
               message: `${fighter.data.name} slew the dragon ${best.name}!`,
             });
@@ -425,6 +501,11 @@ export class CombatSystem {
             ? CombatBalance.eliteArcherRanged
             : CombatBalance.archerRanged;
         dmg *= dmgMult * 0.75;
+        const slayer = {
+          id: fighter.data.id,
+          role: fighter.data.role,
+          name: fighter.data.name,
+        };
         this.vfx?.projectileArc(
           fighter.sprite.x,
           fighter.sprite.y - 10,
@@ -432,7 +513,7 @@ export class CombatSystem {
           monster.sprite.y - 8,
           'arrow',
           () => {
-            this.monsters?.damageMonster(monster.id, dmg);
+            this.monsters?.damageMonster(monster.id, dmg, slayer);
           }
         );
         continue;
@@ -454,8 +535,20 @@ export class CombatSystem {
             ? CombatBalance.eliteGuardMelee
             : CombatBalance.guardMelee;
       this.vfx?.meleeLunge(fighter.sprite, monster.sprite.x, monster.sprite.y);
-      const dead = this.monsters.damageMonster(monster.id, base * dmgMult);
+      const slayer = {
+        id: fighter.data.id,
+        role: fighter.data.role,
+        name: fighter.data.name,
+      };
+      const dead = this.monsters.damageMonster(monster.id, base * dmgMult, slayer);
       if (dead) {
+        if (isKnight) {
+          this.subjects.appendLifeLog(
+            fighter.data.id,
+            `Slew ${monster.name}`,
+            'hunt'
+          );
+        }
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${fighter.data.name} slew ${monster.name}`,
         });

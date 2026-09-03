@@ -62,6 +62,12 @@ export function dispatchGameCommand(
         targetId: command.targetId,
       });
       break;
+    case 'COMMAND_KNIGHT_HUNT':
+      game.events.emit(KingdomEvents.COMMAND_KNIGHT_HUNT, {
+        knightId: command.knightId,
+        monsterId: command.monsterId,
+      });
+      break;
     case 'PROMOTE_CAREER':
       game.events.emit(KingdomEvents.CAREER_HIRE, {
         subjectId: command.subjectId,

@@ -1,8 +1,19 @@
+import type { ChallengeAction } from './challenges';
 import type { RealmGoal } from './realmGoals';
 
+export type StripGoal =
+  | (RealmGoal & { rewardGold?: number })
+  | {
+      id: string;
+      label: string;
+      action: ChallengeAction | RealmGoal['action'];
+      subjectId?: string;
+      rewardGold?: number;
+    };
+
 interface NextForRealmStripProps {
-  goal: RealmGoal | null;
-  onAction: (goal: RealmGoal) => void;
+  goal: StripGoal | null;
+  onAction: (goal: StripGoal) => void;
 }
 
 /** Persistent HUD hint under resources — one clear next step. */
@@ -11,7 +22,9 @@ export function NextForRealmStrip({ goal, onAction }: NextForRealmStripProps) {
 
   return (
     <div className="next-realm-strip" role="status" aria-live="polite">
-      <span className="next-realm-label">Next</span>
+      <span className="next-realm-label">
+        {goal.rewardGold != null ? 'Challenge' : 'Next'}
+      </span>
       <p className="next-realm-text">{goal.label}</p>
       <button
         type="button"

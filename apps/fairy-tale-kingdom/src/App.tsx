@@ -27,18 +27,29 @@ import {
   type CaptiveRecord,
 } from './kingdom/CaptivesRepository';
 import { GameOverModal } from './kingdom/GameOverModal';
+import { ChallengeOfferCard } from './kingdom/ChallengeOfferCard';
+import {
+  CHALLENGE_COOLDOWN_MS,
+  challengeById,
+  challengeToStripGoal,
+  getNextEarlyChallenge,
+  isChallengeComplete,
+  pickOccasionalChallenge,
+  type MonsterChallengeKind,
+  type RealmChallenge,
+} from './kingdom/challenges';
+import {
+  loadChallengePrefs,
+  resetChallengePrefs,
+  saveChallengePrefs,
+  type ChallengePrefs,
+} from './kingdom/challengePrefs';
 import { KingdomEventsRail } from './kingdom/KingdomEventsRail';
 import { KingdomMenu } from './kingdom/KingdomMenu';
 import { LayoutRepository } from './kingdom/LayoutRepository';
-import { NextForRealmStrip } from './kingdom/NextForRealmStrip';
-import { OpeningGuideCard } from './kingdom/OpeningGuideCard';
+import { NextForRealmStrip, type StripGoal } from './kingdom/NextForRealmStrip';
 import { RansomPanel } from './kingdom/RansomPanel';
-import {
-  loadOpeningGuideSeen,
-  resetOpeningGuideSeen,
-  saveOpeningGuideSeen,
-} from './kingdom/sessionPrefs';
-import { suggestRealmGoal, type RealmGoal } from './kingdom/realmGoals';
+import { suggestRealmGoal } from './kingdom/realmGoals';
 import { useKingdom } from './kingdom/useKingdom';
 import { useSandboxSettings } from './kingdom/useSandboxSettings';
 import { LearningPanel } from './learning/LearningPanel';
@@ -56,6 +67,8 @@ import { MarketplacePanel } from './marketplace/MarketplacePanel';
 import { InspectorPanel } from './subjects/InspectorPanel';
 import { formatClock } from './utils/formatClock';
 import { useKingdomEventFeed } from './kingdom/useKingdomEventFeed';
+import type { MonsterSlainPayload } from './game/subjects/events';
+import { EconomyBalance } from './game/economy/economy';
 
 const layoutRepo = new LayoutRepository();
 const captivesRepo = new CaptivesRepository();
@@ -89,6 +102,7 @@ const DEFAULT_STATS: KingdomStats = {
   hasFairyGodmother: false,
   hasBishop: false,
   hasGeneral: false,
+  hasKnight: false,
   hasExecutioner: false,
   royaltyUnlocked: false,
   inspired: false,
@@ -131,6 +145,9 @@ export default function App() {
   const [selectedBuilding, setSelectedBuilding] =
     useState<BuildingSnapshot | null>(null);
   const [selectedCamp, setSelectedCamp] = useState<CampSnapshot | null>(null);
+  const [selectedMonsterId, setSelectedMonsterId] = useState<string | null>(
+    null
+  );
   const [day, setDay] = useState<DaySnapshot>({
     dayPhase: 'Night',
     hour: 0,
@@ -146,7 +163,15 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [namingAfterLoss, setNamingAfterLoss] = useState(false);
   const [stats, setStats] = useState<KingdomStats>(DEFAULT_STATS);
-  const [showOpeningGuide, setShowOpeningGuide] = useState(false);
+  const [challengePrefs, setChallengePrefs] = useState<ChallengePrefs>(() =>
+    loadChallengePrefs()
+  );
+  const [showChallengeOffer, setShowChallengeOffer] = useState(false);
+  const [offerChallenge, setOfferChallenge] = useState<RealmChallenge | null>(
+    null
+  );
+  const royalWeddingFlagRef = useRef(false);
+  const slainMonsterKindRef = useRef<MonsterChallengeKind | null>(null);
   const {
     pinned: eventPinned,
     recent: eventRecent,
@@ -178,16 +203,40 @@ export default function App() {
     [settings.gameDifficulty, kingdomGameMode]
   );
 
-  const realmGoal = useMemo(
+  const activeChallenge = useMemo(
     () =>
-      suggestRealmGoal({
-        stats,
-        gold,
-        food,
-        infiniteGold,
-      }),
-    [stats, gold, food, infiniteGold]
+      challengePrefs.activeId
+        ? challengeById(challengePrefs.activeId)
+        : null,
+    [challengePrefs.activeId]
   );
+
+  const stripGoal = useMemo((): StripGoal | null => {
+    const foodLow =
+      stats.population > 0 &&
+      food < stats.population * EconomyBalance.lowFoodMult;
+    if (foodLow && stats.granaryCount > 0) {
+      return {
+        id: 'food-low',
+        label: 'Food is low — farmers needed',
+        action: 'market-field',
+      };
+    }
+    if (activeChallenge) {
+      return challengeToStripGoal(activeChallenge);
+    }
+    return suggestRealmGoal({
+      stats,
+      gold,
+      food,
+      infiniteGold,
+    });
+  }, [activeChallenge, stats, gold, food, infiniteGold]);
+
+  const persistChallengePrefs = useCallback((next: ChallengePrefs) => {
+    setChallengePrefs(next);
+    saveChallengePrefs(next);
+  }, []);
 
   const sendCommand = useCallback((command: GameCommand) => {
     setGameCommand(command);
@@ -219,8 +268,17 @@ export default function App() {
       await captivesRepo.reset();
       setCaptives([]);
       setKingdomGameMode(mode);
-      resetOpeningGuideSeen();
-      setShowOpeningGuide(true);
+      resetChallengePrefs();
+      const first = getNextEarlyChallenge([]);
+      const prefs: ChallengePrefs = {
+        claimedIds: [],
+        activeId: first?.id ?? null,
+        nextOfferAt: 0,
+        offerSeen: false,
+      };
+      persistChallengePrefs(prefs);
+      setOfferChallenge(first);
+      setShowChallengeOffer(Boolean(first));
       if (mode === 'learning') {
         await applyReadingQuickStart();
       }
@@ -229,13 +287,14 @@ export default function App() {
       setSelected(null);
       setSelectedBuilding(null);
       setSelectedCamp(null);
+      setSelectedMonsterId(null);
       setPlaceMode({ active: false, kind: null });
       setPendingPlaceCost(null);
       setShowRansom(false);
       setStats(DEFAULT_STATS);
       setRemountKey((n) => n + 1);
     },
-    [applyReadingQuickStart, resetFood, resetGold, startNewKingdom]
+    [applyReadingQuickStart, persistChallengePrefs, resetFood, resetGold, startNewKingdom]
   );
 
   const handleTrainAtBuilding = useCallback(
@@ -490,21 +549,68 @@ export default function App() {
     setShowQuestions((v) => !v);
   }, []);
 
-  const dismissOpeningGuide = useCallback(() => {
-    saveOpeningGuideSeen(true);
-    setShowOpeningGuide(false);
-    flash('Your treasury is empty — answer a question to begin.');
-  }, [flash]);
+  const dismissChallengeOffer = useCallback(() => {
+    setShowChallengeOffer(false);
+    persistChallengePrefs({ ...challengePrefs, offerSeen: true });
+    if (offerChallenge?.kind === 'earn_gold') {
+      flash('Your treasury is empty — answer a question to begin.');
+    }
+  }, [challengePrefs, flash, offerChallenge, persistChallengePrefs]);
 
-  const openingEarnGold = useCallback(() => {
-    saveOpeningGuideSeen(true);
-    setShowOpeningGuide(false);
-    setShowQuestions(true);
-    flash('Your treasury is empty — answer a question to begin.');
-  }, [flash]);
+  const acceptChallengeOffer = useCallback(() => {
+    if (!offerChallenge) {
+      setShowChallengeOffer(false);
+      return;
+    }
+    persistChallengePrefs({
+      ...challengePrefs,
+      activeId: offerChallenge.id,
+      offerSeen: true,
+    });
+    setShowChallengeOffer(false);
+    if (offerChallenge.kind === 'earn_gold') {
+      setShowQuestions(true);
+      flash('Your treasury is empty — answer a question to begin.');
+    } else {
+      flash(`Challenge accepted: ${offerChallenge.title}`);
+    }
+  }, [challengePrefs, flash, offerChallenge, persistChallengePrefs]);
 
-  const handleRealmGoal = useCallback(
-    (goal: RealmGoal) => {
+  const completeActiveChallenge = useCallback(
+    async (challenge: RealmChallenge) => {
+      const claimedIds = [...challengePrefs.claimedIds, challenge.id];
+      const earlyNext = getNextEarlyChallenge(claimedIds);
+      let nextActive: string | null = earlyNext?.id ?? null;
+      let nextOfferAt = challengePrefs.nextOfferAt;
+      if (!earlyNext) {
+        nextOfferAt = Date.now() + CHALLENGE_COOLDOWN_MS;
+        nextActive = null;
+      }
+      persistChallengePrefs({
+        claimedIds,
+        activeId: nextActive,
+        nextOfferAt,
+        offerSeen: true,
+      });
+      await addGold(challenge.rewardGold);
+      flash(`Challenge complete — +${challenge.rewardGold}g`);
+      ingestKingdomEvent({
+        id: `challenge-done-${challenge.id}`,
+        severity: 'joy',
+        title: `Challenge complete: ${challenge.title}`,
+        detail: `+${challenge.rewardGold} gold`,
+        ttlMs: 8000,
+      });
+      if (earlyNext && !challengePrefs.offerSeen) {
+        setOfferChallenge(earlyNext);
+        setShowChallengeOffer(true);
+      }
+    },
+    [addGold, challengePrefs, flash, ingestKingdomEvent, persistChallengePrefs]
+  );
+
+  const handleStripGoal = useCallback(
+    (goal: StripGoal) => {
       if (goal.action === 'questions') {
         setShowMarket(false);
         setShowRansom(false);
@@ -517,6 +623,27 @@ export default function App() {
           seq: nextCommandSeq(),
           subjectId: goal.subjectId,
         });
+        return;
+      }
+      if (goal.action === 'hire-hint') {
+        setShowQuestions(false);
+        setShowRansom(false);
+        setShowMarket(true);
+        flash(
+          activeChallenge?.payload?.role === 'general'
+            ? 'Train a general at the barracks'
+            : 'Train a knight at the barracks'
+        );
+        return;
+      }
+      if (goal.action === 'royal-hint') {
+        flash(
+          'Need cathedral + bishop, a royal ball, then fairy godmother blessing — wed before morning.'
+        );
+        return;
+      }
+      if (goal.action === 'hunt-hint') {
+        flash('Select a knight or monster, then send them on a hunt.');
         return;
       }
       setShowQuestions(false);
@@ -553,12 +680,15 @@ export default function App() {
         }
       }
     },
-    [flash, gold, infiniteGold, sendCommand, spend]
+    [activeChallenge, flash, gold, infiniteGold, sendCommand, spend]
   );
 
   const handleKingdomEvent = useCallback(
     (payload: KingdomEventPayload) => {
       ingestKingdomEvent(payload);
+      if (payload.id === 'challenge-royal-wedding' && !payload.clear) {
+        royalWeddingFlagRef.current = true;
+      }
       if (
         payload.severity === 'critical' ||
         payload.severity === 'warn' ||
@@ -569,6 +699,10 @@ export default function App() {
     },
     [flash, ingestKingdomEvent]
   );
+
+  const handleMonsterSlain = useCallback((payload: MonsterSlainPayload) => {
+    slainMonsterKindRef.current = payload.kind;
+  }, []);
 
   const focusFeedEvent = useCallback(
     (item: { x?: number; y?: number }) => {
@@ -586,10 +720,65 @@ export default function App() {
 
   useEffect(() => {
     if (!kingdomReady || needsSetup || namingAfterLoss) return;
-    if (!loadOpeningGuideSeen() && gold === 0) {
-      setShowOpeningGuide(true);
+    if (challengePrefs.activeId) return;
+    if (!challengePrefs.offerSeen) {
+      const first = getNextEarlyChallenge(challengePrefs.claimedIds);
+      if (first) {
+        persistChallengePrefs({
+          ...challengePrefs,
+          activeId: first.id,
+        });
+        setOfferChallenge(first);
+        setShowChallengeOffer(true);
+        return;
+      }
     }
-  }, [kingdomReady, needsSetup, namingAfterLoss, gold, remountKey]);
+    const monsterKinds = sandboxSettings.monsters.kinds;
+    const enabledMonsterKinds = (
+      ['troll', 'ogre', 'dragon'] as MonsterChallengeKind[]
+    ).filter((k) => monsterKinds[k]);
+    const occasional = pickOccasionalChallenge({
+      claimedIds: challengePrefs.claimedIds,
+      stats,
+      monstersPresent: [],
+      enabledMonsterKinds,
+      nextOfferAt: challengePrefs.nextOfferAt,
+    });
+    if (occasional) {
+      persistChallengePrefs({
+        ...challengePrefs,
+        activeId: occasional.id,
+      });
+      setOfferChallenge(occasional);
+      setShowChallengeOffer(true);
+    }
+  }, [
+    kingdomReady,
+    needsSetup,
+    namingAfterLoss,
+    challengePrefs,
+    persistChallengePrefs,
+    sandboxSettings.monsters,
+    stats,
+  ]);
+
+  useEffect(() => {
+    if (!activeChallenge) return;
+    const slain = slainMonsterKindRef.current;
+    const wedding = royalWeddingFlagRef.current;
+    if (
+      isChallengeComplete(activeChallenge, {
+        gold,
+        stats,
+        slainMonsterKind: slain,
+        royalWeddingJustCompleted: wedding,
+      })
+    ) {
+      slainMonsterKindRef.current = null;
+      royalWeddingFlagRef.current = false;
+      void completeActiveChallenge(activeChallenge);
+    }
+  }, [activeChallenge, gold, stats, completeActiveChallenge]);
 
   const followingPeek = Boolean(selected && !inspectorExpanded);
   const sheetNeedsScrim =
@@ -774,7 +963,7 @@ export default function App() {
       </header>
 
       {showSidePanels && (
-        <NextForRealmStrip goal={realmGoal} onAction={handleRealmGoal} />
+        <NextForRealmStrip goal={stripGoal} onAction={handleStripGoal} />
       )}
 
       <main className="stage">
@@ -790,6 +979,12 @@ export default function App() {
               const nextId = s?.id ?? null;
               const idChanged = nextId !== selectedSubjectIdRef.current;
               selectedSubjectIdRef.current = nextId;
+
+              if (s?.subjectKind === 'monster') {
+                setSelectedMonsterId(s.id);
+              } else if (!s) {
+                setSelectedMonsterId(null);
+              }
 
               if (s) {
                 setShowMarket(false);
@@ -867,6 +1062,7 @@ export default function App() {
               });
             }}
             onKingdomEvent={handleKingdomEvent}
+            onMonsterSlain={handleMonsterSlain}
             onKingdomStats={setStats}
             onPlaceMode={setPlaceMode}
             onBuildingDemolished={handleBuildingDemolished}
@@ -945,11 +1141,11 @@ export default function App() {
           />
         )}
 
-        {showOpeningGuide && showSidePanels && (
-          <OpeningGuideCard
-            kingdomName={kingdom.name}
-            onEarnGold={openingEarnGold}
-            onDismiss={dismissOpeningGuide}
+        {showChallengeOffer && offerChallenge && showSidePanels && (
+          <ChallengeOfferCard
+            challenge={offerChallenge}
+            onAccept={acceptChallengeOffer}
+            onDismiss={dismissChallengeOffer}
           />
         )}
 
@@ -1017,6 +1213,7 @@ export default function App() {
                   gold={gold}
                   infiniteGold={infiniteGold}
                   militaryAvailable={stats.militaryAvailable}
+                  selectedMonsterId={selectedMonsterId}
                   collapsed={!inspectorExpanded}
                   onExpand={() => {
                     ignoreScrimUntilRef.current = performance.now() + 500;
@@ -1026,6 +1223,7 @@ export default function App() {
                   onClose={() => {
                     setSelected(null);
                     selectedSubjectIdRef.current = null;
+                    setSelectedMonsterId(null);
                     setInspectorExpanded(false);
                     clearSelection();
                   }}
@@ -1042,7 +1240,24 @@ export default function App() {
                       seq: nextCommandSeq(),
                       generalId: selected.id,
                       troopCount,
-                      targetId: selectedCamp?.id,
+                      targetId: selectedMonsterId
+                        ? `monster:${selectedMonsterId}`
+                        : selectedCamp?.id,
+                    });
+                  }}
+                  onKnightHunt={() => {
+                    sendCommand({
+                      type: 'COMMAND_KNIGHT_HUNT',
+                      seq: nextCommandSeq(),
+                      knightId: selected.id,
+                      monsterId: selectedMonsterId ?? undefined,
+                    });
+                  }}
+                  onSendNearestKnight={() => {
+                    sendCommand({
+                      type: 'COMMAND_KNIGHT_HUNT',
+                      seq: nextCommandSeq(),
+                      monsterId: selected.id,
                     });
                   }}
                   onPromoteCareer={(targetRole, cost) => {
@@ -1126,7 +1341,9 @@ export default function App() {
                   captives={captives}
                   gold={gold}
                   infiniteGold={infiniteGold}
-                  canExecute={stats.canExecuteCaptive}
+                  canExecute={
+                    Boolean(stats.canExecuteCaptive) && captives.length > 0
+                  }
                   onRansom={(id, cost) => {
                     void handleRansom(id, cost);
                   }}

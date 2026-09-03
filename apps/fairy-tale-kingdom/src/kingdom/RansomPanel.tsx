@@ -30,7 +30,8 @@ export function RansomPanel({
         </button>
       </div>
       <p className="muted">
-        Ransom royals home, or execute prisoners at the gallows.
+        Ransom royals home, or execute prisoners at the gallows (needs an
+        executioner + gallows).
       </p>
       {captives.length === 0 ? (
         <p className="muted">No one is captive.</p>
@@ -59,6 +60,11 @@ export function RansomPanel({
                       type="button"
                       className="market-buy"
                       disabled={!canExecute}
+                      title={
+                        canExecute
+                          ? 'Lead to the gallows'
+                          : 'Need an executioner, gallows, and a prisoner'
+                      }
                       onClick={() => onExecute(c.id)}
                     >
                       Execute
@@ -69,6 +75,11 @@ export function RansomPanel({
             );
           })}
         </ul>
+      )}
+      {captives.length > 0 && onExecute && !canExecute && (
+        <p className="muted">
+          Execute needs a gallows and an executioner in the realm.
+        </p>
       )}
     </section>
   );

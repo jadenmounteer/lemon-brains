@@ -30,6 +30,14 @@ export type GameCommand =
       targetId?: string;
     }
   | {
+      type: 'COMMAND_KNIGHT_HUNT';
+      seq: number;
+      /** Omit or empty to send the nearest free knight. */
+      knightId?: string;
+      /** Omit to hunt the nearest monster to the knight. */
+      monsterId?: string;
+    }
+  | {
       type: 'PROMOTE_CAREER';
       seq: number;
       subjectId: string;

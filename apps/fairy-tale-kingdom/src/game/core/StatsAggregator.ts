@@ -77,6 +77,7 @@ export class StatsAggregator {
       hasFairyGodmother: subjects.hasRole('fairy_godmother'),
       hasBishop: subjects.hasRole('bishop'),
       hasGeneral: subjects.hasRole('general'),
+      hasKnight: subjects.hasRole('knight'),
       hasExecutioner: subjects.hasRole('executioner'),
       canExecuteCaptive: this.deps.justice?.canExecute() ?? false,
       royaltyUnlocked: hasKing && hasQueen,

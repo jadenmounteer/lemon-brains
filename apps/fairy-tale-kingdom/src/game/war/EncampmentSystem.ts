@@ -598,10 +598,16 @@ export class EncampmentSystem {
     }
     if (!captive) {
       const name = homeUnit?.name ?? `Raider ${camp.garrison}`;
+      const role: import('../art/assetManifest').UnitRole =
+        camp.kind === 'thief'
+          ? 'thief'
+          : camp.kind === 'gypsy'
+            ? 'gypsy'
+            : 'bandit';
       captive = {
         id: `${camp.id}-arrest-${Date.now()}`,
         name,
-        role: camp.kind === 'goblin' ? 'bandit' : camp.kind === 'giant' ? 'bandit' : 'bandit',
+        role,
         houseId: `camp:${camp.id}`,
         maxHp: 30,
       };

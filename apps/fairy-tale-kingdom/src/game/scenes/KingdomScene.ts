@@ -31,6 +31,7 @@ import {
   type BuyNavalPayload,
   type CareerHirePayload,
   type CommandDetachmentPayload,
+  type CommandKnightHuntPayload,
   type DestroyCampPayload,
   type DemolishBuildingPayload,
   type AutoGrantFamilyWishPayload,
@@ -363,6 +364,7 @@ export class KingdomScene extends Phaser.Scene {
         this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
           count: this.captives.length,
         });
+        this.world.emitStats();
       },
       removeCaptive: (id) => {
         this.captives = this.captives.filter((c) => c.id !== id);
@@ -370,6 +372,7 @@ export class KingdomScene extends Phaser.Scene {
         this.game.events.emit(KingdomEvents.CAPTIVES_CHANGED, {
           count: this.captives.length,
         });
+        this.world.emitStats();
       },
     });
     this.justice = new JusticeSystem(
@@ -377,6 +380,9 @@ export class KingdomScene extends Phaser.Scene {
       this.subjects,
       this.buildings,
       this.dungeonLife
+    );
+    this.raids.setOnArrestIntake((captive, guardId, fromX, fromY) =>
+      this.dungeonLife.requestIntake(captive, { guardId, fromX, fromY })
     );
     this.cathedralLife = new CathedralLifeSystem(
       this,
@@ -851,6 +857,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
     this.game.events.on(KingdomEvents.DAY_ROLLED, this.onDayRolled);
     this.game.events.on(KingdomEvents.COMMAND_DETACHMENT, this.onCommand);
+    this.game.events.on(KingdomEvents.COMMAND_KNIGHT_HUNT, this.onKnightHunt);
     this.game.events.on(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.on(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.on(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
@@ -1007,6 +1014,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.TRANSFORM_PEASANT, this.onTransform);
     this.game.events.off(KingdomEvents.DAY_ROLLED, this.onDayRolled);
     this.game.events.off(KingdomEvents.COMMAND_DETACHMENT, this.onCommand);
+    this.game.events.off(KingdomEvents.COMMAND_KNIGHT_HUNT, this.onKnightHunt);
     this.game.events.off(KingdomEvents.SET_DAYS_PLAYED, this.onSetDaysPlayed);
     this.game.events.off(KingdomEvents.CAREER_HIRE, this.onCareerHire);
     this.game.events.off(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
@@ -1475,6 +1483,64 @@ export class KingdomScene extends Phaser.Scene {
     this.world.emitStats();
   };
 
+  private onKnightHunt = (payload: CommandKnightHuntPayload) => {
+    let monster = payload.monsterId
+      ? this.monsters?.getById(payload.monsterId)
+      : null;
+    let knightId = payload.knightId;
+    let knight = knightId ? this.subjects.getById(knightId) : null;
+
+    if (!monster && knight) {
+      monster =
+        this.monsters?.nearestMonster(
+          knight.sprite.x,
+          knight.sprite.y,
+          4000
+        ) ?? null;
+    }
+    if (!monster) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No monster to hunt.',
+      });
+      return;
+    }
+    if (!knightId) {
+      const nearest = this.subjects.findNearestKnight(
+        monster.sprite.x,
+        monster.sprite.y
+      );
+      knightId = nearest?.data.id;
+      knight = nearest ?? null;
+    }
+    if (!knightId) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'No free knight to send on the hunt.',
+      });
+      return;
+    }
+    const ok = this.subjects.assignKnightHunt(knightId, monster.id);
+    if (!ok) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'That knight cannot hunt right now.',
+      });
+      return;
+    }
+    knight = this.subjects.getById(knightId) ?? knight;
+    this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+      message: `${knight?.data.name ?? 'A knight'} rides out against ${monster.name}!`,
+    });
+    this.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+      id: `knight-hunt-${knightId}-${monster.id}`,
+      severity: 'joy',
+      title: 'Knight on the hunt!',
+      detail: `${knight?.data.name ?? 'A knight'} seeks ${monster.name}`,
+      x: monster.sprite.x,
+      y: monster.sprite.y,
+      ttlMs: 8000,
+    });
+    this.world.emitStats();
+  };
+
   private onDestroyCamp = (payload: DestroyCampPayload) => {
     this.encampments?.requestDestroy(payload.campId);
     this.world.emitStats();
@@ -1601,6 +1667,10 @@ export class KingdomScene extends Phaser.Scene {
     const keepId =
       snap && snap.kind === 'keep' ? snap.id : null;
     this.subjects.setLoyaltyHighlight(keepId);
+    if (snap?.kind === 'dungeon') {
+      snap.prisonerCapacity = this.dungeonLife.capacity();
+      snap.prisonerUsed = this.dungeonLife.occupiedCells();
+    }
     this.game.events.emit(KingdomEvents.BUILDING_SELECTED, snap);
   }
 

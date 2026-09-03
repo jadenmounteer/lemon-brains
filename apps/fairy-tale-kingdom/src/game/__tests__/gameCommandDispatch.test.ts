@@ -112,6 +112,39 @@ describe('dispatchGameCommand', () => {
     );
   });
 
+  it('maps COMMAND_KNIGHT_HUNT', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'COMMAND_KNIGHT_HUNT',
+      seq: 11,
+      knightId: 'k1',
+      monsterId: 'm1',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(
+      KingdomEvents.COMMAND_KNIGHT_HUNT,
+      { knightId: 'k1', monsterId: 'm1' }
+    );
+  });
+
+  it('maps COMMAND_DETACHMENT with monster targetId', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'COMMAND_DETACHMENT',
+      seq: 12,
+      generalId: 'gen-1',
+      troopCount: 3,
+      targetId: 'monster:m9',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(
+      KingdomEvents.COMMAND_DETACHMENT,
+      {
+        generalId: 'gen-1',
+        troopCount: 3,
+        targetId: 'monster:m9',
+      }
+    );
+  });
+
   it('maps DESTROY_CAMP', () => {
     const game = mockGame();
     dispatchGameCommand(game as never, {

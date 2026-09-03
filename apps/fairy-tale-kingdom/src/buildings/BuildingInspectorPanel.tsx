@@ -97,6 +97,13 @@ export function BuildingInspectorPanel({
           {building.royalUsed ?? 0} / {building.royalCapacity}
         </p>
       )}
+      {building.kind === 'dungeon' &&
+        typeof building.prisonerCapacity === 'number' && (
+          <p>
+            <span className="muted">Prisoners</span>{' '}
+            {building.prisonerUsed ?? 0} / {building.prisonerCapacity}
+          </p>
+        )}
       {building.capacityLines && building.capacityLines.length > 0 && (
         <>
           <h3 className="inspector-subhead">Capacity</h3>

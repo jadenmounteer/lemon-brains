@@ -12,6 +12,7 @@ import {
   type GameOverPayload,
   type GoldStolenPayload,
   type KingdomEventPayload,
+  type MonsterSlainPayload,
   type MarketToastPayload,
   type PlaceModePayload,
   type RaidWarningPayload,
@@ -50,6 +51,7 @@ interface PhaserGameProps {
   onGameOver: (payload: GameOverPayload) => void;
   onRaidWarning: (payload: RaidWarningPayload) => void;
   onKingdomEvent?: (payload: KingdomEventPayload) => void;
+  onMonsterSlain?: (payload: MonsterSlainPayload) => void;
   onKingdomStats: (stats: KingdomStats) => void;
   onPlaceMode: (mode: PlaceModePayload) => void;
   onWallPlaced?: (payload: WallPlacedPayload) => void;
@@ -80,6 +82,7 @@ export function PhaserGame({
   onGameOver,
   onRaidWarning,
   onKingdomEvent,
+  onMonsterSlain,
   onKingdomStats,
   onPlaceMode,
   onWallPlaced,
@@ -104,6 +107,7 @@ export function PhaserGame({
   const onOverRef = useRef(onGameOver);
   const onWarnRef = useRef(onRaidWarning);
   const onKingdomEventRef = useRef(onKingdomEvent);
+  const onMonsterSlainRef = useRef(onMonsterSlain);
   const onStatsRef = useRef(onKingdomStats);
   const onPlaceRef = useRef(onPlaceMode);
   const onWallPlacedRef = useRef(onWallPlaced);
@@ -124,6 +128,7 @@ export function PhaserGame({
   onOverRef.current = onGameOver;
   onWarnRef.current = onRaidWarning;
   onKingdomEventRef.current = onKingdomEvent;
+  onMonsterSlainRef.current = onMonsterSlain;
   onStatsRef.current = onKingdomStats;
   onPlaceRef.current = onPlaceMode;
   onWallPlacedRef.current = onWallPlaced;
@@ -198,6 +203,9 @@ export function PhaserGame({
         }
       }
     };
+    const handleMonsterSlain = (payload: MonsterSlainPayload) => {
+      onMonsterSlainRef.current?.(payload);
+    };
     const handleStats = (stats: KingdomStats) => {
       onStatsRef.current(stats);
     };
@@ -236,6 +244,7 @@ export function PhaserGame({
     game.events.on(KingdomEvents.GAME_OVER, handleOver);
     game.events.on(KingdomEvents.RAID_WARNING, handleWarn);
     game.events.on(KingdomEvents.KINGDOM_EVENT, handleKingdomEvent);
+    game.events.on(KingdomEvents.MONSTER_SLAIN, handleMonsterSlain);
     game.events.on(KingdomEvents.KINGDOM_STATS, handleStats);
     game.events.on(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
     game.events.on(KingdomEvents.WALL_PLACED, handleWallPlaced);
@@ -257,6 +266,7 @@ export function PhaserGame({
       game.events.off(KingdomEvents.GAME_OVER, handleOver);
       game.events.off(KingdomEvents.RAID_WARNING, handleWarn);
       game.events.off(KingdomEvents.KINGDOM_EVENT, handleKingdomEvent);
+      game.events.off(KingdomEvents.MONSTER_SLAIN, handleMonsterSlain);
       game.events.off(KingdomEvents.KINGDOM_STATS, handleStats);
       game.events.off(KingdomEvents.PLACE_MODE_CHANGED, handlePlace);
       game.events.off(KingdomEvents.WALL_PLACED, handleWallPlaced);

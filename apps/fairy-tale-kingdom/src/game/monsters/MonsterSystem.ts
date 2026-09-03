@@ -308,14 +308,18 @@ export class MonsterSystem {
     this.onChanged?.();
   }
 
-  damageMonster(id: string, amount: number): boolean {
+  damageMonster(
+    id: string,
+    amount: number,
+    slayer?: { id: string; role: string; name: string }
+  ): boolean {
     const m = this.getById(id);
     if (!m || !m.sprite.active) return false;
     m.hp = Math.max(0, m.hp - amount);
     this.vfx?.hitFlash(m.sprite);
     if (m.hp / m.maxHp <= 0.35) m.sprite.setTint(0xff6666);
     if (m.hp <= 0) {
-      this.killMonster(m);
+      this.killMonster(m, slayer);
       return true;
     }
     return false;
@@ -825,7 +829,32 @@ export class MonsterSystem {
     });
   }
 
-  private killMonster(m: ManagedMonster): void {
+  private killMonster(
+    m: ManagedMonster,
+    slayer?: { id: string; role: string; name: string }
+  ): void {
+    const payload = {
+      monsterId: m.id,
+      kind: m.kind,
+      name: m.name,
+      x: m.sprite.x,
+      y: m.sprite.y,
+      slayerId: slayer?.id,
+      slayerRole: slayer?.role,
+      slayerName: slayer?.name,
+    };
+    this.scene.game.events.emit(KingdomEvents.MONSTER_SLAIN, payload);
+    this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+      id: `monster-slain-${m.id}`,
+      severity: 'joy',
+      title: slayer
+        ? `${slayer.name} slew ${m.name}!`
+        : `${m.name} has been slain!`,
+      detail: m.kind === 'dragon' ? 'A dragon falls' : `A ${m.kind} falls`,
+      x: m.sprite.x,
+      y: m.sprite.y,
+      ttlMs: 10000,
+    });
     this.scene.tweens.killTweensOf(m.sprite);
     this.scene.tweens.add({
       targets: m.sprite,
@@ -865,6 +894,8 @@ export class MonsterSystem {
       hunger: Math.round(m.hunger),
       sick: false,
       genderLabel: '—',
+      subjectKind: 'monster',
+      monsterKind: m.kind,
     };
   }
 

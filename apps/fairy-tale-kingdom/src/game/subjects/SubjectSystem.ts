@@ -378,8 +378,11 @@ export class SubjectSystem {
       if (managed.data.allegiance === 'camp') continue;
       if (managed.interrupt?.kind === 'flee') continue;
       if (managed.interrupt?.kind === 'abducted') continue;
-      // Detachments keep marching — don't yank them into raid defense.
+      // Detachments / knight hunts / justice escorts keep marching.
       if (managed.interrupt?.kind === 'assault') continue;
+      if (managed.interrupt?.kind === 'hunt_monster') continue;
+      if (managed.interrupt?.kind === 'escort_captive') continue;
+      if (managed.interrupt?.kind === 'execute') continue;
 
       const keepId =
         managed.data.loyaltyKeepId ??
@@ -514,6 +517,48 @@ export class SubjectSystem {
       }
     }
     return null;
+  }
+
+  /** Nearest free knight, or null. */
+  findNearestKnight(x: number, y: number): ManagedSubject | null {
+    let best: ManagedSubject | null = null;
+    let bestD = Number.POSITIVE_INFINITY;
+    for (const s of this.registry.all) {
+      if (
+        s.data.role !== 'knight' ||
+        !s.sprite.active ||
+        s.data.sick ||
+        s.data.allegiance === 'camp' ||
+        s.interrupt
+      ) {
+        continue;
+      }
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Send a knight to hunt a specific monster. Returns false if invalid.
+   */
+  assignKnightHunt(knightId: string, monsterId: string): boolean {
+    const knight = this.getById(knightId);
+    if (
+      !knight ||
+      knight.data.role !== 'knight' ||
+      !knight.sprite.active ||
+      knight.data.sick
+    ) {
+      return false;
+    }
+    knight.interrupt = { kind: 'hunt_monster', targetId: monsterId };
+    knight.data.activity = 'hunt';
+    knight.data.activityLabel = 'Riding out on a monster hunt';
+    return true;
   }
 
   /**
@@ -1198,6 +1243,13 @@ export class SubjectSystem {
         }
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${princess.data.name} remains a Princess forever!`,
+        });
+        this.scene.game.events.emit(KingdomEvents.KINGDOM_EVENT, {
+          id: 'challenge-royal-wedding',
+          severity: 'joy',
+          title: 'A royal wedding!',
+          detail: `${princess.data.name} and ${prince?.data.name ?? 'the prince'} are wed`,
+          ttlMs: 12000,
         });
       }
       for (const id of ids) this.clearInterrupt(id);
@@ -3475,6 +3527,8 @@ export class SubjectSystem {
       temporaryPrincess: managed.data.temporaryPrincess,
       married: managed.data.married,
       canCommandTroops: managed.data.role === 'general',
+      canHuntMonster: managed.data.role === 'knight',
+      subjectKind: 'subject',
       happiness: managed.data.happiness,
       ageYears: managed.data.ageYears,
       body: managed.data.body,

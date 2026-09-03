@@ -51,6 +51,9 @@ export interface BuildingSnapshot {
   royalCapacity?: number;
   influenceRadius?: number;
   capacityLines?: string[];
+  /** Dungeon prisoner cells occupied (including escorts en route). */
+  prisonerUsed?: number;
+  prisonerCapacity?: number;
   /** Keep this building answers to (fief), when set. */
   loyaltyLabel?: string;
 }
@@ -171,7 +174,8 @@ export type InterruptKind =
   | 'exorcise'
   | 'defect'
   | 'abducted'
-  | 'escort_captive';
+  | 'escort_captive'
+  | 'hunt_monster';
 
 export interface SubjectInterrupt {
   kind: InterruptKind;
@@ -263,6 +267,10 @@ export interface SubjectSnapshot {
   ballActive?: boolean;
   festivalActive?: boolean;
   canCommandTroops?: boolean;
+  /** True when this snapshot is a world monster (troll/ogre/dragon), not a subject. */
+  subjectKind?: 'subject' | 'monster';
+  monsterKind?: 'troll' | 'ogre' | 'dragon';
+  canHuntMonster?: boolean;
   happiness?: number;
   ageYears?: number;
   body?: BodyCondition;
@@ -336,6 +344,7 @@ export interface KingdomStats {
   hasFairyGodmother: boolean;
   hasBishop: boolean;
   hasGeneral: boolean;
+  hasKnight: boolean;
   hasExecutioner: boolean;
   canExecuteCaptive?: boolean;
   royaltyUnlocked: boolean;

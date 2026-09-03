@@ -18,6 +18,7 @@ import { planSiege, type SiegePlan } from '../war/GeneralStrategy';
 import { WarBalance } from '../war/WarBalance';
 import { KEEP_ID } from '../buildings/BuildingSystem';
 import { Phase12Balance } from '../economy/phase12Balance';
+import { pickName } from '../subjects/names';
 
 import { RaidMovement } from './RaidMovement';
 import { RaidSpawner } from './RaidSpawner';
@@ -50,6 +51,14 @@ export class RaidSystem {
   private vfx: SiegeVfx | null = null;
   private encampments: EncampmentSystem | null = null;
   private onChanged: (() => void) | null = null;
+  private onArrestIntake:
+    | ((
+        captive: import('../../kingdom/CaptivesRepository').CaptiveRecord,
+        guardId: string,
+        fromX: number,
+        fromY: number
+      ) => boolean)
+    | null = null;
   private siegeToastShown = false;
   private siegePhase: SiegePhase = 'none';
   private musterMs = 0;
@@ -121,6 +130,17 @@ export class RaidSystem {
 
   setEncampments(encampments: EncampmentSystem): void {
     this.encampments = encampments;
+  }
+
+  setOnArrestIntake(
+    cb: (
+      captive: import('../../kingdom/CaptivesRepository').CaptiveRecord,
+      guardId: string,
+      fromX: number,
+      fromY: number
+    ) => boolean
+  ): void {
+    this.onArrestIntake = cb;
   }
 
   setOnChanged(cb: () => void): void {
@@ -1316,12 +1336,15 @@ export class RaidSystem {
     if (raider.state === 'done') return;
     raider.state = 'done';
     const campId = raider.homeCampId;
-    const kindLabel =
+    const fromX = raider.sprite.x;
+    const fromY = raider.sprite.y;
+    const role: import('../art/assetManifest').UnitRole =
       raider.stealKind === 'gypsy' || raider.kind === 'gypsy'
         ? 'gypsy'
         : raider.stealKind === 'thief'
           ? 'thief'
           : 'bandit';
+    const kindLabel = role;
     const recovered = Math.max(
       Phase12Balance.arrestBountyGold,
       raider.carriedGold > 0
@@ -1352,10 +1375,26 @@ export class RaidSystem {
       `Arrested a ${kindLabel} and recovered ${recovered} gold`,
       'arrest'
     );
+
+    const hasDungeon = Boolean(this.buildings?.hasDungeon());
+    let escorted = false;
+    if (hasDungeon && this.onArrestIntake && guardId) {
+      const captive = {
+        id: `raid-arrest-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+        name: pickName(Math.floor(Math.random() * 1_000_000)),
+        role,
+        houseId: campId ? `camp:${campId}` : 'wild',
+        maxHp: 30,
+      };
+      escorted = this.onArrestIntake(captive, guardId, fromX, fromY);
+    }
+
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: this.buildings?.hasDungeon()
-        ? `Guards arrested a ${kindLabel} — recovered ${recovered} gold!`
-        : `Guards drove off a ${kindLabel}!`,
+      message: escorted
+        ? `Guards arrest a ${kindLabel} — escorting to the dungeon (+${recovered}g)`
+        : hasDungeon
+          ? `Guards arrested a ${kindLabel} — recovered ${recovered} gold!`
+          : `Guards drove off a ${kindLabel}!`,
     });
     if (!this.hasActiveRaiders()) this.endWave();
     this.onChanged?.();
