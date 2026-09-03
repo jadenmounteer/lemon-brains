@@ -26,6 +26,9 @@ const STAGE_MS: Record<Exclude<Stage, 'done'>, number> = {
 };
 
 const MAX_GUESTS = 8;
+const ARRIVE_R = 42;
+/** Safety cap so a stuck procession cannot block the realm forever. */
+const GATHER_MAX_MS = 90_000;
 
 /**
  * Staged wedding: guests gather → aisle → bishop rite → cheer → keep banquet.
@@ -37,6 +40,7 @@ export class WeddingCeremonySystem {
   private cathedral = { x: 0, y: 0 };
   private couple: { a: string; b: string; bishop: string } | null = null;
   private guestIds: string[] = [];
+  private gatherWaitMs = 0;
   private props: Phaser.GameObjects.Image[] = [];
   private onRiteComplete: (() => void) | null = null;
   private vfx: CelebrationVfx | null = null;
@@ -77,6 +81,7 @@ export class WeddingCeremonySystem {
     this.cathedral = cathedral;
     this.couple = { a: partnerA, b: partnerB, bishop: bishopId };
     this.guestIds = this.pickGuests([partnerA, partnerB, bishopId]);
+    this.gatherWaitMs = 0;
     this.spawnArch(cathedral.x, cathedral.y);
     this.applyGather();
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
@@ -87,6 +92,13 @@ export class WeddingCeremonySystem {
 
   update(deltaMs: number): void {
     if (!this.active || !this.couple) return;
+    if (this.stage === 'gather') {
+      this.nudgeGathering();
+      if (!this.principalsReady()) {
+        this.gatherWaitMs += deltaMs;
+        if (this.gatherWaitMs < GATHER_MAX_MS) return;
+      }
+    }
     this.stageMs -= deltaMs;
     if (this.stageMs > 0) return;
 
@@ -151,8 +163,67 @@ export class WeddingCeremonySystem {
     return pool.slice(0, MAX_GUESTS).map((s) => s.data.id);
   }
 
+  private pinParticipant(id: string, partnerId: string): void {
+    const m = this.subjects.getById(id);
+    if (!m) return;
+    m.interrupt = { kind: 'wedding', partnerId };
+  }
+
+  private principalsReady(): boolean {
+    if (!this.couple) return false;
+    const door = cathedralDoor(this.cathedral);
+    const bishopPt = cathedralBishopSpot(this.cathedral, this.couple.bishop);
+    const checks: { id: string; x: number; y: number }[] = [
+      { id: this.couple.a, x: door.x, y: door.y },
+      { id: this.couple.b, x: door.x, y: door.y },
+      { id: this.couple.bishop, x: bishopPt.x, y: bishopPt.y },
+    ];
+    for (const { id, x, y } of checks) {
+      const m = this.subjects.getById(id);
+      if (!m) return false;
+      const d = Phaser.Math.Distance.Between(m.sprite.x, m.sprite.y, x, y);
+      if (d > ARRIVE_R) return false;
+    }
+    return true;
+  }
+
+  /** Keep nudging anyone still en route during the gather stage. */
+  private nudgeGathering(): void {
+    if (!this.couple) return;
+    for (const id of [
+      this.couple.a,
+      this.couple.b,
+      this.couple.bishop,
+      ...this.guestIds,
+    ]) {
+      const m = this.subjects.getById(id);
+      if (!m || m.moving) continue;
+      if (id === this.couple.bishop) {
+        const pt = cathedralBishopSpot(this.cathedral, id);
+        if (
+          Phaser.Math.Distance.Between(m.sprite.x, m.sprite.y, pt.x, pt.y) >
+          ARRIVE_R
+        ) {
+          this.subjects.nudgeToward(id, pt.x, pt.y, 55);
+        }
+        continue;
+      }
+      if (id === this.couple.a || id === this.couple.b) {
+        const door = cathedralDoor(this.cathedral);
+        const tx = door.x + (id === this.couple.a ? -6 : 6);
+        if (
+          Phaser.Math.Distance.Between(m.sprite.x, m.sprite.y, tx, door.y) >
+          ARRIVE_R
+        ) {
+          this.subjects.nudgeToward(id, tx, door.y, 55);
+        }
+      }
+    }
+  }
+
   private applyGather(): void {
     if (!this.couple) return;
+    const partnerTag = this.couple.b;
     const ids = [
       this.couple.a,
       this.couple.b,
@@ -162,6 +233,7 @@ export class WeddingCeremonySystem {
     ids.forEach((id, i) => {
       const m = this.subjects.getById(id);
       if (!m) return;
+      this.pinParticipant(id, partnerTag);
       m.data.activity = 'wedding';
       m.data.activityLabel =
         id === this.couple!.bishop

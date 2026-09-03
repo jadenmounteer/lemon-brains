@@ -235,6 +235,8 @@ export interface Subject {
   curse?: CurseKind;
   cursedAsRole?: SubjectRole;
   lowHappyHours?: number;
+  /** Physician currently walking to this wounded subject. */
+  healTargetId?: string | null;
   /** Encampment this subject belongs to, when allegiance is 'camp'. */
   campId?: string | null;
   /** 'camp' subjects live at a bandit/thief/gypsy camp instead of the kingdom. */

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { findChildHome, findMarriageHome } from '../familyHousing';
+import {
+  defectHoursNeeded,
+  findChildHome,
+  findMarriageHome,
+  isHomelessHouseId,
+} from '../familyHousing';
 
 const dwellings = [
   { id: 'house-a', kind: 'house' as const },
@@ -40,6 +45,30 @@ describe('findMarriageHome', () => {
       { gold: 50, houseBuildCost: 30 }
     );
     expect(result).toEqual({ ok: true, needsNewHouse: true });
+  });
+});
+
+describe('isHomelessHouseId', () => {
+  it('treats empty house ids as homeless', () => {
+    expect(isHomelessHouseId('')).toBe(true);
+    expect(isHomelessHouseId(null)).toBe(true);
+    expect(isHomelessHouseId(undefined)).toBe(true);
+  });
+
+  it('does not treat camp housing as homeless', () => {
+    expect(isHomelessHouseId('camp:bandit-1', false)).toBe(false);
+  });
+
+  it('treats a missing dwelling as homeless', () => {
+    expect(isHomelessHouseId('house-1', false)).toBe(true);
+    expect(isHomelessHouseId('house-1', true)).toBe(false);
+  });
+});
+
+describe('defectHoursNeeded', () => {
+  it('shortens the miserable wait when homeless', () => {
+    expect(defectHoursNeeded(false, { housed: 6, homeless: 3 })).toBe(6);
+    expect(defectHoursNeeded(true, { housed: 6, homeless: 3 })).toBe(3);
   });
 });
 

@@ -172,6 +172,7 @@ export default function App() {
   );
   const royalWeddingFlagRef = useRef(false);
   const slainMonsterKindRef = useRef<MonsterChallengeKind | null>(null);
+  const completingChallengeIdRef = useRef<string | null>(null);
   const {
     pinned: eventPinned,
     recent: eventRecent,
@@ -578,20 +579,36 @@ export default function App() {
 
   const completeActiveChallenge = useCallback(
     async (challenge: RealmChallenge) => {
-      const claimedIds = [...challengePrefs.claimedIds, challenge.id];
-      const earlyNext = getNextEarlyChallenge(claimedIds);
-      let nextActive: string | null = earlyNext?.id ?? null;
-      let nextOfferAt = challengePrefs.nextOfferAt;
-      if (!earlyNext) {
-        nextOfferAt = Date.now() + CHALLENGE_COOLDOWN_MS;
-        nextActive = null;
-      }
-      persistChallengePrefs({
-        claimedIds,
-        activeId: nextActive,
-        nextOfferAt,
-        offerSeen: true,
+      let didClaim = false;
+      let earlyNext: RealmChallenge | null = null;
+      let showNextOffer = false;
+      setChallengePrefs((prev) => {
+        if (
+          prev.claimedIds.includes(challenge.id) ||
+          (prev.activeId != null && prev.activeId !== challenge.id)
+        ) {
+          return prev;
+        }
+        didClaim = true;
+        const claimedIds = [...prev.claimedIds, challenge.id];
+        earlyNext = getNextEarlyChallenge(claimedIds);
+        let nextActive: string | null = earlyNext?.id ?? null;
+        let nextOfferAt = prev.nextOfferAt;
+        if (!earlyNext) {
+          nextOfferAt = Date.now() + CHALLENGE_COOLDOWN_MS;
+          nextActive = null;
+        }
+        showNextOffer = Boolean(earlyNext && !prev.offerSeen);
+        const next: ChallengePrefs = {
+          claimedIds,
+          activeId: nextActive,
+          nextOfferAt,
+          offerSeen: true,
+        };
+        saveChallengePrefs(next);
+        return next;
       });
+      if (!didClaim) return;
       await addGold(challenge.rewardGold);
       flash(`Challenge complete — +${challenge.rewardGold}g`);
       ingestKingdomEvent({
@@ -601,12 +618,12 @@ export default function App() {
         detail: `+${challenge.rewardGold} gold`,
         ttlMs: 8000,
       });
-      if (earlyNext && !challengePrefs.offerSeen) {
+      if (showNextOffer && earlyNext) {
         setOfferChallenge(earlyNext);
         setShowChallengeOffer(true);
       }
     },
-    [addGold, challengePrefs, flash, ingestKingdomEvent, persistChallengePrefs]
+    [addGold, flash, ingestKingdomEvent]
   );
 
   const handleStripGoal = useCallback(
@@ -764,6 +781,8 @@ export default function App() {
 
   useEffect(() => {
     if (!activeChallenge) return;
+    if (challengePrefs.claimedIds.includes(activeChallenge.id)) return;
+    if (completingChallengeIdRef.current === activeChallenge.id) return;
     const slain = slainMonsterKindRef.current;
     const wedding = royalWeddingFlagRef.current;
     if (
@@ -774,11 +793,18 @@ export default function App() {
         royalWeddingJustCompleted: wedding,
       })
     ) {
+      completingChallengeIdRef.current = activeChallenge.id;
       slainMonsterKindRef.current = null;
       royalWeddingFlagRef.current = false;
       void completeActiveChallenge(activeChallenge);
     }
-  }, [activeChallenge, gold, stats, completeActiveChallenge]);
+  }, [activeChallenge, gold, stats, challengePrefs.claimedIds, completeActiveChallenge]);
+
+  useEffect(() => {
+    if (completingChallengeIdRef.current !== activeChallenge?.id) {
+      completingChallengeIdRef.current = null;
+    }
+  }, [activeChallenge]);
 
   const followingPeek = Boolean(selected && !inspectorExpanded);
   const sheetNeedsScrim =

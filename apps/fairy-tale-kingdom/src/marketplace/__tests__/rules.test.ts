@@ -123,6 +123,15 @@ describe('canPlaceBuilding', () => {
   it('allows house placement by default', () => {
     expect(canPlaceBuilding('house', baseStats)).toBe(true);
   });
+
+  it('blocks a second keep once one already stands', () => {
+    expect(canPlaceBuilding('keep', baseStats)).toBe(false);
+    expect(canPlaceBuilding('keep', { ...baseStats, keepCount: 0 })).toBe(true);
+  });
+
+  it('blocks road tiles', () => {
+    expect(canPlaceBuilding('road', baseStats)).toBe(false);
+  });
 });
 
 describe('wall drag billing', () => {

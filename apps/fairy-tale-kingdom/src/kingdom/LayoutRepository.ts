@@ -23,7 +23,10 @@ import {
 export const LAYOUT_STORAGE_KEY = 'fairyTaleKingdom.layout';
 export { LAYOUT_SCHEMA_VERSION };
 
-const VALID_BUILD_KINDS = new Set<string>(BUILD_CATALOG.map((c) => c.kind));
+const VALID_BUILD_KINDS = new Set<string>([
+  ...BUILD_CATALOG.map((c) => c.kind),
+  'road', // legacy saves — no longer placeable
+]);
 const VALID_MONSTER_KINDS = new Set(['troll', 'ogre', 'dragon']);
 const VALID_UNIT_ROLES = new Set<string>(UNIT_ROLES);
 const VALID_CAMP_KINDS = new Set([

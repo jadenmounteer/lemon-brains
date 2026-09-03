@@ -82,6 +82,8 @@ export const CombatBalance = {
   guardRange: 28,
   archerRange: 90,
   pillageRadius: 48,
+  /** How far a marching raider may detour to burn a claimed house or field. */
+  homesteadPillageRadius: 160,
   aggroRadius: 110,
   fleeRadius: 70,
   repairPerTick: 4,

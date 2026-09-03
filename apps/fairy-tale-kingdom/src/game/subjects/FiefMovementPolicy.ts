@@ -8,6 +8,7 @@ export interface FiefBuildingQuery {
   getInfluenceRadius(): number;
   getMilitaryInfluenceRadius(): number;
   getById?(id: string): { kind: BuildKind } | undefined;
+  inRealmClaim?(x: number, y: number): boolean;
 }
 
 /** Clamps wander targets to a keep or military building's influence sphere. */
@@ -21,6 +22,9 @@ export class FiefMovementPolicy implements IMovementPolicy {
     keepId: string,
     point: { x: number; y: number }
   ): { x: number; y: number } {
+    if (this.buildings.inRealmClaim?.(point.x, point.y)) {
+      return { x: point.x, y: point.y };
+    }
     const origin = this.buildings.getInfluenceOriginPoint(keepId);
     if (!origin) return point;
 

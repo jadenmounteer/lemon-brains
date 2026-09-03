@@ -19,13 +19,25 @@ export class SelectionController {
     snap: ReturnType<BuildingSystem['select']>
   ): void {
     this.clearInfluence();
-    if (!snap || !snap.influenceRadius) return;
-    if (snap.kind !== 'keep' && snap.kind !== 'barracks' && snap.kind !== 'dungeon') {
+    if (!snap) return;
+    if (snap.kind === 'keep') {
+      const color = 0xc4a35a;
+      this.influenceGfx = this.scene.add.graphics().setDepth(6);
+      this.influenceGfx.lineStyle(1, color, 0.55);
+      this.influenceGfx.fillStyle(color, 0.06);
+      for (const c of buildings.claimCircles()) {
+        this.influenceGfx.strokeCircle(c.x, c.y, c.radius);
+        this.influenceGfx.fillCircle(c.x, c.y, c.radius);
+      }
       return;
     }
+    if (snap.kind !== 'barracks' && snap.kind !== 'dungeon') {
+      return;
+    }
+    if (!snap.influenceRadius) return;
     const pt = buildings.getInfluenceOriginPoint(snap.id);
     if (!pt) return;
-    const color = snap.kind === 'keep' ? 0xc4a35a : 0xb5453f;
+    const color = 0xb5453f;
     this.influenceGfx = this.scene.add.graphics().setDepth(6);
     this.influenceGfx.lineStyle(1, color, 0.55);
     this.influenceGfx.strokeCircle(pt.x, pt.y, snap.influenceRadius);

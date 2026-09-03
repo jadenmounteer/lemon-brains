@@ -297,12 +297,6 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     cost: 50,
   },
   {
-    kind: 'road',
-    name: 'Road',
-    blurb: 'Dirt path for patrols and travel. Place freely on grass.',
-    cost: 4,
-  },
-  {
     kind: 'bridge',
     name: 'Bridge',
     blurb:
@@ -325,7 +319,7 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     kind: 'keep',
     name: 'Keep',
     blurb:
-      'A multi-room castle: court, banquet, kitchen, and chambers. Seat dukes and castle staff. All keeps must fall to lose.',
+      'A multi-room castle: court, banquet, kitchen, and chambers. Seat royals and castle staff. The realm falls if this keep is destroyed.',
     cost: 120,
     requiresRoyalty: true,
   },

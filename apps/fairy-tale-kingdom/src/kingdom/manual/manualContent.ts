@@ -124,7 +124,7 @@ export function buildManualSections(): ManualSection[] {
       intro: [
         'I am Merlin, Your Majesty — wizard advisor to the crown. Fairy Tale Kingdom is a watchable realm: you inspect, you spend, you place stone and timber, and your subjects live their days inside a castle that breathes.',
         'Gold flows from Knowledge Quest — open Questions on desktop, or the menu on mobile — and from plunder recovered by your guards. Spend it in the Marketplace on buildings and ships; train folk at the workplaces where they will serve. Food and happiness keep people loyal; empty bellies and misery birth witches, thieves, and bandits.',
-        'You begin with a lone keep upon the road and an empty map. Place houses for beds, a granary then fields for food, roads for patrols, and a dungeon or barracks when order and steel are needed. The wilds are vast, and fringe camps already watch you.',
+        'You begin with a lone keep on an empty map. Place houses for beds, a granary then fields for food, and a dungeon or barracks when order and steel are needed. Each holding you place expands the realm’s claim. The wilds are vast, and fringe camps already watch you.',
       ],
       entries: [
         {
@@ -133,7 +133,7 @@ export function buildManualSections(): ManualSection[] {
             'Watch life unfold: follow a cook through supper prep, or the king at morning court. Tap anyone to follow; open Details for job, room (“At: Banquet hall”), thoughts, and happiness.',
             'Answer reading questions for gold → buy buildings and boats from the Marketplace → click a building and Train the roles it supports.',
             'When a subject dreams of promotion, select them and read their Aspiration in the inspector. If every requirement is met, press Grant wish to promote them.',
-            'Festivals, weddings, jousts, and camp life play out on their own. When raids loom, soldiers and archers leave the revel to hold their keep’s perimeter; guards keep patrolling the fief’s roads.',
+            'Festivals, weddings, jousts, and camp life play out on their own. When raids loom, soldiers and archers leave the revel to hold the keep’s perimeter; guards keep patrolling claimed streets and holdings.',
           ],
         },
         {
@@ -149,7 +149,7 @@ export function buildManualSections(): ManualSection[] {
           body: [
             'The Marketplace sells structures and ships — not people. To recruit, select a building and use its Train list: barracks for soldiers, dungeon for guards, cathedral for bishop and witch hunter, keep for royalty, and so on.',
             'Each building has role capacity — inspect Who works here and Capacity before you spend. Training checks beds (except royals, who live at keeps), royal gates, and unique slots such as one bishop or one fairy godmother.',
-            'New subjects spawn at the building entrance and bind to that workplace within their fief.',
+            'New subjects spawn at the building entrance and bind to that workplace.',
           ],
         },
         {
@@ -166,14 +166,15 @@ export function buildManualSections(): ManualSection[] {
           title: 'Food first, then the castle',
           body: [
             'New peasants fill field farmer slots before bakeries, docks, markets, and finally castle staff. Place a field early so the realm eats — cooks and servants appear once farms are staffed (or a single steward if you have no fields yet).',
-            'Subjects commute on roads across their keep’s loyalty territory: houses on one fringe, fields and docks on another. Night sleep, meal hours, and work sites stick to real buildings — royals sleep in chambers; villagers eat at home; court and castle staff dine in the banquet hall.',
+            'Subjects commute between real sites: houses on one fringe, fields and docks on another. Night sleep, meal hours, and work sites stick to buildings — royals sleep in chambers; villagers eat at home; court and castle staff dine in the banquet hall.',
           ],
         },
         {
-          title: 'Keep loyalty & fiefs',
+          title: 'Kingdom borders',
           body: [
-            'Every subject and building answers to the nearest keep — the crown keep or a duke’s seat. Inspectors show Loyalty. Select a keep to tint its loyal folk.',
-            'Work, patrol, and defense stay inside that fief’s influence ring. Wander targets clamp to the sphere — subjects rarely drift outside their liege’s territory unless fleeing danger.',
+            'There is one keep. You lose if it falls. The realm’s border is not a wall — it is a gold overlay of overlapping circles around every standing holding (keep, houses, fields, docks, taverns, barracks, and the rest). Dirt paths, bridges, and ladders do not count. Place a house far away and it is still yours: an exclave with its own circle.',
+            'Click the keep to paint that overlay. Subjects path through grass and doors as usual; the border does not block walking. Idle wander and random commute targets stay on claimed ground. Guards and soldiers on patrol visit claimed civic posts, houses, fields, and docks — including those exclaves. Fleeing, hunting, weddings, and orders you give can take people outside the claim.',
+            'Raiders still march on the keep for gold and siege, but they may burn a claimed house or field they pass. Barracks and dungeon clicks still show a local military ring. Older saves may list Loyalty on inspectors — it no longer splits the map into rival fiefs.',
           ],
         },
         {
@@ -193,7 +194,7 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Winning by surviving',
           body: [
-            'You lose when every keep is destroyed. Extra keeps seat dukes and buy time. Soft early raids give you space to found — but never zero danger.',
+            'You lose when the keep is destroyed. Soft early raids give you space to found — but never zero danger.',
           ],
         },
         {
@@ -230,14 +231,14 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         hireEntry('guard', 'unit:guard', [
-          'Train at the dungeon. Patrol the loyalty keep’s roads, houses, and civic posts — pausing at cathedral, market, infirmary, tavern, bakery, granary, cemetery, and gallows on their rounds.',
-          'Arrest thieves and necromancers when a dungeon exists, recover stolen gold, and keep walking raid roads while soldiers hold the perimeter.',
+          'Train at the dungeon. Patrol claimed houses, fields, docks, and civic posts — pausing at cathedral, market, infirmary, tavern, bakery, granary, cemetery, and gallows on their rounds, including holdings far from the keep.',
+          'Arrest thieves and necromancers when a dungeon exists, recover stolen gold, and keep walking threatened streets while soldiers hold the perimeter.',
         ]),
         hireEntry('soldier', 'unit:soldier', [
-          'Train at the barracks. Defend their keep’s perimeter when any raid or siege hits. Peacetime they patrol the fief; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
+          'Train at the barracks. Defend the keep’s perimeter when any raid or siege hits. Peacetime they patrol claimed holdings; wartime they leave festivals and form the wall line. Join general detachments when ordered.',
         ]),
         hireEntry('archer', 'unit:archer', [
-          'Train at the barracks. Prefer battlements with line-of-sight toward raiders threatening their fief. Climb ladders in a raid; otherwise patrol with the army of their keep.',
+          'Train at the barracks. Prefer battlements with line-of-sight toward raiders. Climb ladders in a raid; otherwise patrol claimed holdings with the army.',
         ]),
         hireEntry('elite_guard', 'unit:elite_guard', [
           'Hardened melee for late pressure. Train at the barracks once king and queen reign and posts remain open.',
@@ -290,10 +291,10 @@ export function buildManualSections(): ManualSection[] {
           ],
         },
         hireEntry('duke', 'unit:duke', [
-          'Train at a keep once you hold a second seat. Regional lord — noble trim and shoulder cape, lesser crown than the king. Spreads influence and softens the all-keeps-must-fall lose condition.',
+          'Regional lord — noble trim and shoulder cape, lesser crown than the king. A second keep is no longer placeable; dukes remain in the roster for older saves.',
         ]),
         hireEntry('duchess', 'unit:duchess', [
-          'Train at a keep. Regional lady — noble dress without a full queen’s train. Same strategic value as a duke.',
+          'Regional lady — noble dress without a full queen’s train. Same as a duke: leftover for older saves, not a second-keep unlock.',
         ]),
         hireEntry('fairy_godmother', 'unit:fairy_godmother', [
           'Train at the keep. Starry hat, flowing gown, and sparkle wand. At a royal ball, blesses a female peasant into a temporary princess. Unique.',
@@ -369,7 +370,7 @@ export function buildManualSections(): ManualSection[] {
       ],
       entries: [
         buildEntry('keep', 'prop:keep', [
-          'Heart of the realm — a large multi-room castle. Influence circle; royal housing; castle staff workplaces; lose only when all keeps fall. Train king, queen, duke, duchess, and fairy godmother here. See Castle life for the room guide.',
+          'Heart of the realm — a large multi-room castle. Click it to see kingdom borders: a gold overlay around every claimed holding. Royal housing; castle staff workplaces; lose if this keep falls. Train king, queen, and fairy godmother here. See Castle life for the room guide.',
         ]),
         buildEntry('house', 'prop:house', [
           'Three beds. Starter homes for families — peasants need beds before you can train more commoners.',
@@ -424,9 +425,6 @@ export function buildManualSections(): ManualSection[] {
         ]),
         buildEntry('watchtower', 'prop:watchtower', [
           'Extends nearby archer range. Royal gate.',
-        ]),
-        buildEntry('road', 'prop:road', [
-          'Cheap dirt paths patrols prefer. You place them — no starter crossroads.',
         ]),
         buildEntry('bridge', 'prop:bridge', [
           'Span rivers (R to rotate). Ground units and monsters cross; dragons never needed one.',
@@ -541,7 +539,7 @@ export function buildManualSections(): ManualSection[] {
           title: 'Civilian jobs',
           body: [
             'Food-first hiring order: Farmer → fields, then Baker → bakery, Fisherman → dock, Merchant → market, then Castle staff → keep (cook, servant, steward, scribe, cupbearer). Surplus staff rebalance onto new fields when you place them.',
-            'Jobs bind a workplace in the subject’s loyalty territory when possible. Inspectors show Works at, At (keep room), and Loyalty.',
+            'Jobs bind a workplace near the subject when possible. Inspectors show Works at and At (keep room).',
           ],
         },
         {
@@ -562,8 +560,8 @@ export function buildManualSections(): ManualSection[] {
         {
           title: 'Civic patrol life',
           body: [
-            'Guards cycle the fief’s roads and pause at civic buildings — market, cathedral, infirmary, tavern, bakery, granary, cemetery, and gallows — as part of their inspection route.',
-            'The dungeon sphere marks where arrests can begin; the cathedral hosts bishop schedules and weddings; together they anchor order and faith in the fief.',
+            'Guards cycle claimed civic buildings — market, cathedral, infirmary, tavern, bakery, granary, cemetery, and gallows — and also visit houses, fields, docks, and manors, even when those sit far from the keep.',
+            'The dungeon ring marks where arrests can begin; the cathedral hosts bishop schedules and weddings. Kingdom borders themselves are not a wall — they only decide where idle patrols and wander go.',
           ],
         },
       ],
@@ -591,9 +589,9 @@ export function buildManualSections(): ManualSection[] {
         },
         {
           artKey: 'prop:keep',
-          title: 'Influence & dukes',
+          title: 'One keep, one realm',
           body: [
-            'Keeps paint influence. Barracks and dungeons paint military spheres. Extra keeps → train dukes and duchesses and widen the safety net against total defeat.',
+            'Click the keep to see kingdom borders. Extra keeps are no longer placeable. Barracks and dungeon clicks still show a local military ring.',
           ],
         },
       ],
@@ -773,14 +771,14 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:general',
           title: 'Detachments',
           body: [
-            'Select a general, choose troop count, and send them to destroy a camp or hunt a monster or castle. Troops leave their sphere for the order, then return to patrol when done.',
+            'Select a general, choose troop count, and send them to destroy a camp or hunt a monster or castle. Troops leave peacetime patrol for the order, then return when done.',
           ],
         },
         {
           title: 'Raids & sieges',
           body: [
             'Bandits, goblins, and thieves steal gold and flee. Giants abduct villagers to eat at camp. Sieges bring engines, burning, and keep focus — they batter walls and gates; your ladders serve defenders only. Drawbridges slam; peasants repair.',
-            'Any raid kicks military off balls and festivals: soldiers and archers hold their loyalty keep’s perimeter or walls; guards keep patrolling threatened roads in the fief.',
+            'Any raid kicks military off balls and festivals: soldiers and archers hold the keep’s perimeter or walls; guards keep patrolling threatened streets and claimed holdings.',
           ],
         },
         {
@@ -794,39 +792,36 @@ export function buildManualSections(): ManualSection[] {
     },
     {
       id: 'roads',
-      label: 'Roads & bridges',
+      label: 'Bridges',
       intro: [
-        'You paint the kingdom’s veins. Commuters and patrols prefer your dirt roads; rivers need your timber.',
+        'Rivers need timber. Subjects walk open grass; a bridge is how they (and ground monsters) cross water.',
       ],
       entries: [
-        buildEntry('road', 'prop:road', [
-          'Snap to grass. Link each keep’s houses to its fields, docks, and walls so peasants commute and guards walk where you care.',
-        ]),
         buildEntry('bridge', 'prop:bridge', [
-          'Must cover water with land (or road) on both ends. Press R while placing to flip 0°/90°.',
+          'Must cover water with land on both ends. Press R while placing to flip 0°/90°.',
         ]),
       ],
     },
     {
       id: 'spheres',
-      label: 'Military spheres & loyalty',
+      label: 'Kingdom borders',
       intro: [
-        'Select a keep to see its influence ring and tint everyone loyal to that seat. Barracks and dungeon rings still mark military posts.',
+        'Select the keep to see the realm’s claim — overlapping gold circles around every standing holding. Barracks and dungeon still show a local military ring when you click them.',
       ],
       entries: [
         {
           artKey: 'prop:keep',
-          title: 'Keep fiefs',
+          title: 'How borders work',
           body: [
-            'Nearest-keep loyalty: work, roam, and defend stay in that fief. Dukes and duchesses seat satellite keeps — each with its own influence ring. The inspector Loyalty line names the liege (Crown or a named keep).',
-            'Movement policy clamps wander targets inside the sphere — subjects rarely leave their fief unless fleeing danger or marching on your order.',
+            'The border is the union of padded circles (~100 paces) around the keep and each living building: houses, manors, fields, docks, taverns, granaries, barracks, and so on. Paths, bridges, and ladders do not expand it. A far house or field is still claimed — an exclave — and still yours to patrol and still a target raiders may burn on the way to the keep.',
+            'The overlay is a map, not a fence. Units walk through it. Idle wander snaps back onto claimed ground. Commutes, patrols, and physician house-calls go to real buildings even when those sit outside the keep’s old inner ring. Fleeing, hunts, and orders can leave the claim. You lose only if the keep falls.',
           ],
         },
         {
           artKey: 'prop:dungeon',
-          title: 'Guards on the roads',
+          title: 'Guards on claimed ground',
           body: [
-            'Guards patrol roads, houses, and civic posts inside their keep’s territory — not only the dungeon circle. During raids they keep walking threatened streets while the army holds the wall.',
+            'Guards patrol houses, fields, docks, and civic posts across the claimed realm — not only the dungeon circle. During raids they keep walking threatened streets while the army holds the wall.',
           ],
         },
         {
@@ -860,7 +855,7 @@ export function buildManualSections(): ManualSection[] {
           artKey: 'unit:guard',
           title: 'Cordons',
           body: [
-            'Zombie outbreak, raid, or siege: quarantine hot zones, bark orders (“Stay back! Quarantine!”, “Raid incoming — get indoors!”), shove civilians toward safe keeps and houses in clear spheres. Soldiers clear hostiles. When quiet: “Cordon lifted. Resume patrol.”',
+            'Zombie outbreak, raid, or siege: quarantine hot zones, bark orders (“Stay back! Quarantine!”, “Raid incoming — get indoors!”), shove civilians toward the keep and houses. Soldiers clear hostiles. When quiet: “Cordon lifted. Resume patrol.”',
           ],
         },
         {

@@ -64,7 +64,7 @@ import {
 } from './buildingShared';
 
 const KEEP_BLURB =
-  'A seat of power. Rival armies must destroy every keep to conquer the kingdom.';
+  'Heart of the realm. Rival armies win if they destroy this keep.';
 
 const LADDER_SNAP_DIST = 96;
 const GATE_SNAP_DIST = 96;
@@ -96,6 +96,7 @@ export class BuildingSystem {
   private keepInteriorSprite: Phaser.GameObjects.Image | null = null;
   private keepHearth: Phaser.GameObjects.Sprite | null = null;
   private onDestroyed: ((b: BuildingRecord) => void) | null = null;
+  private onPlaced: ((b: BuildingRecord) => void) | null = null;
   private selectedId: string | null = null;
   private vfx: SiegeVfx | null = null;
   private burningIds = new Set<string>();
@@ -222,6 +223,10 @@ export class BuildingSystem {
 
   setOnDestroyed(cb: (b: BuildingRecord) => void): void {
     this.onDestroyed = cb;
+  }
+
+  setOnPlaced(cb: (b: BuildingRecord) => void): void {
+    this.onPlaced = cb;
   }
 
   setPathGrid(grid: PathGrid): void {
@@ -708,6 +713,14 @@ export class BuildingSystem {
   inKeepTerritory(keepId: string, x: number, y: number): boolean {
     const nearest = this.nearestKeepId(x, y);
     return nearest === keepId;
+  }
+
+  claimCircles(): ReturnType<BuildingQueries['claimCircles']> {
+    return this.queries().claimCircles();
+  }
+
+  inRealmClaim(x: number, y: number): boolean {
+    return this.queries().inRealmClaim(x, y);
   }
 
   /** Random walkable-ish point biased toward keepId's influence. */
@@ -1580,6 +1593,9 @@ export class BuildingSystem {
     this.recomputeHouseLabels();
     if (kind === 'keep') {
       this.reassignBuildingLoyalties();
+    }
+    if (isDwelling(kind)) {
+      this.onPlaced?.(record);
     }
     return record;
   }

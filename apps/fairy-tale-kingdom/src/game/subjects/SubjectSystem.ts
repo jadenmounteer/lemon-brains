@@ -35,12 +35,18 @@ import {
   buildingDoorApproach,
   interiorWaypoints,
   isInteriorBuilding,
+  isOnWalkableInteriorNav,
+  nearBuildingDoor,
   pointInsideFootprint,
   snapInteriorPoint,
 } from '../path/interiorPathRouter';
 import { hasInterior, isDwelling } from '../combat/stats';
 import { CombatBalance, UNIT_MAX_HP } from '../combat/stats';
 import { Phase12Balance } from '../economy/phase12Balance';
+import {
+  defectHoursNeeded,
+  isHomelessHouseId,
+} from '../family/familyHousing';
 import {
   BUILDING_ROLE_CAPACITY,
   CASTLE_JOB_CAPACITY,
@@ -84,6 +90,7 @@ import type {
 import { randomPointInZone, ringOffset, type Point, type WorldBounds } from './zones';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
 import type { ManagedSubject } from './managedSubject';
+import { pickNearestInjured } from './physicianHeal';
 import { SubjectRegistry } from './SubjectRegistry';
 import { SubjectScheduler } from './SubjectScheduler';
 import { SubjectSpawner } from './SubjectSpawner';
@@ -730,7 +737,11 @@ export class SubjectSystem {
       if (s.data.role === 'witch' || isMilitaryRole(s.data.role)) continue;
       if (s.data.allegiance === 'camp') continue;
       if (s.interrupt?.kind === 'defect') continue;
-      if ((s.data.lowHappyHours ?? 0) < Phase12Balance.defectHoursNeeded) {
+      const hoursNeeded = defectHoursNeeded(this.isHomeless(s), {
+        housed: Phase12Balance.defectHoursNeeded,
+        homeless: Phase12Balance.homelessDefectHoursNeeded,
+      });
+      if ((s.data.lowHappyHours ?? 0) < hoursNeeded) {
         continue;
       }
       if (s.data.role !== 'peasant' && s.data.role !== 'child') continue;
@@ -1439,27 +1450,43 @@ export class SubjectSystem {
     const doc = this.getById(physicianId);
     if (!doc || doc.data.role !== 'physician') return false;
 
-    let best: ManagedSubject | null = null;
-    let bestD = Infinity;
-    for (const s of this.registry.all) {
-      if (s.data.id === physicianId) continue;
-      if (s.data.hp >= s.data.maxHp) continue;
-      const d = Phaser.Math.Distance.Between(
-        doc.sprite.x,
-        doc.sprite.y,
-        s.sprite.x,
-        s.sprite.y
-      );
-      if (d < bestD && d < CombatBalance.physicianHealRange + 80) {
-        bestD = d;
-        best = s;
-      }
+    const bestId = pickNearestInjured(
+      physicianId,
+      { x: doc.sprite.x, y: doc.sprite.y },
+      this.registry.all.map((s) => ({
+        id: s.data.id,
+        name: s.data.name,
+        x: s.sprite.x,
+        y: s.sprite.y,
+        hp: s.data.hp,
+        maxHp: s.data.maxHp,
+        onWall: s.data.onWall,
+        allegiance: s.data.allegiance,
+        hidden:
+          !s.sprite.visible || s.interrupt?.kind === 'abducted',
+      }))
+    );
+    if (!bestId) {
+      doc.data.healTargetId = null;
+      return false;
     }
-    if (!best) return false;
+    const best = this.getById(bestId.id);
+    if (!best) {
+      doc.data.healTargetId = null;
+      return false;
+    }
 
-    if (bestD > CombatBalance.physicianHealRange) {
-      this.nudgeToward(physicianId, best.sprite.x, best.sprite.y, 45);
+    const dest = this.healApproachPoint(best);
+    const d = Phaser.Math.Distance.Between(
+      doc.sprite.x,
+      doc.sprite.y,
+      best.sprite.x,
+      best.sprite.y
+    );
+    if (d > CombatBalance.physicianHealRange) {
+      this.nudgeToward(physicianId, dest.x, dest.y, 45);
       doc.data.activity = 'heal';
+      doc.data.healTargetId = best.data.id;
       doc.data.activityLabel = `Seeking ${best.data.name}`;
       return false;
     }
@@ -1471,11 +1498,46 @@ export class SubjectSystem {
     this.applyHpTint(best);
     doc.data.activity = 'heal';
     doc.data.activityLabel = `Bandaging ${best.data.name}`;
+    if (best.data.hp >= best.data.maxHp) {
+      doc.data.healTargetId = null;
+    } else {
+      doc.data.healTargetId = best.data.id;
+    }
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${doc.data.name} tended ${best.data.name}'s wounds`,
     });
     this.onChanged?.();
     return true;
+  }
+
+  private healApproachPoint(patient: ManagedSubject): Point {
+    if (!patient.data.onWall || !this.buildings) {
+      return { x: patient.sprite.x, y: patient.sprite.y };
+    }
+    const ladder = this.buildings.ladderNear(
+      patient.sprite.x,
+      patient.sprite.y,
+      80
+    );
+    if (ladder) {
+      const wall = this.buildings.wallForLadder(ladder);
+      if (wall && ladder.ladderFacing) {
+        return ladderGroundApproach(wall.x, wall.y, ladder.ladderFacing);
+      }
+    }
+    const corner = this.buildings.cornerClimbNear(
+      patient.sprite.x,
+      patient.sprite.y,
+      80
+    );
+    if (corner) return { x: corner.groundX, y: corner.groundY };
+    return { x: patient.sprite.x, y: patient.sprite.y + 16 };
+  }
+
+  isSeekingWounded(managed: ManagedSubject): boolean {
+    return (
+      managed.data.role === 'physician' && Boolean(managed.data.healTargetId)
+    );
   }
 
   /** @deprecated Sickness removed — physicians heal injuries via healNearestInjured. */
@@ -1551,6 +1613,13 @@ export class SubjectSystem {
       if (s.data.allegiance === 'camp') continue;
       if (s.data.hunger >= hungryAt) {
         s.data.happiness = Phaser.Math.Clamp(s.data.happiness - 1, 0, 100);
+      }
+      if (this.isHomeless(s)) {
+        s.data.happiness = Phaser.Math.Clamp(
+          s.data.happiness - Phase12Balance.homelessHappinessDrain,
+          0,
+          100
+        );
       }
       if (s.data.happiness < Phase12Balance.defectHappinessThreshold) {
         s.data.lowHappyHours = (s.data.lowHappyHours ?? 0) + 1;
@@ -1900,11 +1969,13 @@ export class SubjectSystem {
     if (!this.raidMode) {
       for (const managed of this.registry.all) {
         if (managed.interrupt) continue;
+        if (this.isSeekingWounded(managed)) continue;
         if (
           managed.data.activity === 'ball' ||
           managed.data.activity === 'festival' ||
           managed.data.activity === 'joust' ||
-          managed.data.activity === 'flee'
+          managed.data.activity === 'flee' ||
+          managed.data.activity === 'wedding'
         ) {
           continue;
         }
@@ -2083,6 +2154,40 @@ export class SubjectSystem {
       const next = this.buildings?.pickHouseForHire(this.occupantCounts());
       s.data.houseId = next ?? '';
     }
+    this.assignHomelessToHomes();
+  }
+
+  isHomeless(managed: ManagedSubject): boolean {
+    if (managed.data.allegiance === 'camp') return false;
+    const houseId = managed.data.houseId;
+    if (houseId.startsWith('camp:')) return false;
+    const exists = Boolean(this.buildings?.getHousePoint(houseId));
+    return isHomelessHouseId(houseId, exists);
+  }
+
+  /** Claim free beds (or keep chambers) for subjects whose homes are gone. */
+  assignHomelessToHomes(): void {
+    if (!this.buildings) return;
+    const counts = this.occupantCounts();
+    const royal = this.royalCounts();
+    let assigned = false;
+    for (const s of this.registry.all) {
+      if (!this.isHomeless(s)) continue;
+      if (livesAtKeep(s.data.role)) {
+        const keep = this.buildings.pickKeepForHire(royal);
+        if (!keep) continue;
+        s.data.houseId = keep;
+        royal.set(keep, (royal.get(keep) ?? 0) + 1);
+        assigned = true;
+        continue;
+      }
+      const house = this.buildings.pickHouseForHire(counts);
+      if (!house) continue;
+      s.data.houseId = house;
+      counts.set(house, (counts.get(house) ?? 0) + 1);
+      assigned = true;
+    }
+    if (assigned) this.onChanged?.();
   }
 
   damageSubject(id: string, amount: number): boolean {
@@ -2255,6 +2360,12 @@ export class SubjectSystem {
     const targetInterior = this.findInteriorBuildingAt(x, y);
     const leavingInterior =
       currentInterior &&
+      isOnWalkableInteriorNav(
+        currentInterior.kind,
+        currentInterior,
+        managed.sprite.x,
+        managed.sprite.y
+      ) &&
       (!targetInterior ||
         targetInterior.id !== currentInterior.id ||
         !pointInsideFootprint(
@@ -2299,7 +2410,43 @@ export class SubjectSystem {
     const interiorBuilding = targetInterior;
     if (
       interiorBuilding &&
-      !pointInsideFootprint(
+      pointInsideFootprint(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      ) &&
+      !isOnWalkableInteriorNav(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      ) &&
+      !nearBuildingDoor(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      )
+    ) {
+      const approach = buildingDoorApproach(
+        interiorBuilding.kind,
+        interiorBuilding
+      );
+      this.nudgeToward(id, approach.x, approach.y, speed, () => {
+        this.nudgeToward(id, targetX, targetY, speed, onArrive);
+      });
+      return;
+    }
+    if (
+      interiorBuilding &&
+      !isOnWalkableInteriorNav(
+        interiorBuilding.kind,
+        interiorBuilding,
+        managed.sprite.x,
+        managed.sprite.y
+      ) &&
+      !nearBuildingDoor(
         interiorBuilding.kind,
         interiorBuilding,
         managed.sprite.x,
@@ -2320,18 +2467,28 @@ export class SubjectSystem {
           y,
           id
         );
+        if (inner.length === 0) {
+          onArrive?.();
+          return;
+        }
         this.followWaypoints(id, inner, speed, onArrive);
       });
       return;
     }
     if (
       interiorBuilding &&
-      pointInsideFootprint(
+      (isOnWalkableInteriorNav(
         interiorBuilding.kind,
         interiorBuilding,
         managed.sprite.x,
         managed.sprite.y
-      )
+      ) ||
+        nearBuildingDoor(
+          interiorBuilding.kind,
+          interiorBuilding,
+          managed.sprite.x,
+          managed.sprite.y
+        ))
     ) {
       const inner = interiorWaypoints(
         interiorBuilding.kind,
@@ -2342,8 +2499,10 @@ export class SubjectSystem {
         y,
         id
       );
-      this.followWaypoints(id, inner, speed, onArrive);
-      return;
+      if (inner.length > 0) {
+        this.followWaypoints(id, inner, speed, onArrive);
+        return;
+      }
     }
 
     // If stranded on water/mountain, teleport onto the nearest open land first
@@ -3243,11 +3402,13 @@ export class SubjectSystem {
       if (!managed.sprite.active || managed.moving || managed.interrupt) {
         continue;
       }
+      if (this.isSeekingWounded(managed)) continue;
       if (
         managed.data.activity === 'ball' ||
         managed.data.activity === 'festival' ||
         managed.data.activity === 'joust' ||
-        managed.data.activity === 'flee'
+        managed.data.activity === 'flee' ||
+        managed.data.activity === 'wedding'
       ) {
         if (managed.presenceAnim) this.clearActivityAnim(managed);
         continue;
@@ -3350,6 +3511,7 @@ export class SubjectSystem {
   private nudgeTowardSchedule(managed: ManagedSubject): void {
     if (!managed.sprite.active || managed.moving || managed.data.onWall) return;
     if (managed.interrupt) return;
+    if (this.isSeekingWounded(managed)) return;
 
     const slot = slotAtHour(managed.data.role, this.clock.hour, managed.data.job);
     managed.data.activity = slot.activity;
@@ -3447,8 +3609,7 @@ export class SubjectSystem {
         .filter(
           (b) =>
             b.hp > 0 &&
-            PATROL_INSPECTION_KINDS.includes(b.kind) &&
-            this.buildings!.inKeepTerritory(keepId, b.x, b.y)
+            PATROL_INSPECTION_KINDS.includes(b.kind)
         );
       if (posts.length) {
         const idx = this.patrolInspectionIdx.get(managed.data.id) ?? 0;
@@ -3458,14 +3619,12 @@ export class SubjectSystem {
       }
     }
 
-    const roadPts = this.buildings
-      .listRoadPoints()
-      .filter((p) => this.buildings!.inKeepTerritory(keepId, p.x, p.y));
+    const roadPts = this.buildings.listRoadPoints();
     if (roadPts.length) {
       return roadPts[Math.floor(Math.random() * roadPts.length)]!;
     }
 
-    // Houses / fields / docks in the fief
+    // Houses / fields / docks including exclaves
     const civic = this.buildings
       .list()
       .filter(
@@ -3474,8 +3633,7 @@ export class SubjectSystem {
           (b.kind === 'house' ||
             b.kind === 'field' ||
             b.kind === 'dock' ||
-            b.kind === 'manor') &&
-          this.buildings!.inKeepTerritory(keepId, b.x, b.y)
+            b.kind === 'manor')
       );
     if (civic.length) {
       const b = civic[Math.floor(Math.random() * civic.length)]!;

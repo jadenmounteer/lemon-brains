@@ -92,7 +92,10 @@ function keepRoomPath(
     }
   }
   if (!prev.has(toRoom)) {
-    return [roomPoint(origin, toRoom, subjectId)];
+    if (fromRoom === 'gate') {
+      return [roomPoint(origin, 'gate', subjectId)];
+    }
+    return keepRoomPath(origin, 'gate', toRoom, subjectId);
   }
   const rooms: KeepRoomId[] = [];
   let step: KeepRoomId | null = toRoom;
@@ -142,8 +145,32 @@ function navPathSegment(
   toY: number
 ): Point[] {
   const grid = InteriorNavGrid.forKind(kind);
-  if (!grid) return [{ x: toX, y: toY }];
+  if (!grid) return [];
   return grid.findPath(origin, kind, fromX, fromY, toX, toY);
+}
+
+/** True when (x,y) sits on a walkable interior nav cell, not merely inside the art box. */
+export function isOnWalkableInteriorNav(
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number },
+  x: number,
+  y: number
+): boolean {
+  const nav = InteriorNavGrid.forKind(kind);
+  if (!nav) return false;
+  const cell = nav.worldToCell(origin, kind, x, y);
+  return cell !== null && nav.isWalkable(cell[0], cell[1]);
+}
+
+export function nearBuildingDoor(
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number },
+  x: number,
+  y: number,
+  radius = 32
+): boolean {
+  const approach = buildingDoorApproach(kind, origin);
+  return Math.hypot(x - approach.x, y - approach.y) <= radius;
 }
 
 /**
@@ -225,6 +252,14 @@ export function interiorWaypoints(
 
   waypoints.push(insideTarget);
   return dedupePoints(waypoints);
+}
+
+/** Outdoor stand point when interior routing cannot reach the goal. */
+export function exteriorApproachFor(
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number }
+): Point {
+  return buildingDoorApproach(kind, origin);
 }
 
 /** Snap a world point to the nearest walkable interior cell. */

@@ -24,6 +24,7 @@ import type { UnitRole } from '../art/assetManifest';
 import { slotAtHour } from './schedules';
 import type { ManagedSubject } from './managedSubject';
 import type { ActivityId, ScheduleSlot, ZoneId } from './types';
+import { FiefMovementPolicy } from './FiefMovementPolicy';
 import { randomPointInZone, type Point, type WorldBounds } from './zones';
 
 export type ScheduleSite = {
@@ -105,7 +106,8 @@ export class SubjectScheduler {
         managed.data.activity === 'ball' ||
         managed.data.activity === 'festival' ||
         managed.data.activity === 'joust' ||
-        managed.data.activity === 'flee'
+        managed.data.activity === 'flee' ||
+        managed.data.activity === 'wedding'
       ) {
         continue;
       }
@@ -155,7 +157,10 @@ export class SubjectScheduler {
   ): ScheduleSite {
     const home = this.deps.homePointFor(managed.data.houseId);
     const rawFallback = randomPointInZone(slot.zone, this.deps.world, home);
-    const fallback = this.deps.snapToWalkable(rawFallback.x, rawFallback.y);
+    const fallback = this.clampWander(
+      managed,
+      this.deps.snapToWalkable(rawFallback.x, rawFallback.y)
+    );
     const buildings = this.deps.getBuildings();
 
     if (managed.data.allegiance === 'camp' && managed.data.campId) {
@@ -371,6 +376,13 @@ export class SubjectScheduler {
     );
   }
 
+  private clampWander(managed: ManagedSubject, point: Point): Point {
+    const buildings = this.deps.getBuildings();
+    if (!buildings) return point;
+    const policy = new FiefMovementPolicy(buildings, this.deps.world);
+    return policy.clampToFief(this.loyaltyKeepId(managed), point);
+  }
+
   private nearestCapacityBuilding(
     managed: ManagedSubject
   ): BuildingRecord | null {
@@ -493,12 +505,7 @@ export class SubjectScheduler {
     if (Math.random() < 0.35) {
       const posts = buildings
         .list()
-        .filter(
-          (b) =>
-            b.hp > 0 &&
-            PATROL_INSPECTION_KINDS.includes(b.kind) &&
-            buildings.inKeepTerritory(keepId, b.x, b.y)
-        );
+        .filter((b) => b.hp > 0 && PATROL_INSPECTION_KINDS.includes(b.kind));
       if (posts.length) {
         const idx = this.deps.getPatrolInspectionIdx(managed.data.id) ?? 0;
         const post = posts[idx % posts.length]!;
@@ -507,9 +514,7 @@ export class SubjectScheduler {
       }
     }
 
-    const roadPts = buildings
-      .listRoadPoints()
-      .filter((p) => buildings.inKeepTerritory(keepId, p.x, p.y));
+    const roadPts = buildings.listRoadPoints();
     if (roadPts.length) {
       return roadPts[Math.floor(Math.random() * roadPts.length)]!;
     }
@@ -522,8 +527,7 @@ export class SubjectScheduler {
           (b.kind === 'house' ||
             b.kind === 'field' ||
             b.kind === 'dock' ||
-            b.kind === 'manor') &&
-          buildings.inKeepTerritory(keepId, b.x, b.y)
+            b.kind === 'manor')
       );
     if (civic.length) {
       const b = civic[Math.floor(Math.random() * civic.length)]!;

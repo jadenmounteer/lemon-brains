@@ -123,6 +123,8 @@ export function canPlaceBuilding(kind: BuildKind, stats: KingdomStats): boolean 
   const item = BUILD_CATALOG.find((b) => b.kind === kind);
   if (!item) return false;
   if (item.requiresRoyalty && !stats.royaltyUnlocked) return false;
+  if (kind === 'keep' && stats.keepCount >= 1) return false;
+  if (kind === 'road') return false;
   if (
     kind === 'field' &&
     (stats.granaryCount <= 0 || stats.fieldCount >= stats.fieldSlots)

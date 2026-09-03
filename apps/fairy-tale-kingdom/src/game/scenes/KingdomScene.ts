@@ -256,6 +256,11 @@ export class KingdomScene extends Phaser.Scene {
     this.monsters.setOnChanged(() => this.world.schedulePersist());
     this.subjects.setMonsters(this.monsters);
 
+    this.buildings.setOnPlaced((b) => {
+      if (b.kind === 'house' || b.kind === 'manor') {
+        this.subjects.assignHomelessToHomes();
+      }
+    });
     this.buildings.setOnDestroyed((b) => {
       if (b.kind === 'house' || b.kind === 'manor') {
         this.subjects.onHouseDestroyed(b.id);

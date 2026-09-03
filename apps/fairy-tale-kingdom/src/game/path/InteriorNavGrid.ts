@@ -103,20 +103,20 @@ export class InteriorNavGrid {
     const from = this.worldToCell(origin, kind, fromX, fromY);
     const to = this.worldToCell(origin, kind, toX, toY);
     if (!from || !to) {
-      return [{ x: toX, y: toY }];
+      return [];
     }
     let start = from;
     let goal = to;
     if (!this.isWalkable(start[0], start[1])) {
       const near = this.nearestWalkable(origin, kind, fromX, fromY);
       const nc = this.worldToCell(origin, kind, near.x, near.y);
-      if (!nc) return [{ x: toX, y: toY }];
+      if (!nc) return [];
       start = nc;
     }
     if (!this.isWalkable(goal[0], goal[1])) {
       const near = this.nearestWalkable(origin, kind, toX, toY);
       const nc = this.worldToCell(origin, kind, near.x, near.y);
-      if (!nc) return [{ x: toX, y: toY }];
+      if (!nc) return [];
       goal = nc;
     }
     const cells = astarCells(
@@ -127,7 +127,7 @@ export class InteriorNavGrid {
       goal
     );
     if (!cells || cells.length === 0) {
-      return [{ x: toX, y: toY }];
+      return [];
     }
     return dedupePoints(
       cells.map(([c, r]) => this.cellToWorld(origin, kind, c, r))

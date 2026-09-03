@@ -54,6 +54,7 @@ export class HungerSystem {
     this.subjects.raiseHungerAll(
       Phase12Balance.hungerRisePerHour * getSandboxRuntime().sickness.hungerRise
     );
+    this.subjects.assignHomelessToHomes();
     this.subjects.tickHappiness();
     this.subjects.tryDefectMiserable();
     this.emitFood(this.foodRepo.loadSync());

@@ -21,6 +21,23 @@ export type ChildHomeResult =
   | { ok: true; houseId: string }
   | { ok: false; reason: string };
 
+/** Camp tents are homes. Empty or missing dwellings count as homeless. */
+export function isHomelessHouseId(
+  houseId: string | null | undefined,
+  houseExists = true
+): boolean {
+  if (houseId?.startsWith('camp:')) return false;
+  if (!houseId) return true;
+  return !houseExists;
+}
+
+export function defectHoursNeeded(homeless: boolean, hours: {
+  housed: number;
+  homeless: number;
+}): number {
+  return homeless ? hours.homeless : hours.housed;
+}
+
 export function bedsForDwelling(kind: BuildKind): number {
   if (kind === 'house') return BEDS_PER_HOUSE;
   if (kind === 'manor') return BEDS_PER_MANOR;

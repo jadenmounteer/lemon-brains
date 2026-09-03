@@ -14,6 +14,11 @@ import {
   type BuildingRecord,
   footprintAabb,
 } from './buildingShared';
+import {
+  claimCirclesFromSites,
+  inRealmClaim as pointInClaim,
+  type ClaimCircle,
+} from './realmClaim';
 
 function dist(x1: number, y1: number, x2: number, y2: number): number {
   return Math.hypot(x2 - x1, y2 - y1);
@@ -221,6 +226,28 @@ export class BuildingQueries implements IBuildingQuery {
   /** True if (x,y) is closer to keepId than to any other keep (Voronoi cell). */
   inKeepTerritory(keepId: string, x: number, y: number): boolean {
     return this.nearestKeepId(x, y) === keepId;
+  }
+
+  claimCircles(): ClaimCircle[] {
+    const sites = this.buildings.map((b) => ({
+      x: b.x,
+      y: b.y,
+      hp: b.hp,
+      kind: b.kind,
+    }));
+    if (this.state.keepHp > 0) {
+      sites.push({
+        x: this.state.keep.x,
+        y: this.state.keep.y,
+        hp: this.state.keepHp,
+        kind: 'keep',
+      });
+    }
+    return claimCirclesFromSites(sites);
+  }
+
+  inRealmClaim(x: number, y: number): boolean {
+    return pointInClaim(x, y, this.claimCircles());
   }
 
   influenceContains(keepId: string, x: number, y: number): boolean {

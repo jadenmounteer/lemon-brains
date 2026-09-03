@@ -28,6 +28,10 @@ export const Phase12Balance = {
   gypsyEntertainHappiness: 2,
   defectHappinessThreshold: 20,
   defectHoursNeeded: 6,
+  /** Extra happiness lost each hour without a house. */
+  homelessHappinessDrain: 2,
+  /** Miserable homeless peasants/children defect sooner. */
+  homelessDefectHoursNeeded: 3,
   pregnancyDays: 4,
   childPromoteAge: 14,
   elderAge: 55,

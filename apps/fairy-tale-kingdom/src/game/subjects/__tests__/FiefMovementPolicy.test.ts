@@ -8,6 +8,7 @@ function mockBuildings(
     influenceRadius: number;
     militaryRadius: number;
     kind: BuildKind;
+    claimed: { x: number; y: number }[];
   }> = {}
 ) {
   const {
@@ -15,6 +16,7 @@ function mockBuildings(
     influenceRadius = 200,
     militaryRadius = 170,
     kind = 'keep' as BuildKind,
+    claimed = [],
   } = overrides;
   return {
     getInfluenceOriginPoint: (id: string) =>
@@ -27,6 +29,8 @@ function mockBuildings(
         : id === 'barracks-1'
           ? { kind: 'barracks' }
           : undefined,
+    inRealmClaim: (x: number, y: number) =>
+      claimed.some((p) => Math.hypot(p.x - x, p.y - y) <= 100),
   };
 }
 
@@ -70,5 +74,14 @@ describe('FiefMovementPolicy', () => {
       world
     );
     expect(policy.randomPointInFief('keep-1', 'keep')).toBeNull();
+  });
+
+  it('does not clamp points already on a claimed holding', () => {
+    const policy = new FiefMovementPolicy(
+      mockBuildings({ claimed: [{ x: 400, y: 100 }] }),
+      world
+    );
+    const kept = policy.clampToFief('keep-1', { x: 400, y: 100 });
+    expect(kept).toEqual({ x: 400, y: 100 });
   });
 });

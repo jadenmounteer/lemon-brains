@@ -801,14 +801,14 @@ export class RaidSystem {
           burn = this.buildings?.fieldsNear(
             raider.sprite.x,
             raider.sprite.y,
-            SiegeBalance.fieldBurnPriorityRadius
+            CombatBalance.homesteadPillageRadius
           );
         }
         if (!burn) {
           burn = this.buildings?.burnablesNear(
             raider.sprite.x,
             raider.sprite.y,
-            CombatBalance.pillageRadius
+            CombatBalance.homesteadPillageRadius
           );
         }
         if (burn) {
