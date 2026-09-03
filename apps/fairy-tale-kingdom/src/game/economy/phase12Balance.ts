@@ -1,9 +1,9 @@
 /** Phase 12 tunables for meals, happiness, influence, careers. */
 export const Phase12Balance = {
-  mealCost: 1,
+  mealCost: 2,
   mealHungerRecover: 40,
-  /** Slightly slower hunger so early food stress is less of a plague. */
-  hungerRisePerHour: 8,
+  /** Hunger pressure — pairs with sandbox sickness.hungerRise multiplier. */
+  hungerRisePerHour: 10,
   hungerInterruptAt: 45,
   /** Hunger at/above this *may* mark a subject sick (see hungerSickChance). */
   sickAtHunger: 90,

@@ -4,8 +4,6 @@ import { isBlockingKind, isBurnable, isFortKind, hasInterior } from '../combat/s
 import type { PathGrid } from '../path/PathGrid';
 import {
   buildingDoorApproach,
-  buildingDoorThreshold,
-  buildingDoorWorld,
 } from '../path/interiorPathRouter';
 import type { SiegeVfx } from '../siege/SiegeVfx';
 import { KingdomEvents } from '../subjects/events';
@@ -39,6 +37,19 @@ export interface BuildingCombatHost {
   allKeepsDestroyed(): boolean;
 }
 
+/** Clear only the outdoor stand tile in front of a door — not the interior. */
+function punchOutdoorDoorApproach(
+  pathGrid: PathGrid,
+  kind: BuildKind | 'keep',
+  origin: { x: number; y: number }
+): void {
+  const approach = buildingDoorApproach(kind, origin);
+  const half = pathGrid.tile / 2;
+  for (const dx of [-half, 0, half]) {
+    pathGrid.clearBlockedAtWorld(approach.x + dx, approach.y);
+  }
+}
+
 /** Damage, repair, raid drawbridge state, and path-grid blocking. */
 export class BuildingCombat {
   constructor(private readonly host: BuildingCombatHost) {}
@@ -62,16 +73,7 @@ export class BuildingCombat {
         footprintAabb('keep', this.host.keep.x, this.host.keep.y)
       );
       const keepOrigin = { x: this.host.keep.x, y: this.host.keep.y };
-      const approach = buildingDoorApproach('keep', keepOrigin);
-      const threshold = buildingDoorThreshold('keep', keepOrigin);
-      const door = buildingDoorWorld('keep', keepOrigin);
-      for (const pt of [approach, door, threshold]) {
-        for (let dy = -16; dy <= 16; dy += 8) {
-          for (let dx = -20; dx <= 20; dx += 8) {
-            this.host.pathGrid.clearBlockedAtWorld(pt.x + dx, pt.y + dy);
-          }
-        }
-      }
+      punchOutdoorDoorApproach(this.host.pathGrid, 'keep', keepOrigin);
     }
     for (const b of this.host.buildings) {
       if (b.kind === 'bridge') {
@@ -87,17 +89,9 @@ export class BuildingCombat {
         this.host.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
       } else if (hasInterior(b.kind)) {
         this.host.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
-        const origin = { x: b.x, y: b.y };
-        const approach = buildingDoorApproach(b.kind, origin);
-        const threshold = buildingDoorThreshold(b.kind, origin);
-        const door = buildingDoorWorld(b.kind, origin);
-        for (const pt of [approach, door, threshold]) {
-          for (let dy = -16; dy <= 16; dy += 8) {
-            for (let dx = -20; dx <= 20; dx += 8) {
-              this.host.pathGrid.clearBlockedAtWorld(pt.x + dx, pt.y + dy);
-            }
-          }
-        }
+        punchOutdoorDoorApproach(this.host.pathGrid, b.kind, { x: b.x, y: b.y });
+      } else if (b.kind === 'ballista') {
+        this.host.pathGrid.markAabbBlocked(footprintAabb(b.kind, b.x, b.y));
       }
     }
   }

@@ -229,25 +229,37 @@ export class TaskSystem {
       this.hunger?.addFood(amount);
     }
 
-    // Passive harvest: peasants on field work near a field
+    // Passive harvest: only assigned farmers at their bound field
     for (const managed of this.subjects.listManaged()) {
       if (managed.data.role !== 'peasant') continue;
       if (managed.interrupt) continue;
-      if (managed.data.zone !== 'field' && managed.data.activity !== 'work') {
-        continue;
-      }
-      const field = this.buildings.nearestField(
+      if (managed.data.job !== 'farmer') continue;
+      const wp = managed.data.workplaceId;
+      if (!wp) continue;
+      const field = this.buildings.getById(wp);
+      if (!field || field.kind !== 'field' || field.hp <= 0) continue;
+
+      const stand = this.subjects.standPointAt(
+        field.x,
+        field.y,
+        field.id,
+        managed.data.id,
+        { radius: 20 }
+      );
+      const dist = Phaser.Math.Distance.Between(
         managed.sprite.x,
         managed.sprite.y,
-        EconomyBalance.harvestRange
+        stand.x,
+        stand.y
       );
-      if (!field) continue;
+      if (dist > EconomyBalance.harvestRange) continue;
+
       managed.data.activityLabel = 'Harvesting the fields';
       this.subjects.playWorkAnim(managed.data.id);
       const sickMult = managed.data.sick ? 0.25 : 1;
       const amount = Math.max(
         1,
-        Math.round(EconomyBalance.foodPerHarvestTick * mult * 0.5 * sickMult)
+        Math.round(EconomyBalance.foodPerHarvestTick * mult * sickMult)
       );
       this.hunger?.addFood(amount);
     }

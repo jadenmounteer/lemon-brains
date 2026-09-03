@@ -109,13 +109,21 @@ export class PathGrid {
     return this.isBlocked(g.col, g.row);
   }
 
+  isTerrainBlockedAtWorld(x: number, y: number): boolean {
+    const g = this.worldToGrid(x, y);
+    if (g.col < 0 || g.row < 0 || g.col >= this.cols || g.row >= this.rows) {
+      return true;
+    }
+    return this.terrainBlocked[g.row * this.cols + g.col]!;
+  }
+
   /** Nearest walkable world point (bridges/cleared land included). */
   snapWorldToOpen(x: number, y: number): Point {
     const g = this.worldToGrid(x, y);
     if (!this.isBlocked(g.col, g.row)) {
       return { x, y };
     }
-    const alt = this.nearestOpen(g);
+    const alt = this.nearestOpenNearWorld(x, y);
     return alt ? this.gridToWorld(alt.col, alt.row) : { x, y };
   }
 
@@ -135,12 +143,12 @@ export class PathGrid {
     let start = this.worldToGrid(from.x, from.y);
     let goal = this.worldToGrid(to.x, to.y);
     if (this.isBlocked(start.col, start.row)) {
-      const alt = this.nearestOpen(start);
+      const alt = this.nearestOpenNearWorld(from.x, from.y);
       if (!alt) return null;
       start = alt;
     }
     if (this.isBlocked(goal.col, goal.row)) {
-      const alt = this.nearestOpen(goal);
+      const alt = this.nearestOpenNearWorld(to.x, to.y);
       if (!alt) return null;
       goal = alt;
     }
@@ -155,7 +163,7 @@ export class PathGrid {
   escapeLandPocket(from: Point, maxPocketCells = 140): Point | null {
     let start = this.worldToGrid(from.x, from.y);
     if (this.isBlocked(start.col, start.row)) {
-      const alt = this.nearestOpen(start);
+      const alt = this.nearestOpenNearWorld(from.x, from.y);
       if (!alt) return null;
       start = alt;
     }
@@ -213,29 +221,34 @@ export class PathGrid {
     return null;
   }
 
-  private nearestOpen(pos: GridPos): GridPos | null {
-    if (!this.isBlocked(pos.col, pos.row)) return pos;
-    const q: GridPos[] = [pos];
-    const seen = new Set<string>([`${pos.col},${pos.row}`]);
-    const dirs = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
-    while (q.length) {
-      const cur = q.shift()!;
-      for (const [dc, dr] of dirs) {
-        const n = { col: cur.col + dc!, row: cur.row + dr! };
-        const key = `${n.col},${n.row}`;
-        if (seen.has(key)) continue;
-        if (n.col < 0 || n.row < 0 || n.col >= this.cols || n.row >= this.rows) {
-          continue;
+  /**
+   * Closest walkable cell to a world point without searching through blocked
+   * tiles (prevents snapping to the wrong side of a wall).
+   */
+  private nearestOpenNearWorld(x: number, y: number): GridPos | null {
+    const origin = this.worldToGrid(x, y);
+    if (!this.isBlocked(origin.col, origin.row)) return origin;
+
+    const maxR = Math.max(this.cols, this.rows);
+    for (let r = 1; r < maxR; r++) {
+      let best: GridPos | null = null;
+      let bestD = Infinity;
+      for (let dc = -r; dc <= r; dc++) {
+        for (let dr = -r; dr <= r; dr++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== r) continue;
+          const col = origin.col + dc;
+          const row = origin.row + dr;
+          if (col < 0 || row < 0 || col >= this.cols || row >= this.rows) continue;
+          if (this.isBlocked(col, row)) continue;
+          const w = this.gridToWorld(col, row);
+          const d = Math.hypot(w.x - x, w.y - y);
+          if (d < bestD) {
+            bestD = d;
+            best = { col, row };
+          }
         }
-        seen.add(key);
-        if (!this.isBlocked(n.col, n.row)) return n;
-        q.push(n);
       }
+      if (best) return best;
     }
     return null;
   }

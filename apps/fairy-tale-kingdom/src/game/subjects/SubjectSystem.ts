@@ -96,7 +96,7 @@ export type { ManagedSubject } from './managedSubject';
 
 const FESTIVAL_GUEST_CAP = 10;
 const BALL_GUEST_CAP = 12;
-const PATH_HOP_BUDGET = 12;
+const PATH_HOP_BUDGET = 1;
 
 const FOOD_BIND_KINDS: BuildKind[] = ['field', 'bakery', 'dock', 'market', 'keep'];
 
@@ -2162,6 +2162,22 @@ export class SubjectSystem {
         id
       );
       this.followWaypoints(id, exitPath, speed, () => {
+        // Ensure we finished outside the footprint before outdoor pathing —
+        // otherwise leavingInterior fires again and can stack-overflow.
+        const stillInside = pointInsideFootprint(
+          currentInterior!.kind,
+          currentInterior!,
+          managed.sprite.x,
+          managed.sprite.y
+        );
+        if (stillInside) {
+          const approach = buildingDoorApproach(
+            currentInterior!.kind,
+            currentInterior!
+          );
+          managed.sprite.setPosition(approach.x, approach.y);
+          managed.sprite.setDepth(20 + approach.y * 0.01);
+        }
         this.nudgeToward(id, targetX, targetY, speed, onArrive);
       });
       return;
@@ -2218,7 +2234,8 @@ export class SubjectSystem {
     }
 
     // If stranded on water/mountain, teleport onto the nearest open land first
-    if (this.pathGrid?.isWorldBlocked(managed.sprite.x, managed.sprite.y)) {
+    // Only yank units off impassable terrain — not building footprints (interiors).
+    if (this.pathGrid?.isTerrainBlockedAtWorld(managed.sprite.x, managed.sprite.y)) {
       const safe = this.snapToWalkable(managed.sprite.x, managed.sprite.y);
       managed.sprite.setPosition(safe.x, safe.y);
       managed.sprite.setDepth(20 + safe.y * 0.01);
@@ -2305,7 +2322,9 @@ export class SubjectSystem {
     this.rescueAccumMs = 0;
     for (const managed of this.registry.all) {
       if (!managed.sprite.active || managed.moving || managed.data.onWall) continue;
-      if (!this.pathGrid.isWorldBlocked(managed.sprite.x, managed.sprite.y)) continue;
+      if (!this.pathGrid.isTerrainBlockedAtWorld(managed.sprite.x, managed.sprite.y)) {
+        continue;
+      }
       const safe = this.snapToWalkable(managed.sprite.x, managed.sprite.y);
       managed.sprite.setPosition(safe.x, safe.y);
       managed.sprite.setDepth(20 + safe.y * 0.01);
@@ -2324,6 +2343,9 @@ export class SubjectSystem {
       return;
     }
     const [next, ...rest] = points;
+    // Interior waypoints intentionally cross outdoor-blocked footprints (doors /
+    // rooms). Never route them back through nudgeToward — that re-enters leave /
+    // enter logic and can recurse until the stack overflows.
     this.tweenMove(managed, next!.x, next!.y, speed, () => {
       if (rest.length === 0) {
         onArrive?.();

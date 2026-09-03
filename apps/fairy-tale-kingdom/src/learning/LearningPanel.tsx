@@ -15,6 +15,11 @@ import {
 import { config } from '../config';
 import { QuestionOptions } from './QuestionOptions';
 
+const STREAK_BONUS_GOLD: Record<3 | 5 | 10, number> = {
+  3: 5,
+  5: 12,
+  10: 25,
+};
 const registry = createCurriculumRegistry();
 const speech = new SpeechSynthesisService();
 const progressRepo = new ProgressRepository(new LocalStorageAdapter());
@@ -109,6 +114,13 @@ export function LearningPanel({
       const result = await progressRepo.recordAndSave(true);
       setProgress(result);
       if (result.streakMilestone) {
+        const bonus = STREAK_BONUS_GOLD[result.streakMilestone];
+        if (bonus) {
+          await onGoldEarned(bonus);
+          setFeedback(
+            `Correct! +${goldPerCorrect} gold · ${result.streakMilestone} streak +${bonus}!`
+          );
+        }
         onStreakMilestone?.(result.streakMilestone);
       }
       window.setTimeout(loadQuestion, 650);

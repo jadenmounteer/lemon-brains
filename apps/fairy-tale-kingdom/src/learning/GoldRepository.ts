@@ -1,7 +1,7 @@
 import { LocalStorageAdapter, type StoragePort } from '@knowledge-quest/storage';
 
 export const GOLD_STORAGE_KEY = 'fairyTaleKingdom.gold';
-export const GOLD_PER_CORRECT = 3;
+export const GOLD_PER_CORRECT = 10;
 
 export class GoldRepository {
   constructor(
