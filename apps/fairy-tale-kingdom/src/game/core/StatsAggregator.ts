@@ -86,14 +86,7 @@ export class StatsAggregator {
       kingCount: subjects.countRole('king'),
       queenCount: subjects.countRole('queen'),
       fieldSlots: buildings.fieldSlots(),
-      militaryAvailable: subjects.combatants().filter(
-        (s) =>
-          !s.interrupt &&
-          (s.data.role === 'guard' ||
-            s.data.role === 'archer' ||
-            s.data.role === 'elite_guard' ||
-            s.data.role === 'elite_archer')
-      ).length,
+      militaryAvailable: subjects.countAssignableDetachment(),
       careerTodos: subjects.listCareerTodos(),
     });
   }

@@ -378,6 +378,8 @@ export class SubjectSystem {
       if (managed.data.allegiance === 'camp') continue;
       if (managed.interrupt?.kind === 'flee') continue;
       if (managed.interrupt?.kind === 'abducted') continue;
+      // Detachments keep marching — don't yank them into raid defense.
+      if (managed.interrupt?.kind === 'assault') continue;
 
       const keepId =
         managed.data.loyaltyKeepId ??
@@ -472,21 +474,58 @@ export class SubjectSystem {
     managed.interrupt = null;
   }
 
-  /**
-   * Assign up to `count` free guards/archers (not knights/generals) to assault a target.
-   * targetId is a camp id or `monster:<id>`.
-   */
-  assignAssault(targetId: string, count: number, _generalId: string): number {
-    const commandable = this.registry.all.filter(
+  /** Roles a general may send on detachment (not knights/generals themselves). */
+  static isDetachmentRole(role: UnitRole): boolean {
+    return (
+      role === 'soldier' ||
+      role === 'guard' ||
+      role === 'archer' ||
+      role === 'elite_guard' ||
+      role === 'elite_archer'
+    );
+  }
+
+  /** Free troops a general can currently assign (off-wall, idle, healthy). */
+  countAssignableDetachment(): number {
+    return this.listAssignableDetachment().length;
+  }
+
+  listAssignableDetachment(): ManagedSubject[] {
+    return this.registry.all.filter(
       (s) =>
         !s.data.sick &&
         !s.interrupt &&
         !s.data.onWall &&
-        (s.data.role === 'guard' ||
-          s.data.role === 'archer' ||
-          s.data.role === 'elite_guard' ||
-          s.data.role === 'elite_archer')
+        s.data.allegiance !== 'camp' &&
+        SubjectSystem.isDetachmentRole(s.data.role)
     );
+  }
+
+  /** Living realm general, or null. */
+  findLivingGeneral(): ManagedSubject | null {
+    for (const s of this.registry.all) {
+      if (
+        s.data.role === 'general' &&
+        s.sprite.active &&
+        !s.data.sick &&
+        s.data.allegiance !== 'camp'
+      ) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Assign up to `count` free soldiers/guards/archers to assault a target.
+   * targetId is a camp id or `monster:<id>`. Requires a living generalId.
+   */
+  assignAssault(targetId: string, count: number, generalId: string): number {
+    const general = this.getById(generalId);
+    if (!general || general.data.role !== 'general' || !general.sprite.active) {
+      return 0;
+    }
+    const commandable = this.listAssignableDetachment();
     let assigned = 0;
     for (const s of commandable) {
       if (assigned >= count) break;

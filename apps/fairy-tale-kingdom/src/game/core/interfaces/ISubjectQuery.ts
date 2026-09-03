@@ -23,6 +23,8 @@ export interface ISubjectQuery {
   hasRolePair?(a: SubjectRole, b: SubjectRole): boolean;
   occupantCounts(): Map<string, number>;
   combatants(): ManagedSubjectView[];
+  /** Free troops a general can assign (off-wall, idle, healthy). */
+  countAssignableDetachment(): number;
   listCareerTodos(): CareerTodoItem[];
   getClockHour(): number;
 }

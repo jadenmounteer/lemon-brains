@@ -153,7 +153,10 @@ export class CombatSystem {
       const base =
         fighter.data.role === 'elite_guard'
           ? CombatBalance.eliteGuardMelee
-          : CombatBalance.guardMelee;
+          : fighter.data.role === 'elite_archer' ||
+              fighter.data.role === 'archer'
+            ? CombatBalance.archerRanged
+            : CombatBalance.guardMelee;
       const destroyed = this.encampments?.applyAssaultHit(
         targetId,
         base * dmgMult

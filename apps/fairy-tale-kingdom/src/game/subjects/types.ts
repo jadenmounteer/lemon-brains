@@ -80,6 +80,8 @@ export interface CampSnapshot {
   supply?: number;
   maxSupply?: number;
   canArrest: boolean;
+  /** True when a living general can send free troops against this camp. */
+  canDestroy: boolean;
   roster: CampRosterEntry[];
 }
 

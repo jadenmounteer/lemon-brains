@@ -19,6 +19,7 @@ export function CampInspectorPanel({
   onSelectUnit,
 }: CampInspectorPanelProps) {
   const canArrest = camp.canArrest;
+  const canDestroy = camp.canDestroy;
   const showArrest =
     camp.kind === 'gypsy' || camp.kind === 'thief' || camp.kind === 'bandit';
 
@@ -65,12 +66,22 @@ export function CampInspectorPanel({
             Arrest
           </button>
         )}
-        <button type="button" className="market-buy" onClick={onDestroy}>
+        <button
+          type="button"
+          className="market-buy"
+          disabled={!canDestroy}
+          onClick={onDestroy}
+        >
           Destroy
         </button>
       </div>
       {!canArrest && showArrest && (
         <p className="muted">Need a dungeon and nearby guards to Arrest.</p>
+      )}
+      {!canDestroy && (
+        <p className="muted">
+          Need a general and free soldiers, guards, or archers to Destroy.
+        </p>
       )}
       <h3 className="inspector-subhead">Living garrison</h3>
       {camp.roster.length > 0 ? (

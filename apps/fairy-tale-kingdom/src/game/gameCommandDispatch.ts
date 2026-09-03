@@ -59,6 +59,7 @@ export function dispatchGameCommand(
       game.events.emit(KingdomEvents.COMMAND_DETACHMENT, {
         generalId: command.generalId,
         troopCount: command.troopCount,
+        targetId: command.targetId,
       });
       break;
     case 'PROMOTE_CAREER':

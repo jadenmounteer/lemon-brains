@@ -1042,6 +1042,7 @@ export default function App() {
                       seq: nextCommandSeq(),
                       generalId: selected.id,
                       troopCount,
+                      targetId: selectedCamp?.id,
                     });
                   }}
                   onPromoteCareer={(targetRole, cost) => {

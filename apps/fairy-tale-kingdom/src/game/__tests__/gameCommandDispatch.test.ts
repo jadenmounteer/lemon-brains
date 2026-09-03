@@ -93,16 +93,34 @@ describe('dispatchGameCommand', () => {
     );
   });
 
-  it('maps DEMOLISH_BUILDING', () => {
+  it('maps COMMAND_DETACHMENT with optional targetId', () => {
     const game = mockGame();
     dispatchGameCommand(game as never, {
-      type: 'DEMOLISH_BUILDING',
-      seq: 8,
-      buildingId: 'bakery-0',
+      type: 'COMMAND_DETACHMENT',
+      seq: 9,
+      generalId: 'gen-1',
+      troopCount: 4,
+      targetId: 'camp-2',
     });
     expect(game.events.emit).toHaveBeenCalledWith(
-      KingdomEvents.DEMOLISH_BUILDING,
-      { buildingId: 'bakery-0' }
+      KingdomEvents.COMMAND_DETACHMENT,
+      {
+        generalId: 'gen-1',
+        troopCount: 4,
+        targetId: 'camp-2',
+      }
     );
+  });
+
+  it('maps DESTROY_CAMP', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'DESTROY_CAMP',
+      seq: 10,
+      campId: 'camp-3',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(KingdomEvents.DESTROY_CAMP, {
+      campId: 'camp-3',
+    });
   });
 });

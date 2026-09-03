@@ -532,22 +532,34 @@ export class EncampmentSystem {
     );
   }
 
-  /** Player-ordered militia assault: mobilizes free guards/archers kingdom-wide. */
+  /** Whether a living general can send free troops against this camp. */
+  canDestroy(campId: string): boolean {
+    if (!this.subjects) return false;
+    const camp = this.camps.find((c) => c.id === campId);
+    if (!camp) return false;
+    return (
+      Boolean(this.subjects.findLivingGeneral()) &&
+      this.subjects.countAssignableDetachment() > 0
+    );
+  }
+
+  /**
+   * Player-ordered camp assault — requires a living general.
+   * Sends all currently assignable troops against this specific camp.
+   */
   requestDestroy(campId: string): boolean {
     if (!this.subjects) return false;
     const camp = this.camps.find((c) => c.id === campId);
     if (!camp) return false;
-    const assigned = this.subjects.assignAssault(camp.id, 99, 'militia');
-    if (assigned === 0) {
+    const general = this.subjects.findLivingGeneral();
+    if (!general) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'No free guards or archers to send.',
+        message: 'Hire a general to command an assault.',
       });
       return false;
     }
-    this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-      message: `${assigned} troops march on the ${CAMP_LABEL[camp.kind]}!`,
-    });
-    return true;
+    const n = Math.max(1, this.subjects.countAssignableDetachment());
+    return this.commandDestroyCamp(general.data.id, n, campId);
   }
 
   /** Arrest one idle raider from a camp — needs a dungeon + a nearby guard/archer. */
@@ -626,6 +638,7 @@ export class EncampmentSystem {
       supply: camp.kind === 'siege' ? camp.supply : undefined,
       maxSupply: camp.kind === 'siege' ? camp.maxSupply : undefined,
       canArrest: this.canArrest(camp.id),
+      canDestroy: this.canDestroy(camp.id),
       roster: camp.roster.map((u) => ({ ...u })),
     };
   }
@@ -858,7 +871,7 @@ export class EncampmentSystem {
     const assigned = this.subjects.assignAssault(camp.id, n, generalId);
     if (assigned === 0) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'No free guards or archers to command.',
+        message: 'No free soldiers, guards, or archers to command.',
       });
       return false;
     }
@@ -877,7 +890,7 @@ export class EncampmentSystem {
     const assigned = this.subjects.assignAssault(`monster:${monsterId}`, n, generalId);
     if (assigned === 0) {
       this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
-        message: 'No free guards or archers to command.',
+        message: 'No free soldiers, guards, or archers to command.',
       });
       return false;
     }

@@ -26,6 +26,8 @@ export type GameCommand =
       seq: number;
       generalId: string;
       troopCount: number;
+      /** camp id, or `monster:<id>`, or omit for nearest camp */
+      targetId?: string;
     }
   | {
       type: 'PROMOTE_CAREER';

@@ -338,7 +338,7 @@ export function InspectorPanel({
       {subject.canCommandTroops && onCommandTroops && (
         <div style={{ marginBottom: '0.75rem' }}>
           <p className="muted">
-            Command guards &amp; archers ({militaryAvailable} free)
+            Command soldiers, guards &amp; archers ({militaryAvailable} free)
           </p>
           <label className="muted" htmlFor="troop-count">
             Troop count
