@@ -236,8 +236,14 @@ export function interiorWaypoints(
 
   const nav = InteriorNavGrid.forKind(kind);
   if (nav) {
-    const startX = outside ? threshold.x : fromX;
-    const startY = outside ? threshold.y : fromY;
+    let startX = outside ? threshold.x : fromX;
+    let startY = outside ? threshold.y : fromY;
+    if (!pointInsideFootprint(kind, origin, startX, startY)) {
+      const snapped = nav.nearestWalkable(origin, kind, threshold.x, threshold.y);
+      startX = snapped.x;
+      startY = snapped.y;
+      if (outside) waypoints[0] = snapped;
+    }
     const path = nav.findPath(
       origin,
       kind,

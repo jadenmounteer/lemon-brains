@@ -415,7 +415,7 @@ export function buildManualSections(): ManualSection[] {
           'Needs a dungeon. The executioner walks the condemned here. Spectacle in, cell capacity out. The cemetery does not get confused, which is more than I can say for some of us.',
         ]),
         buildEntry('stocks', 'prop:stocks', [
-          'A wooden pillory on the green. Inspector → Put in stocks if a guard is free. Neighbors gather and throw fruit. Click the locked soul to read their thoughts and Release them. One guest per frame; buy more if your justice is busy.',
+          'A wooden pillory on the green. Inspector → Put in stocks if a guard is free. Neighbors gather for a short pelting, then go back to their day. Later passers-by may toss one fruit and keep walking. Click the locked soul to read their thoughts and Release them. One guest per frame; buy more if your justice is busy.',
         ]),
         buildEntry('barracks', 'prop:barracks', [
           'Needs royalty. Trains soldiers, archers, knights, elites, and the general. Local military ring. Jousts happen in this neighborhood when the knights get theatrical.',

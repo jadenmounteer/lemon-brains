@@ -1,22 +1,28 @@
 import { layoutPoint } from './layoutUtils';
 
+/**
+ * Offsets are relative to the cathedral building origin (bottom-center of footprint).
+ * Footprint is 320×280, so walkable interior is roughly y in [-280, 0].
+ * Positive y is outdoors south of the doors — do not put ceremony spots there.
+ */
 const ALTAR = { x: 0, y: -70 };
 const BISHOP = { x: 0, y: -50 };
-const DOOR = { x: 0, y: 110 };
+/** South nave door, just inside the footprint (matches interior nav door cell). */
+const DOOR = { x: 0, y: -4 };
 const PEW_LEFT = [
-  { x: -90, y: 20 },
-  { x: -90, y: 60 },
-  { x: -90, y: 100 },
+  { x: -90, y: -36 },
+  { x: -90, y: -64 },
+  { x: -90, y: -92 },
 ];
 const PEW_RIGHT = [
-  { x: 90, y: 20 },
-  { x: 90, y: 60 },
-  { x: 90, y: 100 },
+  { x: 90, y: -36 },
+  { x: 90, y: -64 },
+  { x: 90, y: -92 },
 ];
 const AISLE = [
-  { x: -40, y: 70 },
-  { x: 0, y: 40 },
-  { x: 40, y: 70 },
+  { x: -40, y: -28 },
+  { x: 0, y: -44 },
+  { x: 40, y: -28 },
 ];
 
 export function cathedralAltar(origin: { x: number; y: number }): { x: number; y: number } {

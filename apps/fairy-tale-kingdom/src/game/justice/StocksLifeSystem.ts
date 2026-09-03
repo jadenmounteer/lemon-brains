@@ -5,6 +5,10 @@ import { KingdomEvents } from '../subjects/events';
 import type { SubjectSystem } from '../subjects/SubjectSystem';
 import { ringOffset } from '../subjects/zones';
 import type { SpeechBubbleSystem } from '../ui/SpeechBubbleSystem';
+import {
+  isStocksSpectacleActive,
+  STOCKS_SPECTACLE_MS,
+} from './stocksCrowd';
 
 const STOCK_THOUGHTS = [
   'This tomato has opinions.',
@@ -28,6 +32,10 @@ const FRUIT_KEYS = [
   PROP_KEYS.fruitCabbage,
 ];
 
+const MAX_CROWD = 5;
+const PASSERBY_RANGE = 90;
+const PASSERBY_CHANCE = 0.14;
+
 interface EscortState {
   guardId: string;
   captiveId: string;
@@ -47,6 +55,10 @@ export class StocksLifeSystem {
   private throwAccum = 0;
   private thoughtAccum = 0;
   private bubbles: SpeechBubbleSystem | null = null;
+  /** victim id → time when the opening volley ends */
+  private spectacleUntil = new Map<string, number>();
+  /** victim id → NPCs who already threw at this lock-in */
+  private tossedThisLock = new Map<string, Set<string>>();
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -141,6 +153,8 @@ export class StocksLifeSystem {
     if (stocks) {
       this.subjects.nudgeToward(s.data.id, stocks.x + 18, stocks.y + 22, 48);
     }
+    this.spectacleUntil.delete(subjectId);
+    this.tossedThisLock.delete(subjectId);
     this.clearPelters();
     this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
       message: `${s.data.name} is freed from the stocks`,
@@ -163,6 +177,7 @@ export class StocksLifeSystem {
   update(deltaMs: number): void {
     this.tickEscorts();
     this.tickPinned();
+    this.tickPelterTimers(deltaMs);
     this.tickCrowd(deltaMs);
     this.tickFruit(deltaMs);
     this.tickThoughts(deltaMs);
@@ -172,6 +187,8 @@ export class StocksLifeSystem {
     for (const f of this.fruit) f.sprite.destroy();
     this.fruit = [];
     this.escorts = [];
+    this.spectacleUntil.clear();
+    this.tossedThisLock.clear();
   }
 
   private freeStocks() {
@@ -238,7 +255,7 @@ export class StocksLifeSystem {
         this.subjects.clearInterrupt(guard.data.id);
         guard.data.activityLabel = 'Locked them in the stocks';
         this.escorts = this.escorts.filter((e) => e !== escort);
-        this.gatherCrowd(stocks.x, stocks.y, captive.data.id);
+        this.beginSpectacle(captive.data.id, stocks.x, stocks.y);
         this.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {
           message: `${captive.data.name} is locked in the stocks`,
         });
@@ -277,55 +294,133 @@ export class StocksLifeSystem {
     }
   }
 
+  private beginSpectacle(victimId: string, gx: number, gy: number): void {
+    this.spectacleUntil.set(victimId, this.scene.time.now + STOCKS_SPECTACLE_MS);
+    this.tossedThisLock.set(victimId, new Set());
+    const crowd = this.subjects
+      .listManaged()
+      .filter((s) => this.canJoinCrowd(s.data.id, victimId, gx, gy))
+      .sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(gx, gy, a.sprite.x, a.sprite.y) -
+          Phaser.Math.Distance.Between(gx, gy, b.sprite.x, b.sprite.y)
+      )
+      .slice(0, MAX_CROWD);
+    crowd.forEach((s, i) => {
+      s.interrupt = { kind: 'pelt_stocks', remainingMs: STOCKS_SPECTACLE_MS };
+      s.data.activityLabel = 'Pelting the stocks';
+      s.data.thought =
+        PELT_LINES[Math.floor(Math.random() * PELT_LINES.length)]!;
+      const off = ringOffset(i, crowd.length, 48);
+      const dest = this.subjects.snapToWalkable(gx + off.x, gy + 26 + off.y * 0.4);
+      this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 42);
+      this.markTossed(victimId, s.data.id);
+    });
+  }
+
+  private markTossed(victimId: string, npcId: string): void {
+    let set = this.tossedThisLock.get(victimId);
+    if (!set) {
+      set = new Set();
+      this.tossedThisLock.set(victimId, set);
+    }
+    set.add(npcId);
+  }
+
+  private alreadyTossed(victimId: string, npcId: string): boolean {
+    return this.tossedThisLock.get(victimId)?.has(npcId) ?? false;
+  }
+
+  private canJoinCrowd(
+    id: string,
+    victimId: string,
+    gx: number,
+    gy: number
+  ): boolean {
+    if (id === victimId) return false;
+    if (this.alreadyTossed(victimId, id)) return false;
+    const s = this.subjects.getById(id);
+    if (!s?.sprite.active || s.interrupt) return false;
+    if (s.data.allegiance === 'camp') return false;
+    if (isMilitaryRole(s.data.role) && s.data.role !== 'jester') return false;
+    return Phaser.Math.Distance.Between(gx, gy, s.sprite.x, s.sprite.y) < 200;
+  }
+
+  private tickPelterTimers(deltaMs: number): void {
+    const now = this.scene.time.now;
+    for (const s of this.subjects.listManaged()) {
+      if (s.interrupt?.kind !== 'pelt_stocks') continue;
+      s.interrupt.remainingMs = (s.interrupt.remainingMs ?? 0) - deltaMs;
+      if ((s.interrupt.remainingMs ?? 0) <= 0) {
+        this.releasePelter(s.data.id, 'That was enough tomatoes.');
+      }
+    }
+    for (const [victimId, until] of [...this.spectacleUntil]) {
+      const victim = this.subjects.getById(victimId);
+      if (!victim || victim.interrupt?.kind !== 'in_stocks') {
+        this.spectacleUntil.delete(victimId);
+        continue;
+      }
+      if (now >= until) this.spectacleUntil.delete(victimId);
+    }
+  }
+
+  private releasePelter(id: string, thought: string): void {
+    const s = this.subjects.getById(id);
+    if (!s) return;
+    this.subjects.clearInterrupt(id);
+    s.data.thought = thought;
+    this.subjects.resyncFromSchedule(id);
+  }
+
   private tickCrowd(deltaMs: number): void {
     this.throwAccum += deltaMs;
     if (this.throwAccum < 1100) return;
     this.throwAccum = 0;
+    const now = this.scene.time.now;
     for (const victim of this.subjects.listManaged()) {
       if (victim.interrupt?.kind !== 'in_stocks' || !victim.interrupt.targetId) {
         continue;
       }
       const stocks = this.buildings.getById(victim.interrupt.targetId);
       if (!stocks) continue;
-      this.keepCrowd(stocks.x, stocks.y, victim.data.id);
+      const spectacle = isStocksSpectacleActive(
+        now,
+        this.spectacleUntil.get(victim.data.id)
+      );
       const throwers = this.subjects
         .listManaged()
         .filter((s) => s.interrupt?.kind === 'pelt_stocks');
-      if (throwers.length === 0) continue;
-      const thrower = throwers[Math.floor(Math.random() * throwers.length)]!;
-      this.lobFruit(thrower, victim);
+      if (spectacle) {
+        if (throwers.length === 0) continue;
+        const thrower = throwers[Math.floor(Math.random() * throwers.length)]!;
+        this.lobFruit(thrower, victim);
+        continue;
+      }
+      if (throwers.length > 0) {
+        for (const s of throwers) {
+          this.releasePelter(s.data.id, 'Show is over. Back to stew.');
+        }
+        continue;
+      }
+      if (Math.random() > PASSERBY_CHANCE) continue;
+      const passerby = this.subjects.listManaged().find((s) => {
+        if (!this.canJoinCrowd(s.data.id, victim.data.id, stocks.x, stocks.y)) {
+          return false;
+        }
+        return (
+          Phaser.Math.Distance.Between(
+            stocks.x,
+            stocks.y,
+            s.sprite.x,
+            s.sprite.y
+          ) < PASSERBY_RANGE
+        );
+      });
+      if (!passerby) continue;
+      this.lobFruit(passerby, victim);
+      this.markTossed(victim.data.id, passerby.data.id);
     }
-  }
-
-  private keepCrowd(gx: number, gy: number, victimId: string): void {
-    const existing = this.subjects
-      .listManaged()
-      .filter((s) => s.interrupt?.kind === 'pelt_stocks').length;
-    if (existing >= 8) return;
-    const extras = this.subjects
-      .listManaged()
-      .filter((s) => {
-        if (s.data.id === victimId) return false;
-        if (!s.sprite.active || s.interrupt) return false;
-        if (s.data.allegiance === 'camp') return false;
-        if (isMilitaryRole(s.data.role) && s.data.role !== 'jester') return false;
-        const d = Phaser.Math.Distance.Between(gx, gy, s.sprite.x, s.sprite.y);
-        return d < 200;
-      })
-      .slice(0, 8 - existing);
-    extras.forEach((s, i) => {
-      s.interrupt = { kind: 'pelt_stocks', remainingMs: 18_000 };
-      s.data.activityLabel = 'Pelting the stocks';
-      s.data.thought =
-        PELT_LINES[Math.floor(Math.random() * PELT_LINES.length)]!;
-      const off = ringOffset(existing + i, 8, 48);
-      const dest = this.subjects.snapToWalkable(gx + off.x, gy + 26 + off.y * 0.4);
-      this.subjects.nudgeToward(s.data.id, dest.x, dest.y, 42);
-    });
-  }
-
-  private gatherCrowd(gx: number, gy: number, victimId: string): void {
-    this.keepCrowd(gx, gy, victimId);
   }
 
   private lobFruit(
@@ -378,20 +473,12 @@ export class StocksLifeSystem {
       s.data.thought =
         STOCK_THOUGHTS[Math.floor(Math.random() * STOCK_THOUGHTS.length)]!;
     }
-    for (const s of this.subjects.listManaged()) {
-      if (s.interrupt?.kind !== 'pelt_stocks') continue;
-      s.interrupt.remainingMs = (s.interrupt.remainingMs ?? 8000) - 7000;
-      if ((s.interrupt.remainingMs ?? 0) <= 0) {
-        this.subjects.clearInterrupt(s.data.id);
-      }
-    }
   }
 
   private clearPelters(): void {
     for (const s of this.subjects.listManaged()) {
       if (s.interrupt?.kind !== 'pelt_stocks') continue;
-      this.subjects.clearInterrupt(s.data.id);
-      s.data.activityLabel = 'Done pelting';
+      this.releasePelter(s.data.id, 'Done pelting');
     }
   }
 }
