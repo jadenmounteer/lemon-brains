@@ -139,6 +139,7 @@ const PATROL_INSPECTION_KINDS: BuildKind[] = [
   'granary',
   'cemetery',
   'gallows',
+  'stocks',
 ];
 
 export class SubjectSystem {
@@ -392,6 +393,8 @@ export class SubjectSystem {
       if (managed.interrupt?.kind === 'execute') continue;
       if (managed.interrupt?.kind === 'imprisoned') continue;
       if (managed.interrupt?.kind === 'under_arrest') continue;
+      if (managed.interrupt?.kind === 'in_stocks') continue;
+      if (managed.interrupt?.kind === 'to_stocks') continue;
 
       const keepId =
         managed.data.loyaltyKeepId ??
@@ -1019,6 +1022,9 @@ export class SubjectSystem {
       if (s.data.onWall) continue;
       if (s.interrupt && busy.has(s.interrupt.kind)) continue;
       if (s.interrupt?.kind === 'imprisoned' || s.interrupt?.kind === 'under_arrest') {
+        continue;
+      }
+      if (s.interrupt?.kind === 'in_stocks' || s.interrupt?.kind === 'to_stocks') {
         continue;
       }
       const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
@@ -2082,7 +2088,10 @@ export class SubjectSystem {
         if (
           managed.interrupt?.kind === 'imprisoned' ||
           managed.interrupt?.kind === 'under_arrest' ||
-          managed.interrupt?.kind === 'spectate_hanging'
+          managed.interrupt?.kind === 'spectate_hanging' ||
+          managed.interrupt?.kind === 'in_stocks' ||
+          managed.interrupt?.kind === 'to_stocks' ||
+          managed.interrupt?.kind === 'pelt_stocks'
         ) {
           continue;
         }
@@ -3757,6 +3766,9 @@ export class SubjectSystem {
       underArrest:
         managed.interrupt?.kind === 'under_arrest' ||
         managed.interrupt?.kind === 'imprisoned',
+      inStocks:
+        managed.interrupt?.kind === 'in_stocks' ||
+        managed.interrupt?.kind === 'to_stocks',
     };
   }
 

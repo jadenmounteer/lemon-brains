@@ -8,7 +8,7 @@ import {
 import { isFamilyGoalKind } from '../game/family/familyGoals';
 import type { FamilyAspirationSnapshot } from '../game/subjects/types';
 import { useState } from 'react';
-import { arrestButtonBlockReason } from '../game/subjects/arrestSubject';
+import { arrestButtonBlockReason, stocksButtonBlockReason } from '../game/subjects/arrestSubject';
 
 interface InspectorPanelProps {
   subject: SubjectSnapshot;
@@ -29,6 +29,7 @@ interface InspectorPanelProps {
   onArrest?: () => void;
   onRelease?: () => void;
   onExecutePrisoner?: () => void;
+  onPutInStocks?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
   onCollapse?: () => void;
@@ -152,6 +153,7 @@ export function InspectorPanel({
   onArrest,
   onRelease,
   onExecutePrisoner,
+  onPutInStocks,
   collapsed = false,
   onExpand,
   onCollapse,
@@ -172,6 +174,11 @@ export function InspectorPanel({
   const arrestBlock = arrestButtonBlockReason({
     subjectKind: subject.subjectKind,
     hasDungeon: stats.hasDungeon,
+    hasGuard: stats.hasGuard,
+  });
+  const stocksBlock = stocksButtonBlockReason({
+    subjectKind: subject.subjectKind,
+    hasStocks: stats.hasStocks,
     hasGuard: stats.hasGuard,
   });
 
@@ -412,7 +419,8 @@ export function InspectorPanel({
       {onArrest &&
         subject.subjectKind !== 'monster' &&
         !subject.imprisoned &&
-        !subject.underArrest && (
+        !subject.underArrest &&
+        !subject.inStocks && (
         <div style={{ marginBottom: '0.75rem' }}>
           <button
             type="button"
@@ -429,8 +437,46 @@ export function InspectorPanel({
           </p>
         </div>
       )}
+      {onPutInStocks &&
+        subject.subjectKind !== 'monster' &&
+        !subject.imprisoned &&
+        !subject.underArrest &&
+        !subject.inStocks && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="market-buy"
+            disabled={Boolean(stocksBlock)}
+            title={stocksBlock ?? undefined}
+            onClick={onPutInStocks}
+          >
+            Put in stocks
+          </button>
+          <p className="muted">
+            A guard locks them in the pillory. Nearby folk throw fruit. Click
+            them there to release.
+          </p>
+        </div>
+      )}
       {subject.underArrest && !subject.imprisoned && (
         <p className="muted">A guard is escorting them to a cell.</p>
+      )}
+      {subject.inStocks && !subject.imprisoned && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          {onRelease && (
+            <button
+              type="button"
+              className="market-buy"
+              onClick={onRelease}
+            >
+              Release
+            </button>
+          )}
+          <p className="muted">
+            Locked in the stocks. Nearby people pelt them with fruit until you
+            let them go.
+          </p>
+        </div>
       )}
       {subject.imprisoned && (
         <div style={{ marginBottom: '0.75rem' }}>

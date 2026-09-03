@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { arrestButtonBlockReason } from '../arrestSubject';
+import { arrestButtonBlockReason, stocksButtonBlockReason } from '../arrestSubject';
 
 describe('arrestButtonBlockReason', () => {
   it('blocks monsters', () => {
@@ -34,6 +34,20 @@ describe('arrestButtonBlockReason', () => {
         hasDungeon: true,
         hasGuard: true,
       })
+    ).toBeNull();
+  });
+});
+
+describe('stocksButtonBlockReason', () => {
+  it('requires stocks and a guard', () => {
+    expect(
+      stocksButtonBlockReason({ hasStocks: false, hasGuard: true })
+    ).toMatch(/stocks/i);
+    expect(
+      stocksButtonBlockReason({ hasStocks: true, hasGuard: false })
+    ).toMatch(/guard/i);
+    expect(
+      stocksButtonBlockReason({ hasStocks: true, hasGuard: true })
     ).toBeNull();
   });
 });

@@ -63,6 +63,7 @@ export class StatsAggregator {
       hasDungeon: buildings.hasDungeon(),
       hasBarracks: buildings.hasBarracks(),
       hasGallows: buildings.hasGallows(),
+      hasStocks: buildings.hasStocks(),
       hasCemetery: buildings.hasCemetery(),
       hasDock: buildings.hasDock(),
       dockCount: buildings.dockCount(),

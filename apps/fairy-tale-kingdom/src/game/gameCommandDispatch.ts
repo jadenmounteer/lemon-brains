@@ -93,6 +93,11 @@ export function dispatchGameCommand(
         subjectId: command.subjectId,
       });
       break;
+    case 'PUT_IN_STOCKS':
+      game.events.emit(KingdomEvents.PUT_IN_STOCKS, {
+        subjectId: command.subjectId,
+      });
+      break;
     case 'FOCUS_CAMP':
       game.events.emit(KingdomEvents.FOCUS_CAMP, {
         campId: command.campId,

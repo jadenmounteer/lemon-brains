@@ -27,6 +27,7 @@ import {
   KingdomEvents,
   type ArrestCampPayload,
   type ArrestSubjectPayload,
+  type PutInStocksPayload,
   type BeginPlacePayload,
   type BeginRelocatePayload,
   type BuyNavalPayload,
@@ -68,6 +69,7 @@ import { HorseMountSystem } from '../war/HorseMountSystem';
 import { KeepLifeSystem } from '../keep/KeepLifeSystem';
 import { JusticeSystem } from '../justice/JusticeSystem';
 import { DungeonLifeSystem } from '../dungeon/DungeonLifeSystem';
+import { StocksLifeSystem } from '../justice/StocksLifeSystem';
 import { CathedralLifeSystem } from '../cathedral/CathedralLifeSystem';
 import { WorkplaceSpectacle } from '../workplace/WorkplaceSpectacle';
 import { WishAutomationService } from '../career/WishAutomationService';
@@ -133,6 +135,7 @@ export class KingdomScene extends Phaser.Scene {
   private joustSpectacle!: JoustSpectacleSystem;
   private keepLife!: KeepLifeSystem;
   private dungeonLife!: DungeonLifeSystem;
+  private stocksLife!: StocksLifeSystem;
   private cathedralLife!: CathedralLifeSystem;
   private workplaceSpectacle!: WorkplaceSpectacle;
   private wishAutomation!: WishAutomationService;
@@ -269,6 +272,7 @@ export class KingdomScene extends Phaser.Scene {
       if (b.kind === 'wall') {
         this.subjects.dropFromWall(b.id);
       }
+      this.stocksLife?.onBuildingDestroyed(b.id);
       if (this.registry.get('selectedBuildingId') === b.id) {
         this.publishBuildingSelection(null);
       }
@@ -382,6 +386,8 @@ export class KingdomScene extends Phaser.Scene {
       },
     });
     this.dungeonLife.setBubbles(this.bubbles);
+    this.stocksLife = new StocksLifeSystem(this, this.subjects, this.buildings);
+    this.stocksLife.setBubbles(this.bubbles);
     this.justice = new JusticeSystem(
       this,
       this.subjects,
@@ -515,6 +521,7 @@ export class KingdomScene extends Phaser.Scene {
     });
 
     this.world.registry.register(this.dungeonLife, 'post');
+    this.world.registry.register(this.stocksLife, 'post');
     this.world.registry.register(this.cathedralLife, 'post');
     this.world.registry.register(this.workplaceSpectacle, 'post');
     this.world.registry.register(this.wishAutomation, 'simulate');
@@ -872,6 +879,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.on(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
+    this.game.events.on(KingdomEvents.PUT_IN_STOCKS, this.onPutInStocks);
     this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.on(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
@@ -1031,6 +1039,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
     this.game.events.off(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
+    this.game.events.off(KingdomEvents.PUT_IN_STOCKS, this.onPutInStocks);
     this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.off(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
@@ -1420,8 +1429,37 @@ export class KingdomScene extends Phaser.Scene {
   };
 
   private onReleaseSubject = (payload: { subjectId: string }) => {
-    if (this.dungeonLife.release(payload.subjectId)) {
+    const ok =
+      this.dungeonLife.release(payload.subjectId) ||
+      this.stocksLife.release(payload.subjectId);
+    if (ok) {
       this.publishSelection(this.subjects.refreshSelectedSnapshot());
+      this.world.emitStats();
+      this.world.schedulePersist();
+    }
+  };
+
+  private onPutInStocks = (payload: PutInStocksPayload) => {
+    const target = this.subjects.getById(payload.subjectId);
+    if (!target || !target.sprite.active) return;
+    if (!this.stocksLife.hasStocks()) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Build stocks before you lock anyone in them.',
+      });
+      return;
+    }
+    const guard = this.subjects.nearestArrestingGuard(
+      target.sprite.x,
+      target.sprite.y,
+      target.data.id
+    );
+    if (!guard) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Need a free guard (not this one) to walk them to the stocks.',
+      });
+      return;
+    }
+    if (this.stocksLife.requestLock(target.data.id, guard.data.id)) {
       this.world.emitStats();
       this.world.schedulePersist();
     }

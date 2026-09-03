@@ -163,7 +163,7 @@ export function buildManualSections(): ManualSection[] {
           title: 'Arrest, cells, and the gallows',
           body: [
             'Every person has Arrest in their inspector. If you keep a dungeon with an empty cell and a free guard who is not the accused, that guard will path to them and escort them in — same march you see for thieves and night-casters. Four cells. Full? The dungeon inspector plus a gallows and an executioner finish the story with a rope, not a funeral mix-up.',
-            'This is how you delete a necromancer you no longer find charming. Also peasants you have grown tired of. I do not judge. I merely take notes.',
+            'Prefer humiliation to hanging? Build stocks and press Put in stocks. Neighbors throw fruit. Click the pilloried soul to Release them. I do not judge. I merely take notes.',
           ],
         },
         {
@@ -413,6 +413,9 @@ export function buildManualSections(): ManualSection[] {
         ]),
         buildEntry('gallows', 'prop:gallows', [
           'Needs a dungeon. The executioner walks the condemned here. Spectacle in, cell capacity out. The cemetery does not get confused, which is more than I can say for some of us.',
+        ]),
+        buildEntry('stocks', 'prop:stocks', [
+          'A wooden pillory on the green. Inspector → Put in stocks if a guard is free. Neighbors gather and throw fruit. Click the locked soul to read their thoughts and Release them. One guest per frame; buy more if your justice is busy.',
         ]),
         buildEntry('barracks', 'prop:barracks', [
           'Needs royalty. Trains soldiers, archers, knights, elites, and the general. Local military ring. Jousts happen in this neighborhood when the knights get theatrical.',

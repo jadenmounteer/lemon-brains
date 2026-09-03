@@ -225,6 +225,7 @@ export class BuildingCombat {
         market: 'The market burned!',
         cemetery: 'The cemetery was ruined!',
         gallows: 'The gallows collapsed!',
+        stocks: 'The stocks splintered!',
         keep: 'A keep was destroyed!',
       };
       this.host.scene.game.events.emit(KingdomEvents.MARKET_TOAST, {

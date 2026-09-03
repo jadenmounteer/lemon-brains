@@ -436,6 +436,10 @@ export class BuildingSystem {
     return this.buildings.some((b) => b.kind === 'gallows');
   }
 
+  hasStocks(): boolean {
+    return this.buildings.some((b) => b.kind === 'stocks');
+  }
+
   hasCemetery(): boolean {
     return this.buildings.some((b) => b.kind === 'cemetery');
   }

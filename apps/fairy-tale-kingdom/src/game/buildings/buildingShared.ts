@@ -108,6 +108,7 @@ const FOOTPRINT: Record<BuildKind | 'keep', { w: number; h: number }> = {
   market: { w: 44, h: 30 },
   cemetery: { w: 48, h: 34 },
   gallows: { w: 28, h: 38 },
+  stocks: { w: 36, h: 38 },
   road: { w: 16, h: 16 },
   bridge: { w: 56, h: 20 },
   dock: { w: 40, h: 28 },
@@ -294,6 +295,8 @@ export function textureFor(
       return PROP_KEYS.cemetery;
     case 'gallows':
       return PROP_KEYS.gallows;
+    case 'stocks':
+      return PROP_KEYS.stocks;
     case 'road':
       return PROP_KEYS.road;
     case 'bridge':

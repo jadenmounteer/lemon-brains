@@ -27,6 +27,7 @@ const baseStats: KingdomStats = {
   hasDungeon: true,
   hasBarracks: true,
   hasGallows: true,
+  hasStocks: false,
   hasCemetery: true,
   hasDock: true,
   dockCount: 1,

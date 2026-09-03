@@ -20,6 +20,7 @@ export const BUILDING_MAX_HP: Record<BuildKind | 'keep', number> = {
   market: 40,
   cemetery: 45,
   gallows: 30,
+  stocks: 28,
   road: 15,
   bridge: 35,
   dock: 40,
@@ -145,7 +146,8 @@ export function isBurnable(kind: BuildKind): boolean {
     kind === 'bakery' ||
     kind === 'market' ||
     kind === 'cemetery' ||
-    kind === 'gallows'
+    kind === 'gallows' ||
+    kind === 'stocks'
   );
 }
 

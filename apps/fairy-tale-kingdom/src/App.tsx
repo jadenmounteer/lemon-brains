@@ -88,6 +88,7 @@ const DEFAULT_STATS: KingdomStats = {
   hasDungeon: false,
   hasBarracks: false,
   hasGallows: false,
+  hasStocks: false,
   hasCemetery: false,
   hasDock: false,
   dockCount: 0,
@@ -1323,6 +1324,13 @@ export default function App() {
                       type: 'EXECUTE_CAPTIVE',
                       seq: nextCommandSeq(),
                       id: selected.id,
+                    });
+                  }}
+                  onPutInStocks={() => {
+                    sendCommand({
+                      type: 'PUT_IN_STOCKS',
+                      seq: nextCommandSeq(),
+                      subjectId: selected.id,
                     });
                   }}
                 />

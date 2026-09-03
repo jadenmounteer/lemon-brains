@@ -20,6 +20,7 @@ export type BuildKind =
   | 'market'
   | 'cemetery'
   | 'gallows'
+  | 'stocks'
   | 'road'
   | 'bridge'
   | 'dock';
@@ -314,6 +315,13 @@ export const BUILD_CATALOG: BuildCatalogItem[] = [
     name: 'Gallows',
     blurb: 'Execute captives with an executioner. Place near dungeon.',
     cost: 35,
+  },
+  {
+    kind: 'stocks',
+    name: 'Stocks',
+    blurb:
+      'Public pillory. A guard can lock someone in; passers-by pelt them with fruit. One occupant.',
+    cost: 18,
   },
   {
     kind: 'keep',

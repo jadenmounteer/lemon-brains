@@ -104,6 +104,8 @@ export function randomPointInZone(
       return { x: cx - 50 + jitter(36), y: cy - 50 + jitter(28) };
     case 'gallows':
       return { x: cx - 60 + jitter(30), y: cy - 40 + jitter(24) };
+    case 'stocks':
+      return { x: cx - 50 + jitter(28), y: cy - 30 + jitter(24) };
     case 'cemetery':
       return { x: cx + 100 + jitter(40), y: cy - 30 + jitter(30) };
   }

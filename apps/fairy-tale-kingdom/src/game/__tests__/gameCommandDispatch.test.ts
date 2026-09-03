@@ -158,6 +158,18 @@ describe('dispatchGameCommand', () => {
     );
   });
 
+  it('maps PUT_IN_STOCKS', () => {
+    const game = mockGame();
+    dispatchGameCommand(game as never, {
+      type: 'PUT_IN_STOCKS',
+      seq: 15,
+      subjectId: 'p-1',
+    });
+    expect(game.events.emit).toHaveBeenCalledWith(KingdomEvents.PUT_IN_STOCKS, {
+      subjectId: 'p-1',
+    });
+  });
+
   it('maps RELEASE_SUBJECT', () => {
     const game = mockGame();
     dispatchGameCommand(game as never, {

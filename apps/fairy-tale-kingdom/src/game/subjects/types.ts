@@ -103,6 +103,7 @@ export type ZoneId =
   | 'tavern'
   | 'barracks'
   | 'gallows'
+  | 'stocks'
   | 'cemetery';
 
 export type ActivityId =
@@ -178,6 +179,9 @@ export type InterruptKind =
   | 'imprisoned'
   | 'under_arrest'
   | 'spectate_hanging'
+  | 'to_stocks'
+  | 'in_stocks'
+  | 'pelt_stocks'
   | 'hunt_monster';
 
 export interface SubjectInterrupt {
@@ -299,6 +303,7 @@ export interface SubjectSnapshot {
   loyaltyLabel?: string;
   imprisoned?: boolean;
   underArrest?: boolean;
+  inStocks?: boolean;
 }
 
 export interface FamilyAspirationSnapshot {
@@ -339,6 +344,7 @@ export interface KingdomStats {
   hasDungeon: boolean;
   hasBarracks: boolean;
   hasGallows: boolean;
+  hasStocks: boolean;
   hasCemetery: boolean;
   hasDock: boolean;
   dockCount: number;

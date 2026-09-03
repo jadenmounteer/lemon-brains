@@ -102,6 +102,7 @@ export function exportManualArt(scene: Phaser.Scene): void {
   put('prop:market', PROP_KEYS.market);
   put('prop:cemetery', PROP_KEYS.cemetery);
   put('prop:gallows', PROP_KEYS.gallows);
+  put('prop:stocks', PROP_KEYS.stocks);
   put('prop:road', PROP_KEYS.road);
   put('prop:bridge', PROP_KEYS.bridge);
   put('prop:dock', PROP_KEYS.dock);

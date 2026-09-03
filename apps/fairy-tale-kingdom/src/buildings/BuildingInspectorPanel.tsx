@@ -296,6 +296,8 @@ function kindTitle(kind: BuildingSnapshot['kind']): string {
       return 'Burial ground';
     case 'gallows':
       return 'Justice';
+    case 'stocks':
+      return 'Pillory';
     case 'road':
       return 'Road';
     case 'bridge':

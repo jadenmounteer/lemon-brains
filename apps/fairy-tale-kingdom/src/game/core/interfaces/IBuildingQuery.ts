@@ -23,6 +23,7 @@ export interface IBuildingQuery {
   hasDungeon(): boolean;
   hasBarracks(): boolean;
   hasGallows(): boolean;
+  hasStocks(): boolean;
   hasCemetery(): boolean;
   hasDock(): boolean;
   dockCount(): number;

@@ -2475,6 +2475,55 @@ function drawGallows(scene: Phaser.Scene) {
   tex.refresh();
 }
 
+function drawStocks(scene: Phaser.Scene) {
+  const w = 36;
+  const h = 40;
+  const tex = createCanvas(scene, PROP_KEYS.stocks, w, h);
+  const ctx = tex.getContext();
+  fillRect(ctx, 4, 34, 28, 5, palette.dirt);
+  fillRect(ctx, 8, 32, 20, 4, palette.woodDark);
+  fillRect(ctx, 6, 10, 4, 24, palette.wood);
+  fillRect(ctx, 26, 10, 4, 24, palette.wood);
+  fillRect(ctx, 6, 8, 24, 4, palette.woodDark);
+  fillRect(ctx, 6, 16, 24, 8, palette.wood);
+  fillRect(ctx, 6, 16, 24, 1, palette.ink);
+  fillRect(ctx, 6, 23, 24, 1, palette.ink);
+  pixel(ctx, 17, 19, palette.ink);
+  pixel(ctx, 18, 19, palette.ink);
+  pixel(ctx, 17, 20, palette.ink);
+  pixel(ctx, 18, 20, palette.ink);
+  pixel(ctx, 10, 19, palette.ink);
+  pixel(ctx, 11, 19, palette.ink);
+  pixel(ctx, 24, 19, palette.ink);
+  pixel(ctx, 25, 19, palette.ink);
+  fillRect(ctx, 16, 36, 3, 2, 0xc04545);
+  fillRect(ctx, 22, 35, 2, 2, 0x4a8f3a);
+  tex.refresh();
+}
+
+function drawFruit(scene: Phaser.Scene) {
+  const tomato = createCanvas(scene, PROP_KEYS.fruitTomato, 6, 6);
+  const t = tomato.getContext();
+  fillRect(t, 1, 1, 4, 4, 0xc04545);
+  fillRect(t, 2, 0, 2, 1, 0x3a7a28);
+  pixel(t, 2, 2, 0xff8866);
+  tomato.refresh();
+
+  const apple = createCanvas(scene, PROP_KEYS.fruitApple, 6, 6);
+  const a = apple.getContext();
+  fillRect(a, 1, 1, 4, 4, 0xc03030);
+  fillRect(a, 2, 0, 1, 2, palette.woodDark);
+  pixel(a, 3, 0, 0x3a7a28);
+  apple.refresh();
+
+  const cabbage = createCanvas(scene, PROP_KEYS.fruitCabbage, 7, 6);
+  const c = cabbage.getContext();
+  fillRect(c, 1, 1, 5, 4, 0x4a8f3a);
+  fillRect(c, 2, 0, 3, 1, 0x6bb04a);
+  pixel(c, 3, 2, 0x2f6a28);
+  cabbage.refresh();
+}
+
 function drawRoad(scene: Phaser.Scene) {
   const w = 16;
   const h = 16;
@@ -3042,6 +3091,10 @@ export function generateTextures(scene: Phaser.Scene): void {
     PROP_KEYS.market,
     PROP_KEYS.cemetery,
     PROP_KEYS.gallows,
+    PROP_KEYS.stocks,
+    PROP_KEYS.fruitTomato,
+    PROP_KEYS.fruitApple,
+    PROP_KEYS.fruitCabbage,
     PROP_KEYS.road,
     PROP_KEYS.bridge,
     PROP_KEYS.bridgeV,
@@ -3152,6 +3205,8 @@ export function generateTextures(scene: Phaser.Scene): void {
   drawMarket(scene);
   drawCemetery(scene);
   drawGallows(scene);
+  drawStocks(scene);
+  drawFruit(scene);
   drawRoad(scene);
   drawBridge(scene);
   drawDock(scene);

@@ -285,6 +285,7 @@ export class SubjectScheduler {
           b.kind === 'field' ||
           b.kind === 'dock' ||
           b.kind === 'gallows' ||
+          b.kind === 'stocks' ||
           b.kind === 'road' ||
           b.kind === 'bridge';
         const pt = this.deps.standPointAt(b.x, b.y, b.id, managed.data.id, {
@@ -306,7 +307,8 @@ export class SubjectScheduler {
         const outdoor =
           roleB.kind === 'field' ||
           roleB.kind === 'dock' ||
-          roleB.kind === 'gallows';
+          roleB.kind === 'gallows' ||
+          roleB.kind === 'stocks';
         const pt = this.deps.standPointAt(
           roleB.x,
           roleB.y,

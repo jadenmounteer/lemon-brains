@@ -36,12 +36,15 @@ const THREAT_INTERRUPTS = new Set<InterruptKind>([
   'abducted',
   'imprisoned',
   'under_arrest',
+  'in_stocks',
+  'to_stocks',
 ]);
 
 const CELEBRATION_INTERRUPTS = new Set<InterruptKind>([
   'wedding',
   'line_street',
   'spectate_hanging',
+  'pelt_stocks',
 ]);
 
 export function isCelebrationActivity(activity: ActivityId): boolean {

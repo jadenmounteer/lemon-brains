@@ -15,6 +15,7 @@ const MOVABLE_KINDS = new Set<BuildKind>([
   'market',
   'cemetery',
   'gallows',
+  'stocks',
   'road',
   'bridge',
   'dock',
