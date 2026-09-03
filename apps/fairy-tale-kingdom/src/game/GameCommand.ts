@@ -46,6 +46,7 @@ export type GameCommand =
   | { type: 'EXECUTE_CAPTIVE'; seq: number; id: string }
   | { type: 'DESTROY_CAMP'; seq: number; campId: string }
   | { type: 'ARREST_CAMP'; seq: number; campId: string }
+  | { type: 'ARREST_SUBJECT'; seq: number; subjectId: string }
   | { type: 'FOCUS_CAMP'; seq: number; campId: string; unitId?: string }
   | { type: 'BUY_NAVAL'; seq: number; kind: NavalKind }
   | { type: 'SANDBOX_SPAWN'; seq: number; action: SandboxSpawnAction }

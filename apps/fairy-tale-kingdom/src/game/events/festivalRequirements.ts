@@ -23,42 +23,48 @@ export const FESTIVAL_REQUIREMENTS: FestivalRequirement[] = [
   {
     kind: 'peasant',
     title: 'Peasant hamlet festival',
-    blurb: 'Neighbors dance between clustered cottages.',
+    blurb:
+      'Cluster three homes close enough to gossip over the fence and the hamlet invents a party. Happiness leaks into neighboring lanes.',
     buildings: '≥3 houses/manors with a pair within ~120px',
     units: '≥5 peasants',
   },
   {
     kind: 'market',
     title: 'Market festival',
-    blurb: 'Stalls, song, and trade fill the square.',
+    blurb:
+      'A market plus a merchant gives the square permission to sing. Trade looks like joy, which is close enough.',
     buildings: '≥1 market',
     units: '≥1 merchant and ≥4 peasants',
   },
   {
     kind: 'harvest',
     title: 'Harvest festival',
-    blurb: 'Fields celebrate a good yield.',
+    blurb:
+      'Farmers toast the furrows. While it lasts, harvests work a little harder — the field paying you back for the dancing.',
     buildings: '≥1 field (granary preferred)',
     units: '≥3 farmers',
   },
   {
     kind: 'tavern',
     title: 'Tavern revel',
-    blurb: 'Cups rise and jesters juggle.',
+    blurb:
+      'Need a jester and a tavern. Fastest known spell against post-raid sulking, and it only looks like drinking.',
     buildings: '≥1 tavern',
     units: '≥1 jester and ≥4 commoners',
   },
   {
     kind: 'cathedral',
     title: 'Cathedral feast day',
-    blurb: 'Bells and banners under royal blessing.',
+    blurb:
+      'Bishop and a crown under one holy roof. The faithful steady; the realm remembers it has a soul, briefly.',
     buildings: '≥1 cathedral',
     units: '≥1 bishop and ≥1 king or queen',
   },
   {
     kind: 'harbor',
     title: 'Harbor festival',
-    blurb: 'Nets dry and songs rise from the dock.',
+    blurb:
+      'Fishermen throw a dockside party so the coast feels fed. Proud fishers invent fewer mutinies.',
     buildings: '≥1 dock',
     units: '≥2 fishermen',
   },
@@ -66,7 +72,7 @@ export const FESTIVAL_REQUIREMENTS: FestivalRequirement[] = [
     kind: 'joust',
     title: 'Royal joust',
     blurb:
-      'Mounted knights charge the lists — horses, lances, clash, and cheers.',
+      'Two knights, both crowns, a barracks lawn, and peasants to gasp on cue. Glory now, happier barracks district after.'
     buildings: '≥1 barracks',
     units: 'King and queen, ≥2 knights, ≥5 peasants',
   },

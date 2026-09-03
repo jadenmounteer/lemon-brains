@@ -8,6 +8,7 @@ import {
 import { isFamilyGoalKind } from '../game/family/familyGoals';
 import type { FamilyAspirationSnapshot } from '../game/subjects/types';
 import { useState } from 'react';
+import { arrestButtonBlockReason } from '../game/subjects/arrestSubject';
 
 interface InspectorPanelProps {
   subject: SubjectSnapshot;
@@ -25,6 +26,7 @@ interface InspectorPanelProps {
   onPromoteCareer?: (targetRole: UnitRole, cost: number) => void;
   onGrantMarriage?: () => void;
   onGrantChild?: () => void;
+  onArrest?: () => void;
   collapsed?: boolean;
   onExpand?: () => void;
   onCollapse?: () => void;
@@ -145,6 +147,7 @@ export function InspectorPanel({
   onPromoteCareer,
   onGrantMarriage,
   onGrantChild,
+  onArrest,
   collapsed = false,
   onExpand,
   onCollapse,
@@ -161,6 +164,12 @@ export function InspectorPanel({
       infiniteGold
     );
   }, [subject.role, subject.goal, stats, gold, infiniteGold]);
+
+  const arrestBlock = arrestButtonBlockReason({
+    subjectKind: subject.subjectKind,
+    hasDungeon: stats.hasDungeon,
+    hasGuard: stats.hasGuard,
+  });
 
   const canToggle = Boolean(onExpand || onCollapse);
 
@@ -395,6 +404,23 @@ export function InspectorPanel({
         >
           Send nearest knight
         </button>
+      )}
+      {onArrest && subject.subjectKind !== 'monster' && (
+        <div style={{ marginBottom: '0.75rem' }}>
+          <button
+            type="button"
+            className="market-buy"
+            disabled={Boolean(arrestBlock)}
+            title={arrestBlock ?? undefined}
+            onClick={onArrest}
+          >
+            Arrest
+          </button>
+          <p className="muted">
+            A guard marches them to a free dungeon cell. Execute later from the
+            dungeon when you have a gallows and executioner.
+          </p>
+        </div>
       )}
       {subject.lifeLog && subject.lifeLog.length > 0 && (
         <>

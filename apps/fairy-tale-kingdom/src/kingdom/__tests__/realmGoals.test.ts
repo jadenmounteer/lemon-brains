@@ -32,6 +32,7 @@ const baseStats: KingdomStats = {
   hasBishop: false,
   hasGeneral: false,
   hasKnight: false,
+  hasGuard: false,
   hasExecutioner: false,
   royaltyUnlocked: false,
   inspired: false,

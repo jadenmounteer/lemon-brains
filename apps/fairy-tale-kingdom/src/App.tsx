@@ -103,6 +103,7 @@ const DEFAULT_STATS: KingdomStats = {
   hasBishop: false,
   hasGeneral: false,
   hasKnight: false,
+  hasGuard: false,
   hasExecutioner: false,
   royaltyUnlocked: false,
   inspired: false,
@@ -1299,6 +1300,13 @@ export default function App() {
                   onGrantChild={() => {
                     sendCommand({
                       type: 'GRANT_CHILD',
+                      seq: nextCommandSeq(),
+                      subjectId: selected.id,
+                    });
+                  }}
+                  onArrest={() => {
+                    sendCommand({
+                      type: 'ARREST_SUBJECT',
                       seq: nextCommandSeq(),
                       subjectId: selected.id,
                     });

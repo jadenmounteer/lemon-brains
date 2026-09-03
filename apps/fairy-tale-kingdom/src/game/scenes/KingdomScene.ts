@@ -26,6 +26,7 @@ import { getSandboxRuntime } from '../sandboxRuntime';
 import {
   KingdomEvents,
   type ArrestCampPayload,
+  type ArrestSubjectPayload,
   type BeginPlacePayload,
   type BeginRelocatePayload,
   type BuyNavalPayload,
@@ -868,6 +869,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.on(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
     this.game.events.on(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.on(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
+    this.game.events.on(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
     this.game.events.on(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.on(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.on(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
@@ -1025,6 +1027,7 @@ export class KingdomScene extends Phaser.Scene {
     this.game.events.off(KingdomEvents.EXECUTE_CAPTIVE, this.onExecuteCaptive);
     this.game.events.off(KingdomEvents.DESTROY_CAMP, this.onDestroyCamp);
     this.game.events.off(KingdomEvents.ARREST_CAMP, this.onArrestCamp);
+    this.game.events.off(KingdomEvents.ARREST_SUBJECT, this.onArrestSubject);
     this.game.events.off(KingdomEvents.FOCUS_CAMP, this.onFocusCamp);
     this.game.events.off(KingdomEvents.BUY_NAVAL, this.onBuyNaval);
     this.game.events.off(KingdomEvents.SANDBOX_SPAWN, this.onSandboxSpawn);
@@ -1562,6 +1565,61 @@ export class KingdomScene extends Phaser.Scene {
       this.publishCampSelection(this.encampments.refreshSelectedSnapshot());
     }
     this.world.emitStats();
+  };
+
+  private onArrestSubject = (payload: ArrestSubjectPayload) => {
+    const target = this.subjects.getById(payload.subjectId);
+    if (!target || !target.sprite.active) return;
+
+    if (!this.buildings.hasDungeon()) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Build a dungeon before you arrest anyone.',
+      });
+      return;
+    }
+    if (!this.dungeonLife.hasFreeCell()) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Dungeon full — hang someone at the gallows first.',
+      });
+      return;
+    }
+
+    const guard = this.subjects.nearestArrestingGuard(
+      target.sprite.x,
+      target.sprite.y,
+      target.data.id
+    );
+    if (!guard) {
+      this.game.events.emit(KingdomEvents.MARKET_TOAST, {
+        message: 'Need a free guard (not this one) to make the arrest.',
+      });
+      return;
+    }
+
+    const fromX = target.sprite.x;
+    const fromY = target.sprite.y;
+    const saved = this.subjects.extractCaptive(target.data.id);
+    if (!saved) return;
+
+    const ok = this.dungeonLife.requestIntake(
+      {
+        id: saved.id,
+        name: saved.name,
+        role: saved.role,
+        houseId: saved.houseId,
+        maxHp: saved.maxHp,
+      },
+      { guardId: guard.data.id, fromX, fromY }
+    );
+    if (!ok) {
+      this.subjects.restoreCaptive(saved, { x: fromX, y: fromY });
+      return;
+    }
+
+    this.clearFollowCam();
+    this.publishSelection(this.subjects.select(null));
+    this.world.emitStats();
+    this.world.schedulePersist();
   };
 
   private onFocusCamp = (payload: FocusCampPayload) => {

@@ -347,6 +347,7 @@ export interface KingdomStats {
   hasBishop: boolean;
   hasGeneral: boolean;
   hasKnight: boolean;
+  hasGuard: boolean;
   hasExecutioner: boolean;
   canExecuteCaptive?: boolean;
   royaltyUnlocked: boolean;

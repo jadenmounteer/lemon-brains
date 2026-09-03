@@ -1001,6 +1001,30 @@ export class SubjectSystem {
     return best;
   }
 
+  /** Nearest free guard/elite guard who can escort a prisoner (not the target). */
+  nearestArrestingGuard(
+    x: number,
+    y: number,
+    exceptId?: string
+  ): ManagedSubject | null {
+    const busy = new Set(['escort_captive', 'execute', 'abducted', 'defect']);
+    let best: ManagedSubject | null = null;
+    let bestD = Infinity;
+    for (const s of this.registry.all) {
+      if (s.data.id === exceptId) continue;
+      if (s.data.role !== 'guard' && s.data.role !== 'elite_guard') continue;
+      if (s.data.sick || !s.sprite.active) continue;
+      if (s.data.onWall) continue;
+      if (s.interrupt && busy.has(s.interrupt.kind)) continue;
+      const d = Phaser.Math.Distance.Between(x, y, s.sprite.x, s.sprite.y);
+      if (d < bestD) {
+        bestD = d;
+        best = s;
+      }
+    }
+    return best;
+  }
+
   firstByRole(role: UnitRole): ManagedSubject | null {
     return this.registry.all.find((s) => s.data.role === role) ?? null;
   }

@@ -46,6 +46,7 @@ export const KingdomEvents = {
   CAMP_SELECTED: 'kingdom:camp-selected',
   DESTROY_CAMP: 'kingdom:destroy-camp',
   ARREST_CAMP: 'kingdom:arrest-camp',
+  ARREST_SUBJECT: 'kingdom:arrest-subject',
   FOCUS_CAMP: 'kingdom:focus-camp',
   BUY_NAVAL: 'kingdom:buy-naval',
   SANDBOX_SPAWN: 'kingdom:sandbox-spawn',
@@ -196,6 +197,10 @@ export interface DestroyCampPayload {
 
 export interface ArrestCampPayload {
   campId: string;
+}
+
+export interface ArrestSubjectPayload {
+  subjectId: string;
 }
 
 export interface FocusCampPayload {

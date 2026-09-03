@@ -83,6 +83,11 @@ export function dispatchGameCommand(
     case 'ARREST_CAMP':
       game.events.emit(KingdomEvents.ARREST_CAMP, { campId: command.campId });
       break;
+    case 'ARREST_SUBJECT':
+      game.events.emit(KingdomEvents.ARREST_SUBJECT, {
+        subjectId: command.subjectId,
+      });
+      break;
     case 'FOCUS_CAMP':
       game.events.emit(KingdomEvents.FOCUS_CAMP, {
         campId: command.campId,
